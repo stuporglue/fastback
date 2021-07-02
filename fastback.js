@@ -1,277 +1,316 @@
-var fastback;
-var curwidthpercent = 20;
-var prevscrolltop = 0;
-var scrolltimer;
-var notificationtimer;
+class Fastback {
+	// built-in properties
+	rowwidth = 5;
+	pagesize = 300;
+	curwidthpercent = 20;
+	minphotos = 300;
+	minpages = 4; // 1 before, active, 2 after
+	prevfirstvisible = 0;
+	scrolltimer = 0;
+	urltimer = 0;
+	notificationtimer;
+	curthumbs = [];
+	scrollock = false;
+	
+	// Properties loaded from json
+	cachebase;
+	index;
+	years;
+	yearsindex;
+	tags;
 
-$.getJSON('fastback.php?get=photojson', function(json) {
-	fastback = json;
-}).then(function(){
-	load_view();
-	appendphotos();
-});
+	constructor() {
+		var self = this;
 
-jQuery(document).ready(docReady);
-jQuery('.slider').on('change',sliderChange);
-jQuery('.photos').on('scroll',handleScrollEnd);
-jQuery('.photos').on('click','.thumbnail',handleThumbClick);
+		$.getJSON('fastback.php?get=photojson', function(json) {
+			jQuery.extend(self,json);
+		}).then(function(){
+			self.load_view();
+			self.appendphotos();
+		});
 
-
-// Append as many photos as needed to meet the page size
-function appendphotos(addthismany) {
-	var	html ='';
-	var thumbs = jQuery('.photos img.thumbnail');
-	var cursize = thumbs.length;
-	var curmax = 0;
-	if (cursize > 0) {
-		curmax = thumbs.last().data('photoid');
+		jQuery(document).ready(this.docReady);
+		jQuery('.slider').on('change',this.sliderChange.bind(this));
+		jQuery('.photos').on('scroll',this.handleScrollEnd.bind(this));
+		jQuery('.photos').on('click','.thumbnail',this.handleThumbClick.bind(this));
+		jQuery('.scroller').on('click','.nav',this.navClick.bind(this));
 	}
 
-	var photostoadd = addthismany || ( getPageSize() - cursize );
+	// Append as many photos as needed to meet the page size
+	appendphotos(addthismany) {
+		var	html ='';
+		var cursize = this.curthumbs.length;
+		var curmax = 0;
+		if (cursize > 0) {
+			curmax = this.curthumbs.last().data('photoid');
+		}
 
-	// TODO: Change to slice to avoid looping
-	var endidx = Math.min(photostoadd + curmax,fastback.tags.length);
-	var startidx = curmax + 1;
-	html = fastback.tags.slice(startidx,endidx + 1).join("");
-	jQuery('.photos').append(html);
-}
+		var photostoadd = addthismany || ( this.pagesize - cursize );
 
-// Prepend as many photos as needed to meet the page size
-function prependphotos(addthismany) {
-	var	html ='';
-	var thumbs = jQuery('.photos img.thumbnail');
-	var cursize = thumbs.length;
-	var curmin = 0;
-	if (cursize > 0) {
-		curmin = thumbs.first().data('photoid');
+		// TODO: Change to slice to avoid looping
+		var endidx = Math.min(photostoadd + curmax,this.tags.length);
+		var startidx = curmax + 1;
+		html = this.tags.slice(startidx,endidx + 1).join("");
+		jQuery('.photos').append(html);
+
+		this.curthumbs = jQuery('.photos img.thumbnail');
 	}
 
-	var photostoadd = addthismany || (getPageSize() - cursize);
+	// Prepend as many photos as needed to meet the page size
+	prependphotos(addthismany) {
+		var	html ='';
+		var cursize = this.curthumbs.length;
+		var curmin = 0;
+		if (cursize > 0) {
+			curmin = this.curthumbs.first().data('photoid');
+		}
 
-	var startidx = Math.max(curmin - photostoadd,0);
-	var endidx = curmin - 1;
+		var photostoadd = addthismany || (this.pagesize - cursize);
 
-	html = fastback.tags.slice(startidx,endidx + 1).join("");
-	jQuery('.photos').prepend(html);
-}
+		var startidx = Math.max(curmin - photostoadd,0);
+		var endidx = curmin - 1;
 
-function handleScrollEnd(){
-	loadMore();
-	handleNewCurrentPhoto();
-}
+		html = this.tags.slice(startidx,endidx + 1).join("");
+		jQuery('.photos').prepend(html);
 
-function loadMore(){
-	if ( scrolltimer === undefined ) {
-		scrolltimer = setTimeout(function(){
-			scrolltimer = undefined;	
-		},50);
-	} else {
-		return;
+		this.curthumbs = jQuery('.photos img.thumbnail');
 	}
 
-	var howfar = (document.body.clientHeight + jQuery('.photos').scrollTop()) / jQuery('.photos')[0].scrollHeight;
-
-	var direction = 'unknown';
-
-	if (howfar > prevscrolltop) {
-		direction = 'down';
-	} else if (howfar < prevscrolltop) {
-		direction = 'up';
+	handleScrollEnd(){
+		if ( !this.scrollock ) {
+			this.loadMore();
+			this.handleNewCurrentPhoto();
+		}
 	}
 
-	prevscrolltop = howfar;
+	loadMore(){
+		var curfirst = this.binary_search_first_visible();
+		var howfar = curfirst - this.prevfirstvisible;
 
-	if ( howfar >= 0.6 && direction == 'down') {
-		page_down();
-	}
-	if (howfar <= 0.3 && direction == 'up') {
-		page_up();
-	}
-}
+		var howfarscroll = (document.body.clientHeight + jQuery('.photos').scrollTop()) / jQuery('.photos')[0].scrollHeight;
 
-function page_down() {
-	var curmin = jQuery('.photos img.thumbnail').first().data('photoid');
-	var third = Math.round(getPageSize() / 3);
+		/*
+		if (howfar > prevscrolltop) {
+			direction = 'down';
+		} else if (howfar < prevscrolltop) {
+			direction = 'up';
+		}
+		if ( howfar >= 0.6 && direction == 'down') {
+			page_down();
+		}
+		if (howfar <= 0.3 && direction == 'up') {
+			page_up();
+		}
+		*/
 
-	var imgwide = getRowWidth();
-	var leftover = third % imgwide;
-	if (leftover !== 0) {
-		third += imgwide - leftover;
-	}
+		if ( howfar > this.rowwidth || howfarscroll > .9) {
+			console.log("Page down");
+			this.page_down();
+		} else if (howfar < this.rowwidth*-1 || howfarscroll < .1) {
+			console.log("Page up");
+			this.page_up();
+		}
 
-	jQuery('.photos .thumbnail').slice(0,third).remove();
-	appendphotos();
-}
-
-function page_up() {
-	var curmin = jQuery('.photos img.thumbnail').first().data('photoid');
-	var third = Math.round(getPageSize() / 3) * 2;
-
-	var imgwide = getRowWidth();
-	var leftover = third % imgwide;
-	if (leftover !== 0) {
-		third -= leftover;
+		this.prevfirstvisible = curfirst;
 	}
 
-	jQuery('.photos .thumbnail').slice(third).remove();
-	prependphotos();
-}
+	page_down() {
+		// Leave 1 page before the first visible, delete everything before that
+		var first_visible = this.binary_search_first_visible();
+		var first_keep = first_visible - (this.pagesize / this.minpages);
+		jQuery('#photo-' + first_keep).prevAll().remove();
+		this.curthumbs = jQuery('.photos img.thumbnail');
 
-
-// Figure out how many images to load, including accounting for always making a full row.
-function getPageSize() {
-	var imgwide = getRowWidth();
-
-	var pagesize = Math.pow(imgwide,2) * 6; //(square * 2 for height, load 3 screens worth at a time)
-
-	var leftover = pagesize % imgwide;
-	if ( leftover !== 0 ) {
-		pagesize += (imgwide - leftover);
+		// Then append to hit numbers
+		this.appendphotos();
 	}
 
-	return pagesize;
-}
+	page_up() {
+		// Make sure there are 2 pages before first visible
+		// delete anything after (minpages - 2 before visible + visible)
+		var curmin = this.binary_search_first_visible();
+		var newmax = curmin + (this.minpages - 2)*(this.pagesize/this.minpages); 
+		jQuery('#photo-' + newmax).nextAll().remove();
+		this.curthumbs = jQuery('.photos img.thumbnail');
 
-function getRowWidth() {
-	return Math.round(100/curwidthpercent);
-}
-
-function load_view() {
-	for(var i=0;i<fastback.years.length;i++){
-		jQuery('.scroller').append('<div class="nav" data-year="' + fastback.years[i] + '"><div class="year">' + fastback.years[i] + '</div></div>');
+		// Then prepend to hit numbers
+		this.prependphotos();
 	}
 
-	jQuery('.scroller .nav').on('click',function(e){
-		var year = jQuery(e.target).closest('.nav').data('year');
-		gotodate(year);
-	});
-}
+	load_view() {
+		for(var i=0;i<this.years.length;i++){
+			jQuery('.scroller').append('<div class="nav" data-year="' + this.years[i] + '"><div class="year">' + this.years[i] + '</div></div>');
+		}
+	}
 
-function gotodate(date){
-	console.log("About to go to " + date);
-	idx = fastback.yearindex[date];
+	gotodate(date){
+		this.scrollock = true;
+		var idx = this.yearindex[date];
 
-	var curphotos = jQuery('.photos .thumbnail');
-	var min = curphotos.first().data('photoid');
-	var max = curphotos.last().data('photoid');
-	var newmin = idx - getPageSize() / 3;
-	var newmax = newmin + getPageSize();
+		// get the first item in the row. Should belong to the same year, probably.
+		idx = Math.floor(idx/this.rowwidth) * this.rowwidth;
 
-	if ( newmin > max ){
-		// Only scroling down
-		toremove = jQuery('.photos .thumbnail');
-		jQuery('.photos').append(fastback.tags[newmin]);
-		appendphotos(getPageSize());
-		jQuery('#photo-' + idx)[0].scrollIntoView();
-		toremove.remove();
-	} else if ( newmax < min ) {
-		// Only scrolling up
-		toremove = jQuery('.photos .thumbnail');
-		// Got to prepend a row or it shifts
-		var onerow = fastback.tags.slice(newmax-getRowWidth()+1,newmax+1).join("");
-		jQuery('.photos').prepend(onerow);
-		prependphotos(getPageSize());
-		jQuery('#photo-' + idx)[0].scrollIntoView();
-		toremove.remove();
-	} else if (  ( newmin <= max && newmin >= min ) || (newmax >= min && newmax <= max) ) {
-		// Overlap with existing
-		if ( min < newmin ) {
+		var min = this.curthumbs.first().data('photoid');
+		var max = this.curthumbs.last().data('photoid');
+		var newmin = idx - this.pagesize / this.minpages;
+		var newmax = newmin + this.pagesize;
+		var toremove;
+
+		if ( newmin > max ) {
+			// Only scroling down
+			/*
+			 *	Old:         [**********************]
+			 *	New:                                     [**********************]
+			 */
+			toremove = this.curthumbs;
+			jQuery('.photos').append(this.tags.slice(newmin,newmin+this.rowwidth)); // Should be adding a row
+			this.curthumbs = jQuery('.photos img.thumbnail');
+			this.appendphotos(this.pagesize);
+		} 
+
+		if ( newmax < min ) {
+			// Only scrolling up
+			/*
+			 *	Old:                            [**********************]
+			 *	New: [**********************]
+			 */
+			toremove = this.curthumbs;
+			// Got to prepend a row or it shifts
+			var onerow = this.tags.slice(newmax-this.rowwidth+1,newmax+1).join("");
+			jQuery('.photos').prepend(onerow);
+			this.curthumbs = jQuery('.photos img.thumbnail');
+			this.prependphotos(this.pagesize);
+		}
+
+		if ( newmin > min && newmin < max ) {
 			// too many before - cut between old min and new min
-			jQuery('.photos .thumbnail').slice(0,(newmin - min)).remove();		
-			prependphotos(idx - newmin);
-		}
-		if ( newmax > max ) {
-			jQuery('.photos .thumbnail').slice(0 + 2*getPageSize()/3).remove();
-			appendphotos();
-		}
+
+			// Overlap with existing
+			/*
+			 *	Old:         [**********************]
+			 *	New:                 [**********************]
+			 */
+			toremove = jQuery('#photo-' + newmin).prevAll();
+			this.prependphotos(idx - newmin);
+		} 
+
+		if ( newmax < max && newmax > newmin ) {
+			// too many after
+
+			/*
+			 *	Old:          [**********************]
+			 *	New:   [**********************]
+			 */
+			// 2*(pagesize/minpages) - ship ahead to two screens
+			toremove = jQuery('#photo-' + newmax).nextAll();
+			this.appendphotos();
+		} 
 
 		jQuery('#photo-' + idx)[0].scrollIntoView();
-	} else {
-		console.log("Missed a case in gotodate shomehow");
+		toremove.remove();
+		this.curthumbs = jQuery('.photos img.thumbnail');
+		// window.location.hash = '#photo-' + idx;
+		var html = "<h2>" + date + "</h2>";
+		this.showNotification(html);
+
+		setTimeout(function(){
+			this.scrollock = false;
+		}.bind(this),500);
 	}
 
-	window.location.hash = '#photo-' + idx;
-	var html = "<h2>" + date + "</h2>";
-	showNotification(html);
-}
+	// Find the first photo which is visible
+	// ie. which has a top > 0
+	binary_search_first_visible(){
+		var min = this.curthumbs.first().data('photoid');
+		var max = this.curthumbs.last().data('photoid');
 
-// Find the first photo which is visible
-// ie. which has a top > 0
-function binary_search_first_visible(){
-	var min = jQuery('.photos .thumbnail').first().data('photoid');
-	var max = jQuery('.photos .thumbnail').last().data('photoid');
-	var img_per_row = getRowWidth();
+		var mid;
+		var maxloops = 20;
+		while(min != max && maxloops > 0 && document.readyState === 'complete') {
+			// Only check the first item in rows
+			mid = Math.floor(((max + min)/2)/this.rowwidth) * this.rowwidth;
 
-	var mid;
-	var maxloops = 20;
-	while(min != max && maxloops > 0 && document.readyState === 'complete') {
-		// Only check the first item in rows
-		mid = Math.floor(((max + min)/2)/img_per_row) * img_per_row;
+			if (mid == min) {
 
-		if (mid == min) {
-
-			if (jQuery('#photo-' + mid).offset().top >= -0.25 ) {
-				break;
-			} else {
-				min += 1;
-				mid += 1;
+				if (jQuery('#photo-' + mid).offset().top >= -0.25 ) {
+					break;
+				} else {
+					min += 1;
+					mid += 1;
+				}
+			} else if (mid < min) {
+				mid = min;
 			}
-		} else if (mid < min) {
-			mid = min;
+
+			// Allow for a little bit of slop since the scroll stop seems to be a bit fuzzy
+			if (jQuery('#photo-' + mid).offset().top >= 0 ) {
+				// Go left
+				max = mid;
+			} else {
+				// Go right
+				min = mid;
+			}
+
+			maxloops--;
 		}
 
-		// Allow for a little bit of slop since the scroll stop seems to be a bit fuzzy
-		if (jQuery('#photo-' + mid).offset().top >= -0.25 ) {
-			// Go left
-			max = mid;
-		} else {
-			// Go right
-			min = mid;
+		return min;
+	}
+
+	showNotification(html){
+		jQuery('#notification').html(html).addClass('new');
+		if ( this.notificationtimer !== undefined ) {
+			clearTimeout(this.notificationtimer);
+		}
+		this.notificationtimer = setTimeout(function(){
+			jQuery('#notification').removeClass('new');
+		},5000);
+	}
+
+	handleNewCurrentPhoto(){
+
+		if ( (new Date().getTime() - this.scrolltimer) < 1000 ) {
+			setTimeout(this.handleNewCurrentPhoto.bind(this),200);
+			return;
+		}
+		this.scrolltimer = new Date().getTime();
+
+		var idx = this.binary_search_first_visible();
+		// window.location.hash = '#photo-' + idx;
+		var cur = jQuery('#photo-' + idx);
+		var year = cur.data('date').substr(0,4);
+		var activeyear = jQuery('.nav.active');
+		if(activeyear.length > 0 && activeyear.first().data('year') != year){
+			activeyear.removeClass('active');
+		}
+		jQuery('.nav[data-year=' + year + ']').addClass('active');
+	}
+
+	handleThumbClick(e){
+		var clicked = jQuery(e.target);
+		var filename = new String(clicked.data('orig')).substring(clicked.data('orig').lastIndexOf('/') + 1);
+		var html = '<h2>' + clicked.data('date') + '</h2>';
+		html += '<p><a href="' + clicked.data('orig') + '" download>' + filename + '</a></p>';
+		this.showNotification(html);
+	}
+
+	sliderChange(e){
+		this.rowwidth = e.target.value;
+		this.curwidthpercent = 100/this.rowwidth
+		this.pagesize = Math.pow(this.rowwidth,2) * 2 * this.minpages; //(square * 2 for height, load 3 screens worth at a time)
+		var leftover = this.pagesize % this.rowwidth;
+		if ( leftover !== 0 ) {
+			this.pagesize += (this.rowwidth - leftover);
 		}
 
-		maxloops--;
+		document.styleSheets[0].insertRule('.photos .thumbnail { width: ' + this.curwidthpercent + 'vw; height: ' + this.curwidthpercent + 'vw; }', document.styleSheets[0].cssRules.length);
+		this.appendphotos();
 	}
 
-	return min;
-}
-
-function showNotification(html){
-	jQuery('#notification').html(html).addClass('new');
-	if ( notificationtimer !== undefined ) {
-		clearTimeout(notificationtimer);
+	navClick(e) {
+		var year = jQuery(e.target).closest('.nav').data('year');
+		this.gotodate(year);
 	}
-	notificationtimer = setTimeout(function(){
-		jQuery('#notification').removeClass('new');
-	},5000);
 }
 
-function handleNewCurrentPhoto(){
-	var idx = binary_search_first_visible();
-	window.location.hash = '#photo-' + idx;
-	var cur = jQuery('#photo-' + idx);
-	var year = cur.data('date').substr(0,4);
-	var activeyear = jQuery('.nav.active');
-	if(activeyear.length > 0 && activeyear.first().data('year') != year){
-		activeyear.removeClass('active');
-	}
-	jQuery('.nav[data-year=' + year + ']').addClass('active');
-}
-
-function handleThumbClick(e){
-	var clicked = jQuery(e.target);
-	var filename = new String(clicked.data('orig')).substring(clicked.data('orig').lastIndexOf('/') + 1);
-	var html = '<h2>' + clicked.data('date') + '</h2>';
-	html += '<p><a href="' + clicked.data('orig') + '" download>' + filename + '</a></p>';
-	showNotification(html);
-}
-
-function sliderChange(e){
-	curwidthpercent = 100/e.target.value;
-	document.styleSheets[0].insertRule('.photos .thumbnail { width: ' + curwidthpercent + '%; }', document.styleSheets[0].cssRules.length);
-	appendphotos();
-}
-
-function docReady(){
-	prevscrolltop = jQuery('.photos').scrollTop() / document.body.clientHeight;
-	console.log("Loaded again!");
-}
+var fastback = new Fastback();

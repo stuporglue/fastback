@@ -189,6 +189,8 @@ class fastback {
 					$shellthumb = escapeshellarg($thumbnailfile);
 					$cmd = "vipsthumbnail --size=120x120 --output=$shellthumb --smartcrop=attention $shellfile";
 					$res = `$cmd`;
+					$cmd = `jpegoptim --strip-all --strip-exif --strip-iptc $shellthumb`;
+					$res = `$cmd`;
 					$made_some = true;
 				}
 				// print "$childno";
@@ -288,7 +290,8 @@ class fastback {
 					$json['yearindex'][$this_year] = $idx;
 				}
 			}
-			$json['tags'][] = '<img id="photo-' . $idx .'" data-date="' . $row['sorttime'] . '" data-orig="' . htmlentities($row['file']) . '" data-photoid="' . $idx . '" class="thumbnail" src="' . $this->cache .  htmlentities($row['file']) . '.jpg" />';
+            $base = basename($row['file']);
+			$json['tags'][] = '<img id="photo-' . $idx .'" data-date="' . $row['sorttime'] . '" data-orig="' . htmlentities($row['file']) . '" data-photoid="' . $idx . '" class="thumbnail" src="' . $this->cache .  htmlentities($row['file']) . '.jpg" title="' . $base . '" alt="' . $base . '" />';
 			$idx++;
 		}
 
@@ -299,128 +302,20 @@ class fastback {
 		print($str);
 	}
 
-	public function streamjson2() {
-		$this->sql_connect();
-		$cf = $this->cache . '/fastback.json';
-		header("Content-Type: application/json");
-		if (file_exists($cf)) {
-			header('Content-Length: ' . filesize($cf));
-			readfile($cf);
-			exit();
-		}
-		$cachefile = fopen($cf,'w');
-
-		$res = $this->sql->query("SELECT file,sorttime FROM fastback WHERE thumbnail IS NOT NULL AND thumbnail NOT LIKE 'RESERVE%' ORDER BY sorttime DESC");
-		$str = '{"cachebase":"' . $this->cache . '",' . "\n" .  '"media":{' . "\n";
-		fwrite($cachefile,$str);
-		print($str);
-		$y = 0;
-		$m = 0;
-		$d = 0;
-		$ycomma = false;
-		$mcomma = false;
-		$dcomma = false;
-		$filecomma = false;
-		while($row = $res->fetchArray(SQLITE3_ASSOC)){
-
-			if (empty($row['sorttime'])){
-				die("Found an empty sorttime");
-				continue;
-			}
-
-			$date = explode('-',$row['sorttime']);
-			unset($row['sorttime']);
-
-			if (empty($date[0])){
-				die("Found an empty year");
-				continue;
-			}
-
-			if ( $date[0] != $y ) {
-				// Close out Y, m and d
-				if ( $y != 0 ) {
-					$str = "\n\t\t\t\t]\n\t\t\t}\n\t\t}";
-					fwrite($cachefile,$str);
-					print $str;
-				}
-
-				if ($ycomma) {
-					$str = ",\n";
-					fwrite($cachefile,$str);
-					print $str;
-				}
-
-				$str = "\t" . '"' . $date[0] . '":{' . "\n\t\t\"" . $date[1] . '":{' . "\n\t\t\t\"" . $date[2] . '":[';
-				fwrite($cachefile,$str);
-				print $str;
-
-				$ycomma = true;
-				$mcomma = false;
-				$dcomma = false;
-				$filecomma = false;
-
-			} else if ($date[1] != $m ) {
-				// Close out m and d
-				$str = "\n\t\t\t\t]\n\t\t\t}";
-				fwrite($cachefile,$str);
-				print $str;
-
-				$str = ",";
-				fwrite($cachefile,$str);
-				print $str;
-
-				$str = "\n\t\t" . '"' . $date[1] . '":{' . "\n\t\t\t\"" . $date[2] . '":[';
-				fwrite($cachefile,$str);
-				print $str;
-
-				$mcomma = true;
-				$dcomma = false;
-				$filecomma = false;
-			} else if ($date[2] != $d ) {
-				// Close out d
-				$ycomma = true;
-				$mcomma = true;
-				$dcomma = false;
-				$filecomma = false;
-
-				$str = "\n\t\t\t\t]";
-				$str .= ",\n\t\t\t\t" . '"' . $date[2] . '":[';
-
-				fwrite($cachefile,$str);
-				print $str;
-			}
-
-			$y = $date[0];
-			$m = $date[1];
-			$d = $date[2];
-
-			if ($filecomma) {
-				$str = ",";
-				fwrite($cachefile,$str);
-				print $str;
-			}
-			$filecomma = true;
-
-			$finfo = array($row['file'] => $row);
-			$str = "\n\t\t\t\t" . json_encode($row['file']);
-			fwrite($cachefile,$str);
-			print $str;
-		}
-		$str = "\n\t\t\t]\n\t\t}\n\t}\n}}";
-		fwrite($cachefile,$str);
-		print $str;
-		fclose($cachefile);
-	}
-
 	public function makehtml(){
 		$html = '<!DOCTYPE html>
 <html lang="en">
 	<head>
 		<meta charset="UTF-8">
 		<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
+		<link rel="shortcut icon" href="fastback.png"> 
+		<link rel="apple-touch-icon" href="fastback.png">
 		<title>Moore Photos</title>
 		<link rel="stylesheet" href="fastback.css">
-	</head>
+        <style>
+            .photos .thumbnail { background-image: url(\'' . $this->cache . 'fastback.gif\');
+        </style>
+    </head>
 	<body>
 		<div class="photos" id="photos"></div>
 		<div class="scroller"></div>
@@ -436,7 +331,6 @@ class fastback {
 	}
 
 	private function load_meta() {
-
 		$q_getallmeta = "SELECT key,value FROM fastbackmeta";
 		$res = $this->sql->query($q_getallmeta);
 		//var_dump($res);
