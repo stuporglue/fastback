@@ -1,198 +1,203 @@
 html,body {
-	margin: 0;
-	padding: 0;
-	height: 100%;
-	width: 100%;
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    width: 100%;
 }
 
 .photos::-webkit-scrollbar, .scroller::-webkit-scrollbar {
-	display: none;
+    display: none;
 }
 
 /* Hide scrollbar for IE, Edge and Firefox */
 .photos, .scroller {
-	-ms-overflow-style: none;  /* IE and Edge */
-	scrollbar-width: none;  /* Firefox */
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
 }
 
 .photos {
-	scroll-snap-type: mandatory;
-	scroll-snap-type: y mandatory;
-	position: absolute;
-	left: 0;
-	vertical-align: top;
-	box-sizing: border-box;
-	width: 100%;
-	height: 100%;
-	overflow-y: auto;
-	overflow-x: hidden;
+    scroll-snap-type: mandatory;
+    scroll-snap-type: y mandatory;
+    position: absolute;
+    left: 0;
+    vertical-align: top;
+    box-sizing: border-box;
+    width: 100%;
+    height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
 }
 
 .photos .thumbnail {
-	margin: 0;
-	padding: 0;
-	border: 0;
-	width: 20vw;
-	height: 20vw;
-	display: inline-block;
-	float: left;
-	box-sizing: border-box;
-	scroll-snap-align: start;
-	border-right: 1px solid #ccc;
-	border-bottom: 1px solid #ccc;
-	background-size: 20px;
-	background-repeat: no-repeat;
-	background-position: center center;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    width: 20vw;
+    height: 20vw;
+    display: inline-block;
+    float: left;
+    box-sizing: border-box;
+    scroll-snap-align: start;
+    border-right: 1px solid #ccc;
+    border-bottom: 1px solid #ccc;
+    background-size: 20px;
+    background-repeat: no-repeat;
+    background-position: center center;
 }
 
 .scroller {
-	position: fixed;
-	right: 0;
-	height: 100%;
-	box-sizing: border-box;
-	display: table;
-	-webkit-transition: opacity 0.1s ease-in-out;
-	-moz-transition: opacity 0.1s ease-in-out;
-	-ms-transition: opacity 0.1s ease-in-out;
-	-o-transition: opacity 0.1s ease-in-out;
-	cursor: pointer;
-	height: calc(100% - 30px);
+    position: fixed;
+    right: 0;
+    height: 100%;
+    box-sizing: border-box;
+    display: table;
+    -webkit-transition: opacity 0.1s ease-in-out;
+    -moz-transition: opacity 0.1s ease-in-out;
+    -ms-transition: opacity 0.1s ease-in-out;
+    -o-transition: opacity 0.1s ease-in-out;
+    cursor: pointer;
+    height: calc(100% - 30px);
 }
 
 .scroller:hover {
-	-webkit-transition: opacity 0.1s ease-in-out;
-	-moz-transition: opacity 0.1s ease-in-out;
-	-ms-transition: opacity 0.1s ease-in-out;
-	-o-transition: opacity 0.1s ease-in-out;
+    -webkit-transition: opacity 0.1s ease-in-out;
+    -moz-transition: opacity 0.1s ease-in-out;
+    -ms-transition: opacity 0.1s ease-in-out;
+    -o-transition: opacity 0.1s ease-in-out;
 }
 
 .scroller:hover .nav {
-	opacity: 0.6;
+    opacity: 0.6;
 }
 
 .scroller .nav {
-	text-align: center;
-	display: table-row;
-	background-color: white;
-	-webkit-transition: opacity 0.1s ease-in-out;
-	-moz-transition: opacity 0.1s ease-in-out;
-	-ms-transition: opacity 0.1s ease-in-out;
-	-o-transition: opacity 0.1s ease-in-out;
-	opacity: .4;
+    text-align: center;
+    display: table-row;
+    background-color: white;
+    -webkit-transition: opacity 0.1s ease-in-out;
+    -moz-transition: opacity 0.1s ease-in-out;
+    -ms-transition: opacity 0.1s ease-in-out;
+    -o-transition: opacity 0.1s ease-in-out;
+    opacity: .4;
 }
 
 
 .scroller .nav:hover {
-	opacity: 1;
-	-webkit-transition: opacity 0.1s ease-in-out;
-	-moz-transition: opacity 0.1s ease-in-out;
-	-ms-transition: opacity 0.1s ease-in-out;
-	-o-transition: opacity 0.1s ease-in-out;
+    opacity: 1;
+    -webkit-transition: opacity 0.1s ease-in-out;
+    -moz-transition: opacity 0.1s ease-in-out;
+    -ms-transition: opacity 0.1s ease-in-out;
+    -o-transition: opacity 0.1s ease-in-out;
 }
 
 .scroller .nav .year {
-	display: table-cell;
-	vertical-align: middle;
+    display: table-cell;
+    vertical-align: middle;
 }
 
 .scroller .nav.active {
-	opacity: 1;
-	font-weight: bold;
+    opacity: 1;
+    font-weight: bold;
 }
 .scroller .nav.active .year {
-	opacity: 1;
-	font-weight: bold;
+    opacity: 1;
+    font-weight: bold;
 }
 
 
 #resizer {
-	position: fixed;
-	bottom: 0;
-	width: 100%;
-	direction: rtl
+    position: fixed;
+    bottom: 0;
+    width: 100%;
+    direction: rtl
 }
 
 .slider {
-	-webkit-appearance: none;  /* Override default CSS styles */
-	appearance: none;
-	width: 100%; /* Full-width */
-	height: 25px; /* Specified height */
-	background: #d3d3d3; /* Grey background */
-	outline: none; /* Remove outline */
-	opacity: 0.3; /* Set transparency (for mouse-over effects on hover) */
-	-webkit-transition: .2s; /* 0.2 seconds transition on hover */
-	transition: opacity .2s;
+    -webkit-appearance: none;  /* Override default CSS styles */
+    appearance: none;
+    width: 100%; /* Full-width */
+    height: 25px; /* Specified height */
+    background: #d3d3d3; /* Grey background */
+    outline: none; /* Remove outline */
+    opacity: 0.3; /* Set transparency (for mouse-over effects on hover) */
+    -webkit-transition: .2s; /* 0.2 seconds transition on hover */
+    transition: opacity .2s;
 
 
-	box-sizing: border-box;
-	margin: 0;
-	padding: 0;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
 }
 
 /* Mouse-over effects */
 .slider:hover {
-	opacity: 1; /* Fully shown on mouse-over */
+    opacity: 1; /* Fully shown on mouse-over */
 }
 
 /* The slider handle (use -webkit- (Chrome, Opera, Safari, Edge) and -moz- (Firefox) to override default look) */
 .slider::-webkit-slider-thumb {
-	-webkit-appearance: none; /* Override default look */
-	appearance: none;
-	width: 25px; /* Set a specific slider handle width */
-	height: 25px; /* Slider handle height */
-	background: #04AA6D; /* Green background */
-	cursor: pointer; /* Cursor on hover */
+    -webkit-appearance: none; /* Override default look */
+    appearance: none;
+    width: 25px; /* Set a specific slider handle width */
+    height: 25px; /* Slider handle height */
+    background: #04AA6D; /* Green background */
+    cursor: pointer; /* Cursor on hover */
 }
 
 .slider::-moz-range-thumb {
-	width: 25px; /* Set a specific slider handle width */
-	height: 25px; /* Slider handle height */
-	background: #04AA6D; /* Green background */
-	cursor: pointer; /* Cursor on hover */
+    width: 25px; /* Set a specific slider handle width */
+    height: 25px; /* Slider handle height */
+    background: #04AA6D; /* Green background */
+    cursor: pointer; /* Cursor on hover */
 }
 
 
 #notification {
-	position: absolute;
-	bottom: 40px;
-	left: 10px;
-	width: 300px;
-	background-color: rgba(255,255,255,.8);
-	height: 100px;
-	border-radius: 4px;
-	opacity:0;
-	-webkit-transition: opacity 5s ease-in-out;
-	-moz-transition: opacity 5s ease-in-out;
-	-ms-transition: opacity 5s ease-in-out;
-	-o-transition: opacity 5s ease-in-out;
-	padding: 10px;
+    position: absolute;
+    bottom: 40px;
+    left: 10px;
+    width: 300px;
+    background-color: rgba(255,255,255,.8);
+    height: 100px;
+    border-radius: 4px;
+    opacity:0;
+    -webkit-transition: opacity 5s ease-in-out;
+    -moz-transition: opacity 5s ease-in-out;
+    -ms-transition: opacity 5s ease-in-out;
+    -o-transition: opacity 5s ease-in-out;
+    padding: 10px;
 }
 
+
 #notification h2 {
-	font-size: 16px;
-	color: #333;
+    font-size: 16px;
+    color: #333;
+    margin:0;
+    padding:0;
 }
 
 #notification.new, #notification:hover {
-	opacity: 1;
-	-webkit-transition: opacity 0.5s ease-in-out;
-	-moz-transition: opacity 0.5s ease-in-out;
-	-ms-transition: opacity 0.5s ease-in-out;
-	-o-transition: opacity 0.5s ease-in-out;
+    opacity: 1;
+    -webkit-transition: opacity 0.5s ease-in-out;
+    -moz-transition: opacity 0.5s ease-in-out;
+    -ms-transition: opacity 0.5s ease-in-out;
+    -o-transition: opacity 0.5s ease-in-out;
 }
 
-
-#notification a {
-	padding-left: 20px;
+#notification a.download:before {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    content:"⏬";
+    font-size: 15px;
+    margin-right:5px;
 }
 
-#notification a:before {
-	display: inline-block;
-	width: 20px;
-	height: 20px;
-	content:"⬇";
-	font-size: 35px;
-	position: relative;
-	top: 5px;
+#notification a.flag:before {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    content:"🚩";
+    font-size: 15px;
+    margin-right:5px;
 }
-

@@ -290,7 +290,10 @@ class Fastback {
 		var clicked = jQuery(e.target);
 		var filename = new String(clicked.data('orig')).substring(clicked.data('orig').lastIndexOf('/') + 1);
 		var html = '<h2>' + clicked.data('date') + '</h2>';
-		html += '<p><a href="' + clicked.data('orig') + '" download>' + filename + '</a></p>';
+		html += '<p><a class="download" href="' + clicked.data('orig') + '" download>' + filename + '</a>';
+		html += '<br>';
+		html += '<a class="flag" onclick="return fastback.sendbyajax(this)" href=\"?flag=' + encodeURIComponent(clicked.data('orig')) + '\">Flag Image</a>';
+		html += '</p>';
 		this.showNotification(html);
 	}
 
@@ -310,6 +313,14 @@ class Fastback {
 	navClick(e) {
 		var year = jQuery(e.target).closest('.nav').data('year');
 		this.gotodate(year);
+	}
+
+	sendbyajax(link) {
+		var thelink = link;
+		jQuery.get(thelink.href).then(function(){
+			jQuery(thelink).hide();
+		});
+		return false;
 	}
 }
 

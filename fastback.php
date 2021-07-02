@@ -54,6 +54,10 @@ class fastback {
 
 		$res = $this->sql->query($q_create_files);
 		//var_dump($res);
+        
+		$q_create_files = "CREATE TABLE IF NOT EXISTS flagged ( file TEXT PRIMARY KEY )";
+
+		$res = $this->sql->query($q_create_files);
 	}
 
 	/**
@@ -250,6 +254,8 @@ class fastback {
 			$this->streamjson();
 		} else if (!empty($_GET['get']) && $_GET['get'] == 'js') {
 			$this->makejs();
+        } else if (!empty($_GET['flag'])) {
+            $this->flag_photo();
 		} else {
 			$this->makehtml();
 		}
@@ -266,6 +272,7 @@ class fastback {
 
 		$this->sql_connect();
 		$cf = $this->cache . '/fastback.json.gz';
+		header("Cache-Control: \"max-age=1209600, public");
 		header("Content-Type: application/json");
 		header("Content-Encoding: gzip");
 		if (file_exists($cf)) {
@@ -339,6 +346,18 @@ class fastback {
 			$this->meta[$row['key']] = $row['value'];
 		}
 	}
+
+    public function flag_photo(){
+        $photo = $_GET['flag'];
+		$this->sql_connect();
+        $stmt = $this->sql->prepare("INSERT INTO flagged (file) VALUES (:file) ON CONFLICT(file) DO UPDATE SET file=file");
+        $stmt->bindValue(':file',$_GET['flag']);
+        $stmt->execute();
+        $this->sql_disconnect();
+		header("Content-Type: application/json");
+		header("Cache-Control: no-cache");
+        print json_encode(array('file_flagged' => $_GET['flag']));
+    }
 }
 
 new fastback();
