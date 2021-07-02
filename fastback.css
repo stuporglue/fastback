@@ -5,12 +5,12 @@ html,body {
 	width: 100%;
 }
 
-.example::-webkit-scrollbar {
+.photos::-webkit-scrollbar, .scroller::-webkit-scrollbar {
 	display: none;
 }
 
 /* Hide scrollbar for IE, Edge and Firefox */
-.photos {
+.photos, .scroller {
 	-ms-overflow-style: none;  /* IE and Edge */
 	scrollbar-width: none;  /* Firefox */
 }
@@ -45,7 +45,6 @@ html,body {
 	height: 100%;
 	box-sizing: border-box;
 	display: table;
-	opacity: .4;
 	-webkit-transition: opacity 0.1s ease-in-out;
 	-moz-transition: opacity 0.1s ease-in-out;
 	-ms-transition: opacity 0.1s ease-in-out;
@@ -55,7 +54,6 @@ html,body {
 }
 
 .scroller:hover {
-	opacity: 1;
 	-webkit-transition: opacity 0.1s ease-in-out;
 	-moz-transition: opacity 0.1s ease-in-out;
 	-ms-transition: opacity 0.1s ease-in-out;
@@ -74,6 +72,7 @@ html,body {
 	-moz-transition: opacity 0.1s ease-in-out;
 	-ms-transition: opacity 0.1s ease-in-out;
 	-o-transition: opacity 0.1s ease-in-out;
+	opacity: .4;
 }
 
 
@@ -88,6 +87,15 @@ html,body {
 .scroller .nav .year {
 	display: table-cell;
 	vertical-align: middle;
+}
+
+.scroller .nav.active {
+	opacity: 1;
+	font-weight: bold;
+}
+.scroller .nav.active .year {
+	opacity: 1;
+	font-weight: bold;
 }
 
 
@@ -168,6 +176,10 @@ html,body {
 }
 
 
+#notification a {
+	padding-left: 20px;
+}
+
 #notification a:before {
 	display: inline-block;
 	width: 20px;
@@ -177,3 +189,4 @@ html,body {
 	position: relative;
 	top: 5px;
 }
+

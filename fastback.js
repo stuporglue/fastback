@@ -59,7 +59,7 @@ jQuery('.photos').on('scroll',handleScrollEnd);
 
 function handleScrollEnd(){
 	loadMore();
-	window.location.hash = '#photo-' + binary_search_first_visible();
+	handleNewCurrentPhoto();
 }
 
 function loadMore(){
@@ -218,7 +218,7 @@ function binary_search_first_visible(){
 		if (mid == min) {
 
 			if (jQuery('#photo-' + mid).offset().top >= -0.25 ) {
-				return jQuery('#photo-' + min);
+				break;
 			} else {
 				min += 1;
 				mid += 1;
@@ -259,4 +259,16 @@ function showNotification(html){
 	notificationtimer = setTimeout(function(){
 		jQuery('#notification').removeClass('new');
 	},5000);
+}
+
+function handleNewCurrentPhoto(){
+	var idx = binary_search_first_visible();
+	window.location.hash = '#photo-' + idx;
+	var cur = jQuery('#photo-' + idx);
+	var year = cur.data('date').substr(0,4);
+	var activeyear = jQuery('.nav.active');
+	if(activeyear.length > 0 && activeyear.first().data('year') != year){
+		activeyear.removeClass('active');
+	}
+	jQuery('.nav[data-year=' + year + ']').addClass('active');
 }
