@@ -263,8 +263,9 @@ class fastback {
 			);
 
 		$this->sql_connect();
-		$cf = $this->cache . '/fastback.json';
+		$cf = $this->cache . '/fastback.json.gz';
 		header("Content-Type: application/json");
+		header("Content-Encoding: gzip");
 		if (file_exists($cf)) {
 			header('Content-Length: ' . filesize($cf));
 			readfile($cf);
@@ -294,7 +295,7 @@ class fastback {
 		$this->sql_disconnect();
 
 		$str = json_encode($json,JSON_PRETTY_PRINT);
-		file_put_contents($cf,$str);
+		file_put_contents('compress.zlib://' . $cf,$str);
 		print($str);
 	}
 
