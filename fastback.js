@@ -4,12 +4,18 @@ var prevscrolltop = 0;
 var scrolltimer;
 var notificationtimer;
 
-$.getJSON('https://convenienturl.com/shared/big/Photos/fastback.php?get=photojson', function(json) {
+$.getJSON('fastback.php?get=photojson', function(json) {
 	fastback = json;
 }).then(function(){
 	load_view();
 	appendphotos();
 });
+
+jQuery(document).ready(docReady);
+jQuery('.slider').on('change',sliderChange);
+jQuery('.photos').on('scroll',handleScrollEnd);
+jQuery('.photos').on('click','.thumbnail',handleThumbClick);
+
 
 // Append as many photos as needed to meet the page size
 function appendphotos(addthismany) {
@@ -49,21 +55,12 @@ function prependphotos(addthismany) {
 	jQuery('.photos').prepend(html);
 }
 
-jQuery('.slider').on('change',function(e){
-	curwidthpercent = 100/e.target.value;
-	document.styleSheets[0].insertRule('.photos .thumbnail { width: ' + curwidthpercent + '%; }', document.styleSheets[0].cssRules.length);
-	appendphotos();
-});
-
-jQuery('.photos').on('scroll',handleScrollEnd);
-
 function handleScrollEnd(){
 	loadMore();
 	handleNewCurrentPhoto();
 }
 
 function loadMore(){
-
 	if ( scrolltimer === undefined ) {
 		scrolltimer = setTimeout(function(){
 			scrolltimer = undefined;	
@@ -138,10 +135,6 @@ function getPageSize() {
 function getRowWidth() {
 	return Math.round(100/curwidthpercent);
 }
-
-jQuery(document).on('load',function(){
-	prevscrolltop = jQuery('.photos').scrollTop() / document.body.clientHeight;
-});
 
 function load_view() {
 	for(var i=0;i<fastback.years.length;i++){
@@ -242,16 +235,7 @@ function binary_search_first_visible(){
 	return min;
 }
 
-jQuery('.photos').on('click','.thumbnail',function(e){
-	var clicked = jQuery(e.target);
-	var filename = new String(clicked.data('orig')).substring(clicked.data('orig').lastIndexOf('/') + 1);
-	var html = '<h2>' + clicked.data('date') + '</h2>';
-	html += '<p><a href="' + clicked.data('orig') + '" download>' + filename + '</a></p>';
-	showNotification(html);
-});
-
 function showNotification(html){
-
 	jQuery('#notification').html(html).addClass('new');
 	if ( notificationtimer !== undefined ) {
 		clearTimeout(notificationtimer);
@@ -271,4 +255,23 @@ function handleNewCurrentPhoto(){
 		activeyear.removeClass('active');
 	}
 	jQuery('.nav[data-year=' + year + ']').addClass('active');
+}
+
+function handleThumbClick(e){
+	var clicked = jQuery(e.target);
+	var filename = new String(clicked.data('orig')).substring(clicked.data('orig').lastIndexOf('/') + 1);
+	var html = '<h2>' + clicked.data('date') + '</h2>';
+	html += '<p><a href="' + clicked.data('orig') + '" download>' + filename + '</a></p>';
+	showNotification(html);
+}
+
+function sliderChange(e){
+	curwidthpercent = 100/e.target.value;
+	document.styleSheets[0].insertRule('.photos .thumbnail { width: ' + curwidthpercent + '%; }', document.styleSheets[0].cssRules.length);
+	appendphotos();
+}
+
+function docReady(){
+	prevscrolltop = jQuery('.photos').scrollTop() / document.body.clientHeight;
+	console.log("Loaded again!");
 }
