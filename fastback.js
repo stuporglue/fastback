@@ -11,6 +11,7 @@ class Fastback {
 	notificationtimer;
 	curthumbs = [];
 	scrollock = false;
+	blankgif = 'data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==';
 	
 	// Properties loaded from json
 	cachebase;
@@ -27,6 +28,10 @@ class Fastback {
 		}).then(function(){
 			self.load_view();
 			self.appendphotos();
+
+			var photoswidth = jQuery('.photos')[0].offsetWidth - jQuery('.photos')[0].clientWidth;
+			jQuery('.photos').css('width','calc(100% + ' + photoswidth + ')');
+			jQuery('.photos').focus();
 		});
 
 		jQuery(document).ready(this.docReady);
@@ -49,8 +54,9 @@ class Fastback {
 
 		// TODO: Change to slice to avoid looping
 		var endidx = Math.min(photostoadd + curmax,this.tags.length);
-		var startidx = curmax + 1;
-		html = this.tags.slice(startidx,endidx + 1).join("");
+		var startidx = curmax;
+		console.log("Appending " + (endidx - startidx) + " photos, from " + startidx + " to " + (endidx));
+		html = this.tags.slice(startidx,endidx).join("");
 		jQuery('.photos').append(html);
 
 		this.curthumbs = jQuery('.photos img.thumbnail');
@@ -70,6 +76,7 @@ class Fastback {
 		var startidx = Math.max(curmin - photostoadd,0);
 		var endidx = curmin - 1;
 
+		console.log("Prepending " + (endidx + 1 - startidx) + " photos");
 		html = this.tags.slice(startidx,endidx + 1).join("");
 		jQuery('.photos').prepend(html);
 
@@ -130,7 +137,9 @@ class Fastback {
 		// delete anything after (minpages - 2 before visible + visible)
 		var curmin = this.binary_search_first_visible();
 		var newmax = curmin + (this.minpages - 2)*(this.pagesize/this.minpages); 
-		jQuery('#photo-' + newmax).nextAll().remove();
+		var removeme = jQuery('#photo-' + newmax).nextAll();
+		console.log("Removing " + removeme.length + " from end");
+		removeme.remove();
 		this.curthumbs = jQuery('.photos img.thumbnail');
 
 		// Then prepend to hit numbers
@@ -163,6 +172,8 @@ class Fastback {
 			 *	New:                                     [**********************]
 			 */
 			toremove = this.curthumbs;
+
+			console.log("Date Appending " + ((newmin + this.rowwidth) - newmin) + " photos");
 			jQuery('.photos').append(this.tags.slice(newmin,newmin+this.rowwidth)); // Should be adding a row
 			this.curthumbs = jQuery('.photos img.thumbnail');
 			this.appendphotos(this.pagesize);
@@ -177,6 +188,7 @@ class Fastback {
 			toremove = this.curthumbs;
 			// Got to prepend a row or it shifts
 			var onerow = this.tags.slice(newmax-this.rowwidth+1,newmax+1).join("");
+			console.log("Date Prepending " + ((newmax + 1) - ((newmax - this.rowwidth + 1))) + " photos");
 			jQuery('.photos').prepend(onerow);
 			this.curthumbs = jQuery('.photos img.thumbnail');
 			this.prependphotos(this.pagesize);
@@ -191,6 +203,7 @@ class Fastback {
 			 *	New:                 [**********************]
 			 */
 			toremove = jQuery('#photo-' + newmin).prevAll();
+			console.log("Date Removing " + toremove.length + " from start");
 			this.prependphotos(idx - newmin);
 		} 
 
@@ -202,7 +215,9 @@ class Fastback {
 			 *	New:   [**********************]
 			 */
 			// 2*(pagesize/minpages) - ship ahead to two screens
+
 			toremove = jQuery('#photo-' + newmax).nextAll();
+			console.log("Date Removing " + toremove.length + " from end");
 			this.appendphotos();
 		} 
 

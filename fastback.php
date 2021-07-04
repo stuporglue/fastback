@@ -9,13 +9,21 @@ error_reporting(E_ALL);
 class fastback {
 
 	var $cache = "/shared/big/no_backup/web_cache/"; 
+	var $photobase = "/shared/big/Photos/";
 	var $db_lock_file = '/shared/big/no_backup/web_cache/fastback.lock';
 	var $db_lock;
 
 	var $supported_file_types = array(
 		'png',
 		'jpg',
+		'heic',
+		'jpeg',
+		'bmp',
+		'gif',
+		'tif',
+		'heic',
 	);
+	var $blankpng = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+P+/HgAFhAJ/wlseKgAAAABJRU5ErkJggg==';
 
 	var $meta =array();
 
@@ -33,6 +41,13 @@ class fastback {
 		if (php_sapi_name() === 'cli') {
 			$this->load_db_cache();
 			$this->make_thumbnails();
+
+			// also regenerate the json
+			ob_start();
+			unlink($this->cache . '/fastback.json.gz');
+			$this->streamjson();
+			ob_end_clean();
+
 		} else {
 			$this->makeoutput();
 		}
@@ -71,7 +86,7 @@ class fastback {
 			$lastmod = $this->meta['lastmod'];
 		}
 
-		#$directories = `find . -type d -regextype sed -regex  "./[0-9]\{4\}/[0-9]\{2\}/[0-9]\{2\}$" | tac`;
+		chdir($this->photobase);
 		$filetypes = implode('\|',$this->supported_file_types);
 		$cmd = 'find . -type f -regextype sed -iregex  "./[0-9]\{4\}/[0-9]\{2\}/[0-9]\{2\}/.*\(' . $filetypes . '\)$" -newermt ' . $lastmod;
 		$modified_files_str = `$cmd`;
@@ -81,25 +96,29 @@ class fastback {
 		print "Building cache for " . count($modified_files) . " files modified since $lastmod\n";
 		flush();
 
-		// Need some sort of last modified notice per directory
-		$upsert_statement = $this->sql->prepare("INSERT INTO fastback (file,mtime,sorttime) VALUES (:one_file,:mtime,:sorttime) ON CONFLICT(file) DO UPDATE SET mtime=:mtime");
-		$maxtime = 0;
 		$today = date('Ymd');
-		foreach($modified_files as $one_file) {
+		$multi_insert = "INSERT INTO fastback (file,mtime,sorttime) VALUES ";
+		$multi_insert_tail = " ON CONFLICT(file) DO NOTHING";
+		$collect = array();
+		$maxtime = 0;
+		$togo = count($modified_files);
+		foreach($modified_files as $one_file){
 			$mtime = filemtime($one_file);
-			$sorttime = preg_replace('|.*([0-9]{4})/([0-9]{2})/([0-9]{2})/.*|','\1-\2-\3',$one_file);
-			$upsert_statement->reset();
-			$upsert_statement->bindValue(':one_file',$one_file);
-			$upsert_statement->bindValue(':mtime',$mtime);
+			$collect[] = "('" . SQLite3::escapeString($one_file) . "','" . SQLite3::escapeString($mtime) . "','" . SQLite3::escapeString(preg_replace('|.*([0-9]{4})/([0-9]{2})/([0-9]{2})/.*|','\1-\2-\3',$one_file)) . "')";
+
+			if ( count($collect) > 1000 ) {
+				$sql = $multi_insert . implode(",",$collect) . $multi_insert_tail;	
+				$this->sql->query($sql);
+				$collect = array();
+				$togo -= 1000;
+				print "Upserted 1000, $togo left to go\n";
+			}
 
 			$mtime_date = date('Ymd',$mtime);
 			if($mtime_date > $maxtime){
 				$maxtime = $mtime_date;
 			}
-			$upsert_statement->bindValue(':sorttime',$sorttime);
-			$upsert_statement->execute();
 		}
-		$upsert_statement->close();
 
 		if ($maxtime > $today){
 			$maxtime = $today;
@@ -192,8 +211,10 @@ class fastback {
 					$shellfile = escapeshellarg($file);
 					$shellthumb = escapeshellarg($thumbnailfile);
 					$cmd = "vipsthumbnail --size=120x120 --output=$shellthumb --smartcrop=attention $shellfile";
+					echo "\tChild $childno -- $cmd\n";
 					$res = `$cmd`;
-					$cmd = `jpegoptim --strip-all --strip-exif --strip-iptc $shellthumb`;
+					$cmd = "jpegoptim --strip-all --strip-exif --strip-iptc $shellthumb";
+					echo "\tChild $childno -- $cmd\n";
 					$res = `$cmd`;
 					$made_some = true;
 				}
@@ -272,9 +293,9 @@ class fastback {
 
 		$this->sql_connect();
 		$cf = $this->cache . '/fastback.json.gz';
-		header("Cache-Control: \"max-age=1209600, public");
-		header("Content-Type: application/json");
-		header("Content-Encoding: gzip");
+		@header("Cache-Control: \"max-age=1209600, public");
+		@header("Content-Type: application/json");
+		@header("Content-Encoding: gzip");
 		if (file_exists($cf)) {
 			header('Content-Length: ' . filesize($cf));
 			readfile($cf);
@@ -320,7 +341,7 @@ class fastback {
 		<title>Moore Photos</title>
 		<link rel="stylesheet" href="fastback.css">
         <style>
-            .photos .thumbnail { background-image: url(\'' . $this->cache . 'fastback.gif\');
+            .photos .thumbnail { background-image: url(\'' . $this->cache . 'fastback.png\'); };
         </style>
     </head>
 	<body>

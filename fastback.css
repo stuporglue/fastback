@@ -6,13 +6,13 @@ html,body {
 }
 
 .photos::-webkit-scrollbar, .scroller::-webkit-scrollbar {
-    display: none;
+/*	display: none; */
 }
 
 /* Hide scrollbar for IE, Edge and Firefox */
 .photos, .scroller {
-    -ms-overflow-style: none;  /* IE and Edge */
-    scrollbar-width: none;  /* Firefox */
+/*	-ms-overflow-style: none;  /* IE and Edge */
+/*	scrollbar-width: none;  /* Firefox */
 }
 
 .photos {
@@ -22,7 +22,7 @@ html,body {
     left: 0;
     vertical-align: top;
     box-sizing: border-box;
-    width: 100%;
+    width: calc(100% + 17px);
     height: 100%;
     overflow-y: auto;
     overflow-x: hidden;
