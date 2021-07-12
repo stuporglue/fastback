@@ -284,10 +284,7 @@ class fastback {
 
 	public function streamjson() {
 		$json = array(
-			'cachebase' => $this->cache,
-			'index' => array(),
-			'years' => array(),
-			'yearindex' => array(),
+			'yearmonthindex' => array(),
 			'tags' => array(),
 			);
 
@@ -309,17 +306,15 @@ class fastback {
 		while($row = $res->fetchArray(SQLITE3_ASSOC)){
 			if ( $last_date != $row['sorttime'] ) {
 				$last_date = $row['sorttime'];
-				$json['index'][$last_date] = count($json['tags']) + 1;
 
-				$this_year = substr($last_date,0,4);
-				if ($this_year != $last_year){
-					$last_year = $this_year;
-					$json['years'][] = $this_year;
-					$json['yearindex'][$this_year] = $idx;
+				$this_year_month = substr($last_date,0,7);
+
+				if (empty($json['yearmonthindex'][$this_year_month])) {
+					$json['yearmonthindex'][$this_year_month] = $idx;
 				}
 			}
             $base = basename($row['file']);
-			$json['tags'][] = '<img id="photo-' . $idx .'" data-date="' . $row['sorttime'] . '" data-orig="' . htmlentities($row['file']) . '" data-photoid="' . $idx . '" class="thumbnail" src="' . $this->cache .  htmlentities($row['file']) . '.jpg" title="' . $base . '" alt="' . $base . '" />';
+			$json['tags'][] = '<img id="photo-' . $idx .'" data-date="' . $row['sorttime'] . '" class="thumbnail" src="' . htmlentities(substr($row['file'],2)) . '.jpg" " alt="' . $base . '" />';
 			$idx++;
 		}
 
@@ -331,29 +326,54 @@ class fastback {
 	}
 
 	public function makehtml(){
+		$dirname = dirname($_SERVER['REQUEST_URI']);
 		$html = '<!DOCTYPE html>
 <html lang="en">
 	<head>
 		<meta charset="UTF-8">
 		<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
-		<link rel="shortcut icon" href="fastback.png"> 
-		<link rel="apple-touch-icon" href="fastback.png">
+		<link rel="shortcut icon" href="'.$dirname.'/fastback.png"> 
+		<link rel="apple-touch-icon" href="'.$dirname.'/fastback.png">
 		<title>Moore Photos</title>
-		<link rel="stylesheet" href="fastback.css">
+		<link rel="stylesheet" href="'.$dirname.'/fastback.css">
+		<base href="'. $this->cache . '">
         <style>
-            .photos .thumbnail { background-image: url(\'' . $this->cache . 'fastback.png\'); };
+            .photos .thumbnail,.body { background-image: url(\'' . $this->cache . 'fastback.png\'); };
         </style>
     </head>
 	<body>
-		<div class="photos" id="photos"></div>
+		<div class="photos" id="photos"><div id="photospacer"></div></div>
 		<div class="scroller"></div>
+		<div class="calendarpick"><div class="year"></div><div class="calendar">
+			<div class="calendarrow">
+				<div id="calpick-jan">Jan</div>
+				<div id="calpick-feb">Feb</div>
+				<div id="calpick-mar">Mar</div>
+			</div>
+			<div class="calendarrow">
+				<div id="calpick-apr">Apr</div>
+				<div id="calpick-may">May</div>
+				<div id="calpick-jun">Jun</div>
+			</div>
+			<div class="calendarrow">
+				<div id="calpick-jul">Jul</div>
+				<div id="calpick-aug">Aug</div>
+				<div id="calpick-sep">Sep</div>
+			</div>
+			<div class="calendarrow">
+				<div id="calpick-oct">Oct</div>
+				<div id="calpick-nov">Nov</div>
+				<div id="calpick-dec">Dec</div>
+			</div>
+		</div></div>
 		<div id="resizer">
 			<input type="range" min="1" max="10" value="5" class="slider" id="myRange">
 		</div>
 		<div id="notification"></div>
+		<div id="thumb"><div id="thumbcontent"></div><div id="thumbcontrols"></div><div id="thumbclose">🆇</div></div>
 	</body>
 	<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
-	<script src="fastback.js"></script>
+	<script src="'.$dirname.'/fastback.js"></script>
 </html>';
 		print $html;
 	}

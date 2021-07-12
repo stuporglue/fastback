@@ -1,33 +1,39 @@
 class Fastback {
 	// built-in properties
-	rowwidth = 5;
 	pagesize = 300;
-	curwidthpercent = 20;
-	minphotos = 300;
-	minpages = 4; // 1 before, active, 2 after
+
+	minphotos = 500;
+	minpages = 5;
+
 	prevfirstvisible = 0;
-	scrolltimer = 0;
 	urltimer = 0;
 	notificationtimer;
 	curthumbs = [];
-	scrollock = false;
-	blankgif = 'data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==';
-	
+	originurl = location.pathname.replace(/[^\/]+$/,'');
+
+	disablehandlers = false;
+
+	rowwidth = 5;
+
 	// Properties loaded from json
-	cachebase;
-	index;
 	years;
 	yearsindex;
+	yearmonthindex;
 	tags;
+
+	last_scroll_factors;
+	last_scroll_timestamp = 0;
+	scroll_time = 50;
 
 	constructor() {
 		var self = this;
 
-		$.getJSON('fastback.php?get=photojson', function(json) {
+		$.getJSON(this.originurl + 'fastback.php?get=photojson', function(json) {
 			jQuery.extend(self,json);
 		}).then(function(){
-			self.load_view();
-			self.appendphotos();
+			self.load_nav();
+
+			self.normalize_view();
 
 			var photoswidth = jQuery('.photos')[0].offsetWidth - jQuery('.photos')[0].clientWidth;
 			jQuery('.photos').css('width','calc(100% + ' + photoswidth + ')');
@@ -36,229 +42,92 @@ class Fastback {
 
 		jQuery(document).ready(this.docReady);
 		jQuery('.slider').on('change',this.sliderChange.bind(this));
-		jQuery('.photos').on('scroll',this.handleScrollEnd.bind(this));
+		jQuery('.photos').on('scroll',this.debounce_scroll.bind(this));
 		jQuery('.photos').on('click','.thumbnail',this.handleThumbClick.bind(this));
 		jQuery('.scroller').on('click','.nav',this.navClick.bind(this));
+		jQuery('#thumbclose').on('click',this.hideThumb.bind(this));
 	}
 
 	// Append as many photos as needed to meet the page size
-	appendphotos(addthismany) {
-		var	html ='';
-		var cursize = this.curthumbs.length;
-		var curmax = 0;
-		if (cursize > 0) {
-			curmax = this.curthumbs.last().data('photoid');
+
+	load_nav() {
+		var keys = Object.keys(fastback.yearmonthindex).sort().reverse();
+		var html = '<div class="nav" data-year="onthisdate"><div class="year">Today</div></div>';
+
+		var y;
+		var m;
+		var lastyear = "";
+		var months = {'01':'Jan','02':'Feb','03':'Mar','04':'Apr','05':'May','06':'Jun','07':'Jul','08':'Aug','09':'Sep','10':'Oct','11':'Nov','12':'Dec'};
+		for(var k=0;k<keys.length;k++){
+			y = keys[k].substr(0,4);
+			m = keys[k].substr(5,2);
+
+			if ( y !== lastyear ) {
+				if ( k !== 0 ) {
+					html += '</div></div>';
+				}
+
+				html += '<div class="nav" data-year="' + y + '"><div class="year">' + y + '</div>';
+			}
+
+			// html += '<div class="month" data-month="' + keys[k] + '">' + months[m] + '</div>';
+
+			lastyear = y;
 		}
 
-		var photostoadd = addthismany || ( this.pagesize - cursize );
+		html += '</div></div>';
 
-		// TODO: Change to slice to avoid looping
-		var endidx = Math.min(photostoadd + curmax,this.tags.length);
-		var startidx = curmax;
-		console.log("Appending " + (endidx - startidx) + " photos, from " + startidx + " to " + (endidx));
-		html = this.tags.slice(startidx,endidx).join("");
-		jQuery('.photos').append(html);
-
-		this.curthumbs = jQuery('.photos img.thumbnail');
-	}
-
-	// Prepend as many photos as needed to meet the page size
-	prependphotos(addthismany) {
-		var	html ='';
-		var cursize = this.curthumbs.length;
-		var curmin = 0;
-		if (cursize > 0) {
-			curmin = this.curthumbs.first().data('photoid');
-		}
-
-		var photostoadd = addthismany || (this.pagesize - cursize);
-
-		var startidx = Math.max(curmin - photostoadd,0);
-		var endidx = curmin - 1;
-
-		console.log("Prepending " + (endidx + 1 - startidx) + " photos");
-		html = this.tags.slice(startidx,endidx + 1).join("");
-		jQuery('.photos').prepend(html);
-
-		this.curthumbs = jQuery('.photos img.thumbnail');
-	}
-
-	handleScrollEnd(){
-		if ( !this.scrollock ) {
-			this.loadMore();
-			this.handleNewCurrentPhoto();
-		}
-	}
-
-	loadMore(){
-		var curfirst = this.binary_search_first_visible();
-		var howfar = curfirst - this.prevfirstvisible;
-
-		var howfarscroll = (document.body.clientHeight + jQuery('.photos').scrollTop()) / jQuery('.photos')[0].scrollHeight;
-
-		/*
-		if (howfar > prevscrolltop) {
-			direction = 'down';
-		} else if (howfar < prevscrolltop) {
-			direction = 'up';
-		}
-		if ( howfar >= 0.6 && direction == 'down') {
-			page_down();
-		}
-		if (howfar <= 0.3 && direction == 'up') {
-			page_up();
-		}
-		*/
-
-		if ( howfar > this.rowwidth || howfarscroll > .9) {
-			console.log("Page down");
-			this.page_down();
-		} else if (howfar < this.rowwidth*-1 || howfarscroll < .1) {
-			console.log("Page up");
-			this.page_up();
-		}
-
-		this.prevfirstvisible = curfirst;
-	}
-
-	page_down() {
-		// Leave 1 page before the first visible, delete everything before that
-		var first_visible = this.binary_search_first_visible();
-		var first_keep = first_visible - (this.pagesize / this.minpages);
-		jQuery('#photo-' + first_keep).prevAll().remove();
-		this.curthumbs = jQuery('.photos img.thumbnail');
-
-		// Then append to hit numbers
-		this.appendphotos();
-	}
-
-	page_up() {
-		// Make sure there are 2 pages before first visible
-		// delete anything after (minpages - 2 before visible + visible)
-		var curmin = this.binary_search_first_visible();
-		var newmax = curmin + (this.minpages - 2)*(this.pagesize/this.minpages); 
-		var removeme = jQuery('#photo-' + newmax).nextAll();
-		console.log("Removing " + removeme.length + " from end");
-		removeme.remove();
-		this.curthumbs = jQuery('.photos img.thumbnail');
-
-		// Then prepend to hit numbers
-		this.prependphotos();
-	}
-
-	load_view() {
-		for(var i=0;i<this.years.length;i++){
-			jQuery('.scroller').append('<div class="nav" data-year="' + this.years[i] + '"><div class="year">' + this.years[i] + '</div></div>');
-		}
+		jQuery('.scroller').append(html);
 	}
 
 	gotodate(date){
-		this.scrollock = true;
-		var idx = this.yearindex[date];
-
-		// get the first item in the row. Should belong to the same year, probably.
-		idx = Math.floor(idx/this.rowwidth) * this.rowwidth;
-
-		var min = this.curthumbs.first().data('photoid');
-		var max = this.curthumbs.last().data('photoid');
-		var newmin = idx - this.pagesize / this.minpages;
-		var newmax = newmin + this.pagesize;
-		var toremove;
-
-		if ( newmin > max ) {
-			// Only scroling down
-			/*
-			 *	Old:         [**********************]
-			 *	New:                                     [**********************]
-			 */
-			toremove = this.curthumbs;
-
-			console.log("Date Appending " + ((newmin + this.rowwidth) - newmin) + " photos");
-			jQuery('.photos').append(this.tags.slice(newmin,newmin+this.rowwidth)); // Should be adding a row
-			this.curthumbs = jQuery('.photos img.thumbnail');
-			this.appendphotos(this.pagesize);
-		} 
-
-		if ( newmax < min ) {
-			// Only scrolling up
-			/*
-			 *	Old:                            [**********************]
-			 *	New: [**********************]
-			 */
-			toremove = this.curthumbs;
-			// Got to prepend a row or it shifts
-			var onerow = this.tags.slice(newmax-this.rowwidth+1,newmax+1).join("");
-			console.log("Date Prepending " + ((newmax + 1) - ((newmax - this.rowwidth + 1))) + " photos");
-			jQuery('.photos').prepend(onerow);
-			this.curthumbs = jQuery('.photos img.thumbnail');
-			this.prependphotos(this.pagesize);
-		}
-
-		if ( newmin > min && newmin < max ) {
-			// too many before - cut between old min and new min
-
-			// Overlap with existing
-			/*
-			 *	Old:         [**********************]
-			 *	New:                 [**********************]
-			 */
-			toremove = jQuery('#photo-' + newmin).prevAll();
-			console.log("Date Removing " + toremove.length + " from start");
-			this.prependphotos(idx - newmin);
-		} 
-
-		if ( newmax < max && newmax > newmin ) {
-			// too many after
-
-			/*
-			 *	Old:          [**********************]
-			 *	New:   [**********************]
-			 */
-			// 2*(pagesize/minpages) - ship ahead to two screens
-
-			toremove = jQuery('#photo-' + newmax).nextAll();
-			console.log("Date Removing " + toremove.length + " from end");
-			this.appendphotos();
-		} 
-
-		jQuery('#photo-' + idx)[0].scrollIntoView();
-		toremove.remove();
-		this.curthumbs = jQuery('.photos img.thumbnail');
-		// window.location.hash = '#photo-' + idx;
-		var html = "<h2>" + date + "</h2>";
-		this.showNotification(html);
-
-		setTimeout(function(){
-			this.scrollock = false;
-		}.bind(this),500);
+		// Find the first date for the year indicated
+		var idx = this.yearmonthindex[Object.keys(this.yearmonthindex).filter(function(k){return k.substr(0,4)==date;}).sort().reverse()[0]];
+		this.normalize_view(idx);
+		this.showNotification(date,5000);
 	}
 
-	// Find the first photo which is visible
-	// ie. which has a top > 0
-	binary_search_first_visible(){
-		var min = this.curthumbs.first().data('photoid');
-		var max = this.curthumbs.last().data('photoid');
+	/**
+	* Find the first photo which is visible, ie. which has a top > 0
+	*/
+	binary_search_find_visible(){
+
+		if ( this.curthumbs.length === 0 ) {
+			return false;
+		}
+
+		var min = 0; // parseInt(this.curthumbs.first().attr('id').replace('photo-',''));
+		var max = this.curthumbs.length - 1; // parseInt(this.curthumbs.last().attr('id').replace('photo-',''));
 
 		var mid;
 		var maxloops = 20;
+
+		var old;
+
 		while(min != max && maxloops > 0 && document.readyState === 'complete') {
 			// Only check the first item in rows
 			mid = Math.floor(((max + min)/2)/this.rowwidth) * this.rowwidth;
 
-			if (mid == min) {
+			if ( (min + ',' + mid + ',' + max) == old ) {
+				// We're getting stuck in some conditions, not sure where yet
+				console.log("Stuck in binary_search_find_visible");
+			}
+			old = min + ',' + mid + ',' + max;
 
-				if (jQuery('#photo-' + mid).offset().top >= -0.25 ) {
+			if (mid == min) {
+				if (jQuery(this.curthumbs[mid]).offset().top >= 0) {
 					break;
 				} else {
-					min += 1;
-					mid += 1;
+					// If we're off page and equal, jump forward one row
+					min += this.rowwidth;
+					mid += this.rowwidth;
 				}
 			} else if (mid < min) {
 				mid = min;
 			}
 
 			// Allow for a little bit of slop since the scroll stop seems to be a bit fuzzy
-			if (jQuery('#photo-' + mid).offset().top >= 0 ) {
+			if (jQuery(this.curthumbs[mid]).offset().top >= 0) {
 				// Go left
 				max = mid;
 			} else {
@@ -269,17 +138,31 @@ class Fastback {
 			maxloops--;
 		}
 
-		return min;
+		return jQuery(this.curthumbs[min]).attr('id').replace('photo-','');
 	}
 
-	showNotification(html){
+	showThumb(imghtml,notificationhtml) {
+		jQuery('#thumbcontent').html(imghtml);
+		jQuery('#thumbcontrols').html(notificationhtml);
+		jQuery('#thumb').show();
+	}
+
+	hideThumb() {
+		jQuery('#thumb').hide();
+	}
+
+	showNotification(html,timer){
 		jQuery('#notification').html(html).addClass('new');
+
 		if ( this.notificationtimer !== undefined ) {
 			clearTimeout(this.notificationtimer);
 		}
-		this.notificationtimer = setTimeout(function(){
-			jQuery('#notification').removeClass('new');
-		},5000);
+
+		if (timer !== undefined ) {
+			this.notificationtimer = setTimeout(function(){
+				jQuery('#notification').removeClass('new');
+			},timer);
+		}
 	}
 
 	handleNewCurrentPhoto(){
@@ -290,7 +173,7 @@ class Fastback {
 		}
 		this.scrolltimer = new Date().getTime();
 
-		var idx = this.binary_search_first_visible();
+		var idx = this.binary_search_find_visible();
 		// window.location.hash = '#photo-' + idx;
 		var cur = jQuery('#photo-' + idx);
 		var year = cur.data('date').substr(0,4);
@@ -303,31 +186,54 @@ class Fastback {
 
 	handleThumbClick(e){
 		var clicked = jQuery(e.target);
-		var filename = new String(clicked.data('orig')).substring(clicked.data('orig').lastIndexOf('/') + 1);
-		var html = '<h2>' + clicked.data('date') + '</h2>';
-		html += '<p><a class="download" href="' + clicked.data('orig') + '" download>' + filename + '</a>';
-		html += '<br>';
-		html += '<a class="flag" onclick="return fastback.sendbyajax(this)" href=\"?flag=' + encodeURIComponent(clicked.data('orig')) + '\">Flag Image</a>';
-		html += '</p>';
-		this.showNotification(html);
+
+		var imghtml = '<img src="' + fastback.originurl + clicked.attr('src').replace(/.jpg$/,'') +'"/>';
+
+		var ctrlhtml = '<h2>' + clicked.data('date') + '</h2>';
+		ctrlhtml += '<p><a class="download" href="' + fastback.originurl + clicked.attr('src').replace(/.jpg$/,'') + '" download>' + clicked.attr('alt') + '</a>';
+		ctrlhtml += '<br>';
+		ctrlhtml += '<a class="flag" onclick="return fastback.sendbyajax(this)" href=\"' + fastback.originurl + 'fastback.php?flag=' + encodeURIComponent('./' + clicked.attr('src').replace(/.jpg$/,'')) + '\">Flag Image</a>';
+		ctrlhtml += '</p>';
+		this.showThumb(imghtml,ctrlhtml);
 	}
 
 	sliderChange(e){
-		this.rowwidth = e.target.value;
-		this.curwidthpercent = 100/this.rowwidth
-		this.pagesize = Math.pow(this.rowwidth,2) * 2 * this.minpages; //(square * 2 for height, load 3 screens worth at a time)
-		var leftover = this.pagesize % this.rowwidth;
+		var rowwidth = e.target.value;
+		var curwidthpercent = 100/rowwidth
+		this.pagesize = Math.pow(rowwidth,2) * 2 * this.minpages; //(square * 2 for height, load 3 screens worth at a time)
+		var leftover = this.pagesize % rowwidth;
 		if ( leftover !== 0 ) {
-			this.pagesize += (this.rowwidth - leftover);
+			this.pagesize += (rowwidth - leftover);
 		}
 
-		document.styleSheets[0].insertRule('.photos .thumbnail { width: ' + this.curwidthpercent + 'vw; height: ' + this.curwidthpercent + 'vw; }', document.styleSheets[0].cssRules.length);
+		document.styleSheets[0].insertRule('.photos .thumbnail { width: ' + curwidthpercent + 'vw; height: ' + curwidthpercent + 'vw; }', document.styleSheets[0].cssRules.length);
 		this.appendphotos();
+
+		var firstoffset = this.curthumbs.first().offset().top;
+		for(var i = 1;i<this.curthumbs.length;i++){
+			if (this.curthumbs.eq(i).offset().top !== firstoffset){
+				this.rowwidth = i;
+				break;
+			}
+		}
 	}
 
 	navClick(e) {
 		var year = jQuery(e.target).closest('.nav').data('year');
-		this.gotodate(year);
+		jQuery('#photos').fadeOut(500);
+		
+		if ( parseInt(year) == year ) {
+			if ( this.disablehandlers ) {
+				this.disablehandlers = false;
+				jQuery('#photos').html("");
+				this.curthumbs = [];
+			}
+			this.gotodate(year);
+		} else if (year == 'onthisdate') {
+			this.disablehandlers = true;
+			this.getYearPhotos();
+		}
+		jQuery('#photos').fadeIn(500);
 	}
 
 	sendbyajax(link) {
@@ -336,6 +242,251 @@ class Fastback {
 			jQuery(thelink).hide();
 		});
 		return false;
+	}
+
+	/*
+	* Figure out how many photos are visible rightnow
+	*/
+	photos_on_screen() {
+		// Start with the expected
+		var cols = this.rowwidth;
+
+		var nextvisible = this.binary_search_find_visible();
+		// But check reality if we have photos loaded
+		if ( nextvisible !== false ) {
+			nextvisible = jQuery('#photo-' + nextvisible);
+			var offset = nextvisible.offset().top;
+			var cols = 1;
+			while ( nextvisible.next().offset().top == offset ) {
+				cols++;
+				nextvisible = nextvisible.next();
+			}
+		}
+			
+		var rows = Math.ceil(window.innerHeight / (window.innerWidth / this.rowwidth));
+		var count = rows * cols;
+		return count;
+	}
+
+	debounce_scroll(e) {
+		
+		if (this.disablehandlers) {
+			return;
+		}
+
+		if ( e.timeStamp - this.last_scroll_timestamp > this.scroll_time ) {
+			this.normalize_view();
+		}
+
+		this.last_scroll_timestamp = e.timeStamp;
+	}
+
+	/**
+	* For a given position, normalize the photos around it. 
+	*
+	* At the end of the funciton we should have
+	*
+	* max(this.minphotos,this.minpages*this.photos_on_screen()) photos loaded with the current screen in the middle of this.minpages
+	*/
+	normalize_view(starting_with) {
+
+		// Don't run multiple at once
+		if (this.normalizing === true) {
+			return;
+		}
+
+		this.normalizing = true;
+
+		if ( starting_with instanceof jQuery.Event ) {
+			starting_with = undefined;
+		}
+
+		/**
+		* Use the specified index
+		* OR
+		* the first visible
+		* OR 
+		* 0
+		*/
+		var first_visible = this.binary_search_find_visible();
+
+		// How many photos are we needing?
+		var mid_chunk = this.photos_on_screen();
+		var total_photocount = Math.max(this.minphotos,mid_chunk*this.minpages);
+
+		var orig_anchor = first_visible || 0;
+
+		// Can't || this in there since 0 == false
+		if ( parseInt(starting_with) > -1 ) {
+			orig_anchor = parseInt(starting_with);
+		}
+
+		// Move anchor to the start of the row
+		var anchor = Math.floor(orig_anchor / this.rowwidth) * this.rowwidth;
+
+		// Same as last time, bail
+		if ( 
+			this.last_scroll_factors !== undefined && 
+			this.last_scroll_factors.first_visible == first_visible && 
+			this.last_scroll_factors.total_photocount == total_photocount && 
+			this.last_scroll_factors.mid_chunk == mid_chunk &&
+			this.last_scroll_factors.anchor == anchor
+			) {
+			this.normalizing = false;
+			return;
+		}
+
+		if ( 
+			this.last_scroll_factors !== undefined && 
+			Math.abs(this.last_scroll_factors.anchor - first_visible) < mid_chunk 
+		) {
+			// console.log("Not scrolling till we get at least a page to load");
+			// return;
+		}
+
+		// Get 1/3, then find the number of rows to add before. 
+		var before = Math.floor(Math.ceil(total_photocount / 3) / this.rowwidth) * this.rowwidth;
+		var after = before * 2;
+
+		var newmin = anchor - before; 
+
+		if ( newmin < 0 ) {
+			after += Math.abs(newmin);
+			newmin = 0;
+		}
+
+		var newmax = Math.floor((anchor + after) / this.rowwidth) * this.rowwidth - 1;
+
+		if ( newmax >= this.tags.length ) {
+			tmpmax = Math.floor(this.tags.length / this.rowwidth) * this.rowwidth - 1;
+			newmin -= (newmax - tmpmax);
+			newmax = tmpmax;
+
+			if ( newmin < 0 ) {
+				newmin = 0; // too few photos? I guess.
+			}
+		}
+
+		// Now figure out if we have any to prepend or append.
+
+		var prepend;
+		var remove_from_end;
+		var append;
+		var remove_from_start;
+		var curmin = -Infinity;
+		var curmax = -Infinity;
+		var movement;
+		if ( this.curthumbs.length !== 0){
+			curmin = parseInt(this.curthumbs.first().attr('id').replace('photo-',''));
+			curmax = parseInt(this.curthumbs.last().attr('id').replace('photo-',''));
+		}
+
+		/*
+		* What to add!
+		*/
+		// No overlap, new is left - Prepend
+		if ( newmax < curmin) {
+			// put before 
+			prepend = this.tags.slice(newmin,newmax + 1);
+		} else 
+		// Some overlap, new is slightly left - Prepend
+		if ( newmin < curmin ) {
+			prepend = this.tags.slice(newmin, curmin);	
+		}
+
+
+		// No overlap, new is right - Append
+		if ( newmin > curmax ) {
+			// put before 
+			append = this.tags.slice(newmin,newmax + 1);
+		} else 
+		// Some overlap, new is slightly right - Append
+		if ( newmax > curmax ) {
+			append = this.tags.slice(curmax + 1,newmax + 1);
+		}
+
+		/*
+		* What to remove!
+		*/
+
+		// No overlap, new is left - Delete all and refresh
+		if ( newmax < curmin ) {
+			remove_from_end = jQuery('.photos .thumbnail');
+			movement = 'reload';
+		} else 
+		// Some overlap, new is slightly left - Delete some and slide
+		if ( curmax > newmax ) {
+			remove_from_end = jQuery('#photo-' + newmax).nextAll();
+			movement = 'slide';
+		}
+
+		// No overlap, new is right - Delete all and refresh
+		if ( curmax < newmin ) {
+			remove_from_start = jQuery('.photos .thumbnail');
+			movement = 'reload';
+		} else 
+		// Some overlap, new is slightly right - Delete some and slide
+		if ( curmin < newmin ) {
+			remove_from_start = jQuery('#photo-' + newmin).prevAll();
+			movement = 'slide';
+		}
+
+		this.last_scroll_factors = {
+			"-start": ( remove_from_start === undefined ? 0 : remove_from_start.length ),
+			"+start": ( prepend === undefined ? 0 : prepend.length ),
+			"+end": (append === undefined ? 0 : append.length ),
+			"-end": ( remove_from_end === undefined ? 0 : remove_from_end.length ),
+			"movement": movement,
+			'first_visible': first_visible,
+			'total_photocount': total_photocount,
+			'mid_chunk': mid_chunk,
+			'anchor': anchor,
+			'curmin': curmin,
+			'curmax': curmax,
+			'newmin': newmin,
+			'newmax': newmax
+		};
+
+		console.log(this.last_scroll_factors);
+
+		if ( movement === 'reload' ) {
+			jQuery('.photos').fadeOut(500);
+		}
+
+		if ( remove_from_start !== undefined ) {
+			// removing from start needs to adjust height of spacer
+			remove_from_start.remove();
+		}
+
+		if ( remove_from_end !== undefined ) {
+			remove_from_end.remove();
+		}
+
+		if ( prepend !== undefined ) {
+			// appending to start needs to adjust height of spacer
+			jQuery('#photos').prepend(prepend);
+		}
+
+		if ( append !== undefined ) {
+			jQuery('#photos').append(append);
+		}
+
+		if ( movement === 'reload' || (movement === 'slide' && starting_with !== undefined ) ) {
+			window.location.hash = '#photo-' + anchor;
+		}	
+
+		jQuery('.photos').fadeIn(500);
+
+		this.curthumbs = jQuery('.photos .thumbnail');
+
+		this.normalizing = false;
+	}
+
+	getYearPhotos() {
+		var re = new RegExp( ' data-date="....-' + ("0" + (new Date().getMonth() + 1)).slice(-2) + '-' + ("0" + new Date().getDate()).slice(-2) + '" ');
+		var found = fastback.tags.filter(function(e){return e.match(re);}).join("");
+		jQuery('#photos').html(found);
+		this.curthumbs = jQuery('.photos .thumbnail');
 	}
 }
 

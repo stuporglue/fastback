@@ -1,203 +1,281 @@
 html,body {
-    margin: 0;
-    padding: 0;
-    height: 100%;
-    width: 100%;
+	margin: 0;
+	padding: 0;
+	height: 100%;
+	width: 100%;
+	overflow: hidden;
 }
 
-.photos::-webkit-scrollbar, .scroller::-webkit-scrollbar {
-/*	display: none; */
-}
-
-/* Hide scrollbar for IE, Edge and Firefox */
-.photos, .scroller {
-/*	-ms-overflow-style: none;  /* IE and Edge */
-/*	scrollbar-width: none;  /* Firefox */
+body {
+	background-repeat: no-repeat;
+	background-position: center center;
+	background-size: 100px;
+	overflow-anchor: auto; 
 }
 
 .photos {
-    scroll-snap-type: mandatory;
-    scroll-snap-type: y mandatory;
-    position: absolute;
-    left: 0;
-    vertical-align: top;
-    box-sizing: border-box;
-    width: calc(100% + 17px);
-    height: 100%;
-    overflow-y: auto;
-    overflow-x: hidden;
+	scroll-snap-type: y mandatory;
+	position: absolute;
+	left: 0;
+	vertical-align: top;
+	box-sizing: border-box;
+	width: calc(100% + 17px);
+	height: 100%;
+	overflow-y: auto;
+	overflow-x: hidden;
+	opacity: 1;
+	-webkit-transition: opacity 0.1s ease-in-out;
+	-moz-transition: opacity 0.1s ease-in-out;
+	-ms-transition: opacity 0.1s ease-in-out;
+	-o-transition: opacity 0.1s ease-in-out;
 }
 
 .photos .thumbnail {
-    margin: 0;
-    padding: 0;
-    border: 0;
-    width: 20vw;
-    height: 20vw;
-    display: inline-block;
-    float: left;
-    box-sizing: border-box;
-    scroll-snap-align: start;
-    border-right: 1px solid #ccc;
-    border-bottom: 1px solid #ccc;
-    background-size: 20px;
-    background-repeat: no-repeat;
-    background-position: center center;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	width: 20vw;
+	height: 20vw;
+	display: inline-block;
+	float: left;
+	box-sizing: border-box;
+	scroll-snap-align: start;
+	border-right: 1px solid #ccc;
+	border-bottom: 1px solid #ccc;
+	background-size: 20px;
+	background-repeat: no-repeat;
+	background-position: center center;
+	background-color: white;
+}
+
+
+.photos .thumbnail.removing {
+	-webkit-transition: height 1s ease-in-out;
+	-moz-transition:	height 1s ease-in-out;
+	-ms-transition:		height 1s ease-in-out;
+	-o-transition:		height 1s ease-in-out;
+}
+
+#photospacer {
+	height: 0;
+	-webkit-transition: height 0.1s ease-in-out;
+	-moz-transition:	height 0.1s ease-in-out;
+	-ms-transition:		height 0.1s ease-in-out;
+	-o-transition:		height 0.1s ease-in-out;
 }
 
 .scroller {
-    position: fixed;
-    right: 0;
-    height: 100%;
-    box-sizing: border-box;
-    display: table;
-    -webkit-transition: opacity 0.1s ease-in-out;
-    -moz-transition: opacity 0.1s ease-in-out;
-    -ms-transition: opacity 0.1s ease-in-out;
-    -o-transition: opacity 0.1s ease-in-out;
-    cursor: pointer;
-    height: calc(100% - 30px);
+	position: fixed;
+	right: 0;
+	height: 100%;
+	box-sizing: border-box;
+	display: table;
+	-webkit-transition: opacity 0.1s ease-in-out;
+	-moz-transition: opacity 0.1s ease-in-out;
+	-ms-transition: opacity 0.1s ease-in-out;
+	-o-transition: opacity 0.1s ease-in-out;
+	cursor: pointer;
+	height: calc(100% - 30px);
 }
 
 .scroller:hover {
-    -webkit-transition: opacity 0.1s ease-in-out;
-    -moz-transition: opacity 0.1s ease-in-out;
-    -ms-transition: opacity 0.1s ease-in-out;
-    -o-transition: opacity 0.1s ease-in-out;
+	-webkit-transition: opacity 0.1s ease-in-out;
+	-moz-transition: opacity 0.1s ease-in-out;
+	-ms-transition: opacity 0.1s ease-in-out;
+	-o-transition: opacity 0.1s ease-in-out;
 }
 
 .scroller:hover .nav {
-    opacity: 0.6;
+	opacity: 0.6;
 }
 
 .scroller .nav {
-    text-align: center;
-    display: table-row;
-    background-color: white;
-    -webkit-transition: opacity 0.1s ease-in-out;
-    -moz-transition: opacity 0.1s ease-in-out;
-    -ms-transition: opacity 0.1s ease-in-out;
-    -o-transition: opacity 0.1s ease-in-out;
-    opacity: .4;
+	text-align: center;
+	display: table-row;
+	background-color: white;
+	-webkit-transition: opacity 0.1s ease-in-out;
+	-moz-transition: opacity 0.1s ease-in-out;
+	-ms-transition: opacity 0.1s ease-in-out;
+	-o-transition: opacity 0.1s ease-in-out;
+	opacity: .4;
 }
 
 
 .scroller .nav:hover {
-    opacity: 1;
-    -webkit-transition: opacity 0.1s ease-in-out;
-    -moz-transition: opacity 0.1s ease-in-out;
-    -ms-transition: opacity 0.1s ease-in-out;
-    -o-transition: opacity 0.1s ease-in-out;
+	opacity: 1;
+	-webkit-transition: opacity 0.1s ease-in-out;
+	-moz-transition: opacity 0.1s ease-in-out;
+	-ms-transition: opacity 0.1s ease-in-out;
+	-o-transition: opacity 0.1s ease-in-out;
 }
 
 .scroller .nav .year {
-    display: table-cell;
-    vertical-align: middle;
+	display: table-cell;
+	vertical-align: middle;
 }
 
 .scroller .nav.active {
-    opacity: 1;
-    font-weight: bold;
+	opacity: 1;
+	font-weight: bold;
 }
 .scroller .nav.active .year {
-    opacity: 1;
-    font-weight: bold;
+	opacity: 1;
+	font-weight: bold;
+}
+
+.calendarpick {
+	display: none;
 }
 
 
 #resizer {
-    position: fixed;
-    bottom: 0;
-    width: 100%;
-    direction: rtl
+	position: fixed;
+	bottom: 0;
+	width: 100%;
+	direction: rtl
 }
 
 .slider {
-    -webkit-appearance: none;  /* Override default CSS styles */
-    appearance: none;
-    width: 100%; /* Full-width */
-    height: 25px; /* Specified height */
-    background: #d3d3d3; /* Grey background */
-    outline: none; /* Remove outline */
-    opacity: 0.3; /* Set transparency (for mouse-over effects on hover) */
-    -webkit-transition: .2s; /* 0.2 seconds transition on hover */
-    transition: opacity .2s;
+	-webkit-appearance: none;  /* Override default CSS styles */
+	appearance: none;
+	width: 100%; /* Full-width */
+	height: 25px; /* Specified height */
+	background: #d3d3d3; /* Grey background */
+	outline: none; /* Remove outline */
+	opacity: 0.3; /* Set transparency (for mouse-over effects on hover) */
+	-webkit-transition: .2s; /* 0.2 seconds transition on hover */
+	transition: opacity .2s;
 
 
-    box-sizing: border-box;
-    margin: 0;
-    padding: 0;
+	box-sizing: border-box;
+	margin: 0;
+	padding: 0;
 }
 
 /* Mouse-over effects */
 .slider:hover {
-    opacity: 1; /* Fully shown on mouse-over */
+	opacity: 1; /* Fully shown on mouse-over */
 }
 
 /* The slider handle (use -webkit- (Chrome, Opera, Safari, Edge) and -moz- (Firefox) to override default look) */
 .slider::-webkit-slider-thumb {
-    -webkit-appearance: none; /* Override default look */
-    appearance: none;
-    width: 25px; /* Set a specific slider handle width */
-    height: 25px; /* Slider handle height */
-    background: #04AA6D; /* Green background */
-    cursor: pointer; /* Cursor on hover */
+	-webkit-appearance: none; /* Override default look */
+	appearance: none;
+	width: 25px; /* Set a specific slider handle width */
+	height: 25px; /* Slider handle height */
+	background: #04AA6D; /* Green background */
+	cursor: pointer; /* Cursor on hover */
 }
 
 .slider::-moz-range-thumb {
-    width: 25px; /* Set a specific slider handle width */
-    height: 25px; /* Slider handle height */
-    background: #04AA6D; /* Green background */
-    cursor: pointer; /* Cursor on hover */
+	width: 25px; /* Set a specific slider handle width */
+	height: 25px; /* Slider handle height */
+	background: #04AA6D; /* Green background */
+	cursor: pointer; /* Cursor on hover */
 }
 
+#thumb {
+	position: absolute;
+	box-sizing: border-box;
+	top: 0;
+	left: 0;
+	height: calc(100% - 20px);
+	width: calc(100% - 20px);
+	margin: 10px;
+	background-color: rgba(255,255,255,.8);
+	border-radius: 4px;
+	-webkit-transition: opacity 5s ease-in-out;
+	-moz-transition: opacity 5s ease-in-out;
+	-ms-transition: opacity 5s ease-in-out;
+	-o-transition: opacity 5s ease-in-out;
+	padding: 10px;
+	display: none;
+}
+
+#thumbcontrols {
+	background-color: rgba(100,100,255,.8);
+	height: 100px;
+	position: absolute;
+	bottom: 0;
+	left: 0;
+	width: 100%;
+}
+
+#thumbclose {
+	position: absolute;
+	bottom: 70px;
+	right: 10px;
+	cursor: pointer;
+}
+
+#thumb h2 {
+	font-size: 16px;
+	color: #333;
+	margin:0;
+	padding:0;
+}
+
+#thumbcontent {
+	overflow: hidden;
+	height: calc(100% - 100px);
+	width: 100%;
+}
+
+#thumbcontent img {
+  height: 100%;
+	width: 100%;
+	object-fit: contain;
+}
 
 #notification {
-    position: absolute;
-    bottom: 40px;
-    left: 10px;
-    width: 300px;
-    background-color: rgba(255,255,255,.8);
-    height: 100px;
-    border-radius: 4px;
-    opacity:0;
-    -webkit-transition: opacity 5s ease-in-out;
-    -moz-transition: opacity 5s ease-in-out;
-    -ms-transition: opacity 5s ease-in-out;
-    -o-transition: opacity 5s ease-in-out;
-    padding: 10px;
+	position: absolute;
+	bottom: 40px;
+	left: 10px;
+	width: 300px;
+	background-color: rgba(255,255,255,.8);
+	height: 100px;
+	border-radius: 4px;
+	opacity:0;
+	-webkit-transition: opacity 5s ease-in-out;
+	-moz-transition: opacity 5s ease-in-out;
+	-ms-transition: opacity 5s ease-in-out;
+	-o-transition: opacity 5s ease-in-out;
+	padding: 10px;
 }
 
 
 #notification h2 {
-    font-size: 16px;
-    color: #333;
-    margin:0;
-    padding:0;
+	font-size: 16px;
+	color: #333;
+	margin:0;
+	padding:0;
 }
 
 #notification.new, #notification:hover {
-    opacity: 1;
-    -webkit-transition: opacity 0.5s ease-in-out;
-    -moz-transition: opacity 0.5s ease-in-out;
-    -ms-transition: opacity 0.5s ease-in-out;
-    -o-transition: opacity 0.5s ease-in-out;
+	opacity: 1;
+	-webkit-transition: opacity 0.5s ease-in-out;
+	-moz-transition: opacity 0.5s ease-in-out;
+	-ms-transition: opacity 0.5s ease-in-out;
+	-o-transition: opacity 0.5s ease-in-out;
 }
 
+#thumb a.download:before,
 #notification a.download:before {
-    display: inline-block;
-    width: 20px;
-    height: 20px;
-    content:"⏬";
-    font-size: 15px;
-    margin-right:5px;
+	display: inline-block;
+	width: 20px;
+	height: 20px;
+	content:"⏬";
+	font-size: 15px;
+	margin-right:5px;
 }
 
+#thumb a.flag:before,
 #notification a.flag:before {
-    display: inline-block;
-    width: 20px;
-    height: 20px;
-    content:"🚩";
-    font-size: 15px;
-    margin-right:5px;
+	display: inline-block;
+	width: 20px;
+	height: 20px;
+	content:"🚩";
+	font-size: 15px;
+	margin-right:5px;
 }
+
