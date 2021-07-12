@@ -391,15 +391,12 @@ class fastback {
 <html lang="en">
 	<head>
 		<meta charset="UTF-8">
-		<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
-		<link rel="shortcut icon" href="'.$dirname.'/fastback.png"> 
-		<link rel="apple-touch-icon" href="'.$dirname.'/fastback.png">
-		<title>Moore Photos</title>
-		<link rel="stylesheet" href="'.$dirname.'/fastback.css">
 		<base href="'. $this->cache . '">
-        <style>
-            .photos .thumbnail,.body { background-image: url(\'' . $this->cache . 'fastback.png\'); };
-        </style>
+		<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
+		<link rel="shortcut icon" href="' . $dirname . '/fastback_assets/favicon.png"> 
+		<link rel="apple-touch-icon" href="' . $dirname . '/fastback_assets/favicon.png">
+		<title>Moore Photos</title>
+		<link rel="stylesheet" href="'.$dirname.'/fastback_assets/fastback.css">
     </head>
 	<body>
 		<div class="photos" id="photos"><div id="photospacer"></div></div>
@@ -433,7 +430,7 @@ class fastback {
 		<div id="thumb"><div id="thumbcontent"></div><div id="thumbcontrols"></div><div id="thumbclose">🆇</div></div>
 	</body>
 	<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
-	<script src="'.$dirname.'/fastback.js"></script>
+	<script src="'.$dirname.'/fastback_assets/fastback.js"></script>
 </html>';
 		print $html;
 	}
