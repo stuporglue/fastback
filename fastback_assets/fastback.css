@@ -225,6 +225,7 @@ body {
 	-o-transition: opacity 5s ease-in-out;
 	padding: 10px;
 	display: none;
+	z-index: 10;
 }
 
 #thumbcontrols {
@@ -277,6 +278,7 @@ body {
 	-ms-transition: opacity 5s ease-in-out;
 	-o-transition: opacity 5s ease-in-out;
 	padding: 10px;
+	z-index: 2;
 }
 
 
@@ -326,13 +328,12 @@ body {
 	position: absolute;
 	top: 0;
 	left: 0;
-	z-index: -1;
 }
-
 
 .thumbnail[data-isvideo="1"]:before {
 	display: block;
 	position: relative;
+	z-index: 1;
 	width: 100%;
 	height: 100%;
 	content: " ";
@@ -343,3 +344,4 @@ body {
 	font-size: 10em;
 	opacity: 0.4;
 }
+

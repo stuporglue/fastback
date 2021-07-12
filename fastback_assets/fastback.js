@@ -46,6 +46,7 @@ class Fastback {
 		jQuery('.photos').on('click','.thumbnail',this.handleThumbClick.bind(this));
 		jQuery('.scroller').on('mouseup','.nav',this.navClick.bind(this));
 		jQuery('#thumbclose').on('click',this.hideThumb.bind(this));
+		jQuery(document).on('keyup',this.keyupHandler.bind(this));
 	}
 
 	// Append as many photos as needed to meet the page size
@@ -496,6 +497,12 @@ class Fastback {
 		var found = fastback.tags.filter(function(e){return e.match(re);}).join("");
 		jQuery('#photos').html(found);
 		this.curthumbs = jQuery('.photos .thumbnail');
+	}
+
+	keyupHandler(e) {
+	     if (e.key === "Escape") { 
+			this.hideThumb();
+		}
 	}
 }
 
