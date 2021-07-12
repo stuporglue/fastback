@@ -8,7 +8,7 @@ html,body {
 
 .photos .thumbnail, 
 .body {
-	background-image: url('fastback_assets/loading.png');
+	background-image: url('loading.png');
 }
 
 body {
@@ -322,23 +322,24 @@ body {
 	left: 0;
 }
 
-
-
-.thumbnail {
-	display: flex;
+.thumbnail img {
+	position: absolute;
+	top: 0;
+	left: 0;
+	z-index: -1;
 }
 
+
 .thumbnail[data-isvideo="1"]:before {
-	display: flex;
-	align-items: center;
-	justify-content: center;
+	display: block;
 	position: relative;
 	width: 100%;
 	height: 100%;
-	z-index: 1;
-	color: white;
-	content: url('playbutton.png');
+	content: " ";
+	background-image: url('playbutton.png');
+	background-size: 50% 50%;
+	background-repeat: no-repeat;
+	background-position: center; 
 	font-size: 10em;
 	opacity: 0.4;
-	filter: blur(1px);
 }

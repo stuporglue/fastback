@@ -149,6 +149,8 @@ class Fastback {
 
 	hideThumb() {
 		jQuery('#thumb').hide();
+		jQuery('#thumbcontent').html("");
+		jQuery('#thumbcontrols').html("");
 	}
 
 	showNotification(html,timer){
