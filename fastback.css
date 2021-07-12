@@ -52,7 +52,7 @@ body {
 .photos .thumbnail:after {
 	content: attr(data-date);
 	max-height: 50%;
-	max-width: 50%;
+	max-width: 75%;
 	position: absolute;
 	bottom: 0;
 	left: 0;
@@ -60,6 +60,9 @@ body {
 	display: inline-block;
 	box-sizing: border-box;
 	background-color: rgba(255,255,255,.8);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	word-wrap: break-letter;
 }
 
 .y1980 ~ .y1980:after, .y1981 ~ .y1981:after, .y1982 ~ .y1982:after, .y1983 ~ .y1983:after, .y1984 ~ .y1984:after, .y1985 ~ .y1985:after,
@@ -80,14 +83,6 @@ body {
 .photos .thumbnail img {
 	width: 100%;
 	height: 100%;
-}
-
-
-.photos .thumbnail.removing {
-	-webkit-transition: height 1s ease-in-out;
-	-moz-transition:	height 1s ease-in-out;
-	-ms-transition:		height 1s ease-in-out;
-	-o-transition:		height 1s ease-in-out;
 }
 
 #photospacer {
@@ -137,6 +132,7 @@ body {
 
 .scroller .nav:hover {
 	opacity: 1;
+	font-size: 25px;
 	-webkit-transition: opacity 0.1s ease-in-out;
 	-moz-transition: opacity 0.1s ease-in-out;
 	-ms-transition: opacity 0.1s ease-in-out;
@@ -255,7 +251,8 @@ body {
 	width: 100%;
 }
 
-#thumbcontent img {
+#thumbcontent img,
+#thumbcontent video {
 	height: 100%;
 	width: 100%;
 	object-fit: contain;

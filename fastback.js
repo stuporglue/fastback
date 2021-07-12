@@ -44,7 +44,7 @@ class Fastback {
 		jQuery('.slider').on('change',this.sliderChange.bind(this));
 		jQuery('.photos').on('scroll',this.debounce_scroll.bind(this));
 		jQuery('.photos').on('click','.thumbnail',this.handleThumbClick.bind(this));
-		jQuery('.scroller').on('click','.nav',this.navClick.bind(this));
+		jQuery('.scroller').on('mouseup','.nav',this.navClick.bind(this));
 		jQuery('#thumbclose').on('click',this.hideThumb.bind(this));
 	}
 
@@ -185,14 +185,21 @@ class Fastback {
 	}
 
 	handleThumbClick(e){
-		var clicked = jQuery(e.target);
+		var divwrap = jQuery(e.target).closest('div.thumbnail');
+		var img = divwrap.find('img');
 
-		var imghtml = '<img src="' + fastback.originurl + clicked.attr('src').replace(/.jpg$/,'') +'"/>';
+		var imghtml;
+		if (divwrap.data('isvideo') == 1) {
+			imghtml = '<video controls><source src="' + fastback.originurl + img.attr('src').replace(/.jpg$/,'') + '">Your browser does not support this video format.</video>';
+		} else {
+			imghtml = '<img src="' + fastback.originurl + img.attr('src').replace(/.jpg$/,'') +'"/>';
+		}
 
-		var ctrlhtml = '<h2>' + clicked.data('date') + '</h2>';
-		ctrlhtml += '<p><a class="download" href="' + fastback.originurl + clicked.attr('src').replace(/.jpg$/,'') + '" download>' + clicked.attr('alt') + '</a>';
+
+		var ctrlhtml = '<h2>' + divwrap.data('date') + '</h2>';
+		ctrlhtml += '<p><a class="download" href="' + fastback.originurl + img.attr('src').replace(/.jpg$/,'') + '" download>' + img.attr('alt') + '</a>';
 		ctrlhtml += '<br>';
-		ctrlhtml += '<a class="flag" onclick="return fastback.sendbyajax(this)" href=\"' + fastback.originurl + 'fastback.php?flag=' + encodeURIComponent('./' + clicked.attr('src').replace(/.jpg$/,'')) + '\">Flag Image</a>';
+		ctrlhtml += '<a class="flag" onclick="return fastback.sendbyajax(this)" href=\"' + fastback.originurl + 'fastback.php?flag=' + encodeURIComponent('./' + img.attr('src').replace(/.jpg$/,'')) + '\">Flag Image</a>';
 		ctrlhtml += '</p>';
 		this.showThumb(imghtml,ctrlhtml);
 	}

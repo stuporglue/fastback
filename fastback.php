@@ -1,5 +1,4 @@
 <?php
-
 declare(ticks=1);
 
 ini_set('display_errors', 1);
@@ -13,7 +12,8 @@ class fastback {
 	var $db_lock_file = '/shared/big/no_backup/web_cache/fastback.lock';
 	var $db_lock;
 
-	var $supported_file_types = array(
+	var $supported_photo_types = array(
+		// Photo formats
 		'png',
 		'jpg',
 		'heic',
@@ -23,7 +23,19 @@ class fastback {
 		'tif',
 		'heic',
 	);
-	var $blankpng = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+P+/HgAFhAJ/wlseKgAAAABJRU5ErkJggg==';
+		
+	var $supported_video_types = array(
+		// Video formats
+		'3gp',
+		'avi',
+		'm4v',
+		'mov',
+		'mp4',
+		'mpeg',
+		'mpg',
+		'ogg',
+		'vob'
+	);
 
 	var $meta =array();
 
@@ -65,7 +77,7 @@ class fastback {
 		$res = $this->sql->query($q_create_meta);
 		//var_dump($res);
 
-		$q_create_files = "CREATE TABLE IF NOT EXISTS fastback ( file TEXT PRIMARY KEY, mtime INTEGER, sorttime DATE, thumbnail TEXT)";
+		$q_create_files = "CREATE TABLE IF NOT EXISTS fastback ( file TEXT PRIMARY KEY, isvideo BOOL, mtime INTEGER, sorttime DATE, thumbnail TEXT)";
 
 		$res = $this->sql->query($q_create_files);
 		//var_dump($res);
@@ -79,6 +91,8 @@ class fastback {
 	 * Get all modified files into the db cache
 	 */
 	public function load_db_cache() {
+		global $argv;
+
 		$this->sql_connect();
 
 		$lastmod = '19000101';
@@ -86,8 +100,12 @@ class fastback {
 			$lastmod = $this->meta['lastmod'];
 		}
 
+		if ( count($argv) > 2 && $argv[1] == 'reset' ) {
+			$lastmod = '19000101';
+		}
+
 		chdir($this->photobase);
-		$filetypes = implode('\|',$this->supported_file_types);
+		$filetypes = implode('\|',array_merge($this->supported_photo_types, $this->supported_video_types));
 		$cmd = 'find . -type f -regextype sed -iregex  "./[0-9]\{4\}/[0-9]\{2\}/[0-9]\{2\}/.*\(' . $filetypes . '\)$" -newermt ' . $lastmod;
 		$modified_files_str = `$cmd`;
 		//print "$cmd\n";
@@ -97,19 +115,33 @@ class fastback {
 		flush();
 
 		$today = date('Ymd');
-		$multi_insert = "INSERT INTO fastback (file,mtime,sorttime) VALUES ";
-		$multi_insert_tail = " ON CONFLICT(file) DO NOTHING";
-		$collect = array();
+		$multi_insert = "INSERT INTO fastback (file,mtime,sorttime,isvideo) VALUES ";
+		$multi_insert_tail = " ON CONFLICT(file) DO UPDATE SET isvideo=";
+		$collect_photo = array();
+		$collect_video = array();
 		$maxtime = 0;
 		$togo = count($modified_files);
 		foreach($modified_files as $one_file){
 			$mtime = filemtime($one_file);
-			$collect[] = "('" . SQLite3::escapeString($one_file) . "','" . SQLite3::escapeString($mtime) . "','" . SQLite3::escapeString(preg_replace('|.*([0-9]{4})/([0-9]{2})/([0-9]{2})/.*|','\1-\2-\3',$one_file)) . "')";
+			$pathinfo = pathinfo($one_file);
+			if ( in_array($pathinfo['extension'],$this->supported_video_types) ) {
+				$collect_video[] = "('" . SQLite3::escapeString($one_file) . "','" . SQLite3::escapeString($mtime) . "','" . SQLite3::escapeString(preg_replace('|.*([0-9]{4})/([0-9]{2})/([0-9]{2})/.*|','\1-\2-\3',$one_file)) . "',0)";
+			} else {
+				$collect_photo[] = "('" . SQLite3::escapeString($one_file) . "','" . SQLite3::escapeString($mtime) . "','" . SQLite3::escapeString(preg_replace('|.*([0-9]{4})/([0-9]{2})/([0-9]{2})/.*|','\1-\2-\3',$one_file)) . "',0)";
+			}
 
-			if ( count($collect) > 1000 ) {
-				$sql = $multi_insert . implode(",",$collect) . $multi_insert_tail;	
+			if ( count($collect_photo) > 1000 ) {
+				$sql = $multi_insert . implode(",",$collect_photo) . $multi_insert_tail . '0';
 				$this->sql->query($sql);
-				$collect = array();
+				$collect_photo = array();
+				$togo -= 1000;
+				print "Upserted 1000, $togo left to go\n";
+			}
+
+			if ( count($collect_video) > 1000 ) {
+				$sql = $multi_insert . implode(",",$collect_video) . $multi_insert_tail . '1';
+				$this->sql->query($sql);
+				$collect_video = array();
 				$togo -= 1000;
 				print "Upserted 1000, $togo left to go\n";
 			}
@@ -122,6 +154,23 @@ class fastback {
 
 		if ($maxtime > $today){
 			$maxtime = $today;
+		}
+
+
+		if ( count($collect_photo) > 0 ) {
+			$sql = $multi_insert . implode(",",$collect_photo) . $multi_insert_tail . '0';
+			$this->sql->query($sql);
+			$togo -= count($collect_photo);
+			$collect_photo = array();
+			print "Upserted 1000, $togo left to go\n";
+		}
+
+		if ( count($collect_video) > 0 ) {
+			$sql = $multi_insert . implode(",",$collect_video) . $multi_insert_tail . '1';
+			$this->sql->query($sql);
+			$togo -= count($collect_video);
+			$collect_video = array();
+			print "Upserted 1000, $togo left to go\n";
 		}
 
 		$this->sql->query("INSERT INTO fastbackmeta (key,value) values ('lastmod',$maxtime) ON CONFLICT(key) DO UPDATE SET value=$maxtime");
@@ -178,7 +227,6 @@ class fastback {
 	private function _make_thumbnails($childno = "Unknown") {
 		echo "Child $childno pid is " . getmypid() . "\n";
 
-		$made_some = false;
 		do {
 			$queue = array();
 			$this->sql_connect();
@@ -202,6 +250,7 @@ class fastback {
 
 				$thumbnailfile = $this->cache . ltrim($file,'./') . '.jpg';
 
+				// Make it if needed
 				if ( !file_exists($thumbnailfile) ) {
 					$dirname = dirname($thumbnailfile);
 					if (!file_exists($dirname) ){
@@ -210,16 +259,29 @@ class fastback {
 
 					$shellfile = escapeshellarg($file);
 					$shellthumb = escapeshellarg($thumbnailfile);
-					$cmd = "vipsthumbnail --size=120x120 --output=$shellthumb --smartcrop=attention $shellfile";
-					echo "\tChild $childno -- $cmd\n";
-					$res = `$cmd`;
-					$cmd = "jpegoptim --strip-all --strip-exif --strip-iptc $shellthumb";
-					echo "\tChild $childno -- $cmd\n";
-					$res = `$cmd`;
-					$made_some = true;
+					$pathinfo = pathinfo($file);
+
+					if (in_array($pathinfo['extension'],$this->supported_photo_types)){
+						$cmd = "vipsthumbnail --size=120x120 --output=$shellthumb --smartcrop=attention $shellfile";
+						echo "\tChild $childno -- $cmd\n";
+						$res = `$cmd`;
+					} else if ( in_array($pathinfo['extension'],$this->supported_video_types) ) {
+						$cmd = "ffmpeg -ss 10 -i $shellfile -vframes 1 $shellthumb 2>&1 > /tmp/fastback.ffmpeg.log.$childno";
+						echo "\tChild $childno -- $cmd\n";
+						$res = `$cmd`;
+					}
+
+					if ( file_exists( $thumbnailfile ) ) {
+						$cmd = "jpegoptim --strip-all --strip-exif --strip-iptc $shellthumb";
+						echo "\tChild $childno -- $cmd\n";
+						$res = `$cmd`;
+					} 
 				}
-				// print "$childno";
-				$made_thumbs[$file] = $thumbnailfile;
+
+				// If we've got the file, we're good
+				if ( file_exists($thumbnailfile) ) {
+					$made_thumbs[$file] = $thumbnailfile;
+				}
 			}
 			print "Done with while loop\n";
 
@@ -236,9 +298,7 @@ class fastback {
 			}
 		} while (count($made_thumbs) > 0);
 
-		if ($made_some) {
-			@unlink($this->cache . 'fastback.json');
-		}
+		@unlink($this->cache . 'fastback.json');
 	}
 
 	private function sql_connect($try_no = 1){
@@ -299,7 +359,7 @@ class fastback {
 			exit();
 		}
 
-		$res = $this->sql->query("SELECT file,sorttime FROM fastback WHERE thumbnail IS NOT NULL AND thumbnail NOT LIKE 'RESERVE%' ORDER BY sorttime DESC");
+		$res = $this->sql->query("SELECT file,sorttime,isvideo FROM fastback WHERE thumbnail IS NOT NULL AND thumbnail NOT LIKE 'RESERVE%' ORDER BY sorttime DESC");
 		$last_date = NULL;
 		$last_year = NULL;
 		$idx = 0;
@@ -314,7 +374,7 @@ class fastback {
 				}
 			}
             $base = basename($row['file']);
-			$json['tags'][] = '<div class="thumbnail y' . substr($row['sorttime'],0,4) . '" data-date="' . $row['sorttime'] . '" id="photo-' . $idx . '" data-alt="' . $base .  '"><img  src="' . htmlentities(substr($row['file'],2)) . '.jpg" " alt="' . $base . '" /></div>';
+			$json['tags'][] = '<div class="thumbnail y' . substr($row['sorttime'],0,4) . ' m' . substr($row['sorttime'],5,2) . '" data-isvideo="' . ( $row['isvideo'] ? 1 : 0 ) . '" data-date="' . $row['sorttime'] . '" id="photo-' . $idx . '" data-alt="' . $base .  '"><img  src="' . htmlentities(substr($row['file'],2)) . '.jpg" " alt="' . $base . '" /></div>';
 			$idx++;
 		}
 
