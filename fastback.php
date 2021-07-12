@@ -314,7 +314,7 @@ class fastback {
 				}
 			}
             $base = basename($row['file']);
-			$json['tags'][] = '<img id="photo-' . $idx .'" data-date="' . $row['sorttime'] . '" class="thumbnail" src="' . htmlentities(substr($row['file'],2)) . '.jpg" " alt="' . $base . '" />';
+			$json['tags'][] = '<div class="thumbnail y' . substr($row['sorttime'],0,4) . '" data-date="' . $row['sorttime'] . '" id="photo-' . $idx . '" data-alt="' . $base .  '"><img  src="' . htmlentities(substr($row['file'],2)) . '.jpg" " alt="' . $base . '" /></div>';
 			$idx++;
 		}
 
