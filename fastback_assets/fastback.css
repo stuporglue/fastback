@@ -110,6 +110,7 @@ body {
 	-o-transition: opacity 0.1s ease-in-out;
 	cursor: pointer;
 	height: calc(100% - 30px);
+	z-index: 9;
 }
 
 .scroller:hover {

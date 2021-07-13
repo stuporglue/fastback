@@ -12,6 +12,9 @@ class fastback {
 	var $db_lock_file = '/shared/big/no_backup/web_cache/fastback.lock';
 	var $db_lock;
 
+	var $process_limit = 1000;
+	var $cores = 5;
+
 	var $supported_photo_types = array(
 		// Photo formats
 		'png',
@@ -40,8 +43,6 @@ class fastback {
 	var $meta =array();
 
 	var $sql;
-
-	var $cores = 4;
 
 
 
@@ -100,7 +101,7 @@ class fastback {
 			$lastmod = $this->meta['lastmod'];
 		}
 
-		if ( count($argv) > 2 && $argv[1] == 'reset' ) {
+		if ( count($argv) > 1 && $argv[1] == 'reset' ) {
 			$lastmod = '19000101';
 		}
 
@@ -110,6 +111,7 @@ class fastback {
 		$modified_files_str = `$cmd`;
 		//print "$cmd\n";
 		$modified_files = explode("\n",$modified_files_str);
+		$modified_files = array_filter($modified_files);
 
 		print "Building cache for " . count($modified_files) . " files modified since $lastmod\n";
 		flush();
@@ -121,29 +123,40 @@ class fastback {
 		$collect_video = array();
 		$maxtime = 0;
 		$togo = count($modified_files);
-		foreach($modified_files as $one_file){
+		foreach($modified_files as $k => $one_file){
 			$mtime = filemtime($one_file);
 			$pathinfo = pathinfo($one_file);
-			if ( in_array($pathinfo['extension'],$this->supported_video_types) ) {
-				$collect_video[] = "('" . SQLite3::escapeString($one_file) . "','" . SQLite3::escapeString($mtime) . "','" . SQLite3::escapeString(preg_replace('|.*([0-9]{4})/([0-9]{2})/([0-9]{2})/.*|','\1-\2-\3',$one_file)) . "',0)";
-			} else {
-				$collect_photo[] = "('" . SQLite3::escapeString($one_file) . "','" . SQLite3::escapeString($mtime) . "','" . SQLite3::escapeString(preg_replace('|.*([0-9]{4})/([0-9]{2})/([0-9]{2})/.*|','\1-\2-\3',$one_file)) . "',0)";
+
+			if ( empty($pathinfo['extension']) ) {
+				print_r($pathinfo);
+				var_dump($one_file);
+				die("No file extension. Weird.");
+				continue;
 			}
 
-			if ( count($collect_photo) > 1000 ) {
+
+			if ( in_array(strtolower($pathinfo['extension']),$this->supported_video_types) ) {
+				$collect_video[] = "('" . SQLite3::escapeString($one_file) . "','" . SQLite3::escapeString($mtime) . "','" . SQLite3::escapeString(preg_replace('|.*([0-9]{4})/([0-9]{2})/([0-9]{2})/.*|','\1-\2-\3',$one_file)) . "',0)";
+			} else if ( in_array(strtolower($pathinfo['extension']),$this->supported_photo_types) ) {
+				$collect_photo[] = "('" . SQLite3::escapeString($one_file) . "','" . SQLite3::escapeString($mtime) . "','" . SQLite3::escapeString(preg_replace('|.*([0-9]{4})/([0-9]{2})/([0-9]{2})/.*|','\1-\2-\3',$one_file)) . "',0)";
+			} else {
+				error_log("Don't know what to do with " . print_r($pathinfo,true));
+			}
+
+			if ( count($collect_photo) >= $this->process_limit) {
 				$sql = $multi_insert . implode(",",$collect_photo) . $multi_insert_tail . '0';
 				$this->sql->query($sql);
 				$collect_photo = array();
-				$togo -= 1000;
-				print "Upserted 1000, $togo left to go\n";
+				$togo -= $this->process_limit;
+				print "Upserted {$this->process_limit}, $togo left to go\n";
 			}
 
-			if ( count($collect_video) > 1000 ) {
+			if ( count($collect_video) >= $this->process_limit) {
 				$sql = $multi_insert . implode(",",$collect_video) . $multi_insert_tail . '1';
 				$this->sql->query($sql);
 				$collect_video = array();
-				$togo -= 1000;
-				print "Upserted 1000, $togo left to go\n";
+				$togo -= $this->process_limit;
+				print "Upserted {$this->process_limit}, $togo left to go\n";
 			}
 
 			$mtime_date = date('Ymd',$mtime);
@@ -162,7 +175,7 @@ class fastback {
 			$this->sql->query($sql);
 			$togo -= count($collect_photo);
 			$collect_photo = array();
-			print "Upserted 1000, $togo left to go\n";
+			print "Upserted some, $togo left to go\n";
 		}
 
 		if ( count($collect_video) > 0 ) {
@@ -170,7 +183,7 @@ class fastback {
 			$this->sql->query($sql);
 			$togo -= count($collect_video);
 			$collect_video = array();
-			print "Upserted 1000, $togo left to go\n";
+			print "Upserted some, $togo left to go\n";
 		}
 
 		$this->sql->query("INSERT INTO fastbackmeta (key,value) values ('lastmod',$maxtime) ON CONFLICT(key) DO UPDATE SET value=$maxtime");
@@ -230,7 +243,7 @@ class fastback {
 		do {
 			$queue = array();
 			$this->sql_connect();
-			$res = $this->sql->query("UPDATE fastback SET thumbnail='RESERVED-" . getmypid() . "' WHERE thumbnail IS NULL AND FILE != '' LIMIT 1000");
+			$res = $this->sql->query("UPDATE fastback SET thumbnail='RESERVED-" . getmypid() . "' WHERE thumbnail IS NULL AND FILE != '' LIMIT " . $this->process_limit);
 			$q_queue = "SELECT file FROM fastback WHERE thumbnail='RESERVED-" . getmypid() . "'";
 			$res = $this->sql->query($q_queue);
 			while($row = $res->fetchArray(SQLITE3_ASSOC)){
@@ -261,14 +274,29 @@ class fastback {
 					$shellthumb = escapeshellarg($thumbnailfile);
 					$pathinfo = pathinfo($file);
 
-					if (in_array($pathinfo['extension'],$this->supported_photo_types)){
+					if (in_array(strtolower($pathinfo['extension']),$this->supported_photo_types)){
 						$cmd = "vipsthumbnail --size=120x120 --output=$shellthumb --smartcrop=attention $shellfile";
 						echo "\tChild $childno -- $cmd\n";
 						$res = `$cmd`;
-					} else if ( in_array($pathinfo['extension'],$this->supported_video_types) ) {
+					} else if ( in_array(strtolower($pathinfo['extension']),$this->supported_video_types) ) {
 						$cmd = "ffmpeg -ss 10 -i $shellfile -vframes 1 $shellthumb 2>&1 > /tmp/fastback.ffmpeg.log.$childno";
 						echo "\tChild $childno -- $cmd\n";
 						$res = `$cmd`;
+
+						if ( !file_exists($thumbnailfile)) {
+							$cmd = "ffmpeg -ss 2 -i $shellfile -vframes 1 $shellthumb 2>&1 > /tmp/fastback.ffmpeg.log.$childno";
+							echo "\tChild $childno -- $cmd\n";
+							$res = `$cmd`;
+						}
+
+						if ( !file_exists($thumbnailfile)) {
+							$cmd = "ffmpeg -ss 1 -i $shellfile -vframes 1 $shellthumb 2>&1 > /tmp/fastback.ffmpeg.log.$childno";
+							echo "\tChild $childno -- $cmd\n";
+							$res = `$cmd`;
+						}
+					} else {
+						print "What do I do with ";
+						print_r($pathinfo);
 					}
 
 					if ( file_exists( $thumbnailfile ) ) {
@@ -296,6 +324,7 @@ class fastback {
 				$this->sql->query($update_q);
 				$this->sql_disconnect();
 			}
+
 		} while (count($made_thumbs) > 0);
 
 		@unlink($this->cache . 'fastback.json');
