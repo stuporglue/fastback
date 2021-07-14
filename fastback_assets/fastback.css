@@ -19,7 +19,7 @@ body {
 }
 
 .photos {
-	scroll-snap-type: y mandatory;
+	/* scroll-snap-type: y mandatory; */
 	position: absolute;
 	left: 0;
 	vertical-align: top;
@@ -44,7 +44,7 @@ body {
 	display: inline-block;
 	float: left;
 	box-sizing: border-box;
-	scroll-snap-align: start;
+	/* scroll-snap-align: start; */
 	border-right: 1px solid #ccc;
 	border-bottom: 1px solid #ccc;
 	background-size: 20px;
@@ -290,7 +290,7 @@ body {
 	padding:0;
 }
 
-#notification.new, #notification:hover {
+#notification.new {
 	opacity: 1;
 	-webkit-transition: opacity 0.5s ease-in-out;
 	-moz-transition: opacity 0.5s ease-in-out;
@@ -346,3 +346,14 @@ body {
 	opacity: 0.4;
 }
 
+
+/* smartphones, touchscreens */
+@media (hover: none) and (pointer: coarse) {
+	#resizer {
+		display: none;
+	}
+
+	.scroller {
+		height: 100%;
+	}
+}

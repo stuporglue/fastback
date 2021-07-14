@@ -47,6 +47,37 @@ class Fastback {
 		jQuery('.scroller').on('mouseup','.nav',this.navClick.bind(this));
 		jQuery('#thumbclose').on('click',this.hideThumb.bind(this));
 		jQuery(document).on('keyup',this.keyupHandler.bind(this));
+		jQuery('.photos').hammer({
+			recognizers: [
+				// RecognizerClass, [options], [recognizeWith, ...], [requireFailure, ...]
+				[Hammer.Pinch, { enable: true }]
+				// ,[Hammer.Swipe,{ direction: Hammer.DIRECTION_HORIZONTAL }]
+			]
+		}).on('pinchout pinchin', this.pinchhandler.bind(this));
+	}
+
+	pinchhandler(e) {
+		this.pinchhandler.debounce = this.pinchhandler.debounce || 300;
+		var last_ts = this.pinchhandler.last_ts || 0;
+		this.pinchhandler.last_ts = e.timeStamp;
+
+		if ( e.timeStamp - last_ts <  this.pinchhandler.debounce ) {
+			console.log("Too soon. Skipping this pinch");
+			return;
+		}
+
+		var mr = jQuery('#myRange');
+		var cur = mr.val();
+		if ( e.type == 'pinchout' ) {
+			console.log("Using " + e.type + " with staritng value of " + cur + ". New val should be " + Math.max(cur-1,1) + "(pinchout)");
+			mr.val(Math.max(cur - 1,1)).trigger('change');
+		} else if ( e.type == 'pinchin' ) {
+			console.log("Using " + e.type + " with staritng value of " + cur + ". New val should be " + Math.min(cur+1,10) + "(pinchin)");
+			mr.val(Math.min(cur + 1,10)).trigger('change');
+		}
+
+		this.pinchhandler.debounce = 1;
+		this.pinchhandler.last_ts = this.pinchhandler.last_ts + this.pinchhandler.debounce;
 	}
 
 	// Append as many photos as needed to meet the page size
@@ -210,19 +241,19 @@ class Fastback {
 	sliderChange(e){
 		var rowwidth = e.target.value;
 		var curwidthpercent = 100/rowwidth
-		this.pagesize = Math.pow(rowwidth,2) * 2 * this.minpages; //(square * 2 for height, load 3 screens worth at a time)
-		var leftover = this.pagesize % rowwidth;
+		fastback.pagesize = Math.pow(rowwidth,2) * 2 * fastback.minpages; //(square * 2 for height, load 3 screens worth at a time)
+		var leftover = fastback.pagesize % rowwidth;
 		if ( leftover !== 0 ) {
-			this.pagesize += (rowwidth - leftover);
+			fastback.pagesize += (rowwidth - leftover);
 		}
 
 		document.styleSheets[0].insertRule('.photos .thumbnail { width: ' + curwidthpercent + 'vw; height: ' + curwidthpercent + 'vw; }', document.styleSheets[0].cssRules.length);
-		this.appendphotos();
+		fastback.normalize_view();
 
-		var firstoffset = this.curthumbs.first().offset().top;
-		for(var i = 1;i<this.curthumbs.length;i++){
-			if (this.curthumbs.eq(i).offset().top !== firstoffset){
-				this.rowwidth = i;
+		var firstoffset = fastback.curthumbs.first().offset().top;
+		for(var i = 1;i<fastback.curthumbs.length;i++){
+			if (fastback.curthumbs.eq(i).offset().top !== firstoffset){
+				fastback.rowwidth = i;
 				break;
 			}
 		}
@@ -231,7 +262,7 @@ class Fastback {
 	navClick(e) {
 		var year = jQuery(e.target).closest('.nav').data('year');
 		jQuery('#photos').fadeOut(500);
-		
+
 		if ( parseInt(year) == year ) {
 			if ( this.disablehandlers ) {
 				this.disablehandlers = false;
@@ -272,14 +303,14 @@ class Fastback {
 				nextvisible = nextvisible.next();
 			}
 		}
-			
+
 		var rows = Math.ceil(window.innerHeight / (window.innerWidth / this.rowwidth));
 		var count = rows * cols;
 		return count;
 	}
 
 	debounce_scroll(e) {
-		
+
 		if (this.disablehandlers) {
 			return;
 		}
@@ -341,7 +372,7 @@ class Fastback {
 			this.last_scroll_factors.total_photocount == total_photocount && 
 			this.last_scroll_factors.mid_chunk == mid_chunk &&
 			this.last_scroll_factors.anchor == anchor
-			) {
+		) {
 			this.normalizing = false;
 			return;
 		}
@@ -379,14 +410,14 @@ class Fastback {
 
 		// Now figure out if we have any to prepend or append.
 
-		var prepend;
-		var remove_from_end;
-		var append;
-		var remove_from_start;
+		var prepend = jQuery();
+		var remove_from_end = jQuery();
+		var append = jQuery();
+		var remove_from_start = jQuery();
 		var curmin = -Infinity;
 		var curmax = -Infinity;
 		var movement;
-		if ( this.curthumbs.length !== 0){
+		if ( this.curthumbs.length !== 0) {
 			curmin = parseInt(this.curthumbs.first().attr('id').replace('photo-',''));
 			curmax = parseInt(this.curthumbs.last().attr('id').replace('photo-',''));
 		}
@@ -399,7 +430,7 @@ class Fastback {
 			// put before 
 			prepend = this.tags.slice(newmin,newmax + 1);
 		} else 
-		// Some overlap, new is slightly left - Prepend
+			// Some overlap, new is slightly left - Prepend
 		if ( newmin < curmin ) {
 			prepend = this.tags.slice(newmin, curmin);	
 		}
@@ -410,7 +441,7 @@ class Fastback {
 			// put before 
 			append = this.tags.slice(newmin,newmax + 1);
 		} else 
-		// Some overlap, new is slightly right - Append
+			// Some overlap, new is slightly right - Append
 		if ( newmax > curmax ) {
 			append = this.tags.slice(curmax + 1,newmax + 1);
 		}
@@ -424,7 +455,7 @@ class Fastback {
 			remove_from_end = jQuery('.photos .thumbnail');
 			movement = 'reload';
 		} else 
-		// Some overlap, new is slightly left - Delete some and slide
+			// Some overlap, new is slightly left - Delete some and slide
 		if ( curmax > newmax ) {
 			remove_from_end = jQuery('#photo-' + newmax).nextAll();
 			movement = 'slide';
@@ -435,17 +466,17 @@ class Fastback {
 			remove_from_start = jQuery('.photos .thumbnail');
 			movement = 'reload';
 		} else 
-		// Some overlap, new is slightly right - Delete some and slide
+			// Some overlap, new is slightly right - Delete some and slide
 		if ( curmin < newmin ) {
 			remove_from_start = jQuery('#photo-' + newmin).prevAll();
 			movement = 'slide';
 		}
 
 		this.last_scroll_factors = {
-			"-start": ( remove_from_start === undefined ? 0 : remove_from_start.length ),
-			"+start": ( prepend === undefined ? 0 : prepend.length ),
-			"+end": (append === undefined ? 0 : append.length ),
-			"-end": ( remove_from_end === undefined ? 0 : remove_from_end.length ),
+			"-start": remove_from_start.length + ' (' + (remove_from_start.length % this.rowwidth) + ')',
+			"+start": prepend.length  + ' (' + (prepend.length % this.rowwidth) + ')',
+			"+end": append.length + ' (' + (append.length % this.rowwidth) + ')',
+			"-end": remove_from_end.length + ' (' + (remove_from_end.length % this.rowwidth) + ')',
 			"movement": movement,
 			'first_visible': first_visible,
 			'total_photocount': total_photocount,
@@ -463,23 +494,10 @@ class Fastback {
 			jQuery('.photos').fadeOut(500);
 		}
 
-		if ( remove_from_start !== undefined ) {
-			// removing from start needs to adjust height of spacer
-			remove_from_start.remove();
-		}
-
-		if ( remove_from_end !== undefined ) {
-			remove_from_end.remove();
-		}
-
-		if ( prepend !== undefined ) {
-			// appending to start needs to adjust height of spacer
-			jQuery('#photos').prepend(prepend);
-		}
-
-		if ( append !== undefined ) {
-			jQuery('#photos').append(append);
-		}
+		remove_from_start.remove();
+		remove_from_end.remove();
+		jQuery('#photos').prepend(prepend);
+		jQuery('#photos').append(append);
 
 		if ( movement === 'reload' || (movement === 'slide' && starting_with !== undefined ) ) {
 			window.location.hash = '#photo-' + anchor;
@@ -500,7 +518,7 @@ class Fastback {
 	}
 
 	keyupHandler(e) {
-	     if (e.key === "Escape") { 
+		if (e.key === "Escape") { 
 			this.hideThumb();
 		}
 	}

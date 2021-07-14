@@ -103,6 +103,7 @@ class fastback {
 
 		if ( count($argv) > 1 && $argv[1] == 'reset' ) {
 			$lastmod = '19000101';
+			$this->sql->query("DELETE FROM fastback");
 		}
 
 		chdir($this->photobase);
@@ -290,7 +291,7 @@ class fastback {
 						}
 
 						if ( !file_exists($thumbnailfile)) {
-							$cmd = "ffmpeg -ss 1 -i $shellfile -vframes 1 $shellthumb 2>&1 > /tmp/fastback.ffmpeg.log.$childno";
+							$cmd = "ffmpeg -ss 00:00:00 -i $shellfile -frames:v 1 $shellthumb 2>&1 > /tmp/fastback.ffmpeg.log.$childno";
 							echo "\tChild $childno -- $cmd\n";
 							$res = `$cmd`;
 						}
@@ -428,7 +429,7 @@ class fastback {
 		<link rel="stylesheet" href="'.$dirname.'/fastback_assets/fastback.css">
     </head>
 	<body>
-		<div class="photos" id="photos"><div id="photospacer"></div></div>
+		<div class="photos" id="photos"></div>
 		<div class="scroller"></div>
 		<div class="calendarpick"><div class="year"></div><div class="calendar">
 			<div class="calendarrow">
@@ -458,7 +459,9 @@ class fastback {
 		<div id="notification"></div>
 		<div id="thumb"><div id="thumbcontent"></div><div id="thumbcontrols"></div><div id="thumbclose">🆇</div></div>
 	</body>
-	<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+	<script src="'.$dirname.'/fastback_assets/hammer.min.js"></script>
+	<script src="'.$dirname.'/fastback_assets/jquery.min.js"></script>
+	<script src="'.$dirname.'/fastback_assets/jquery.hammer.js"></script>
 	<script src="'.$dirname.'/fastback_assets/fastback.js"></script>
 </html>';
 		print $html;
