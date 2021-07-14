@@ -6,7 +6,7 @@ html,body {
 	overflow: hidden;
 }
 
-.photos .thumbnail, 
+.photos .tn, 
 .body {
 	background-image: url('loading.png');
 }
@@ -35,7 +35,7 @@ body {
 	-o-transition: opacity 0.1s ease-in-out;
 }
 
-.photos .thumbnail {
+.photos .tn{
 	margin: 0;
 	padding: 0;
 	border: 0;
@@ -54,7 +54,7 @@ body {
 	position: relative;
 }
 
-.photos .thumbnail:after {
+.photos .tn:after {
 	content: attr(data-date);
 	max-height: 50%;
 	max-width: 75%;
@@ -85,7 +85,7 @@ body {
 	display: none;
 }
 
-.photos .thumbnail img {
+.photos .tn img {
 	width: 100%;
 	height: 100%;
 }
@@ -319,19 +319,19 @@ body {
 }
 
 
-.thumbnail img {
+.tn img {
 	position: absolute;
 	top: 0;
 	left: 0;
 }
 
-.thumbnail img {
+.tn img {
 	position: absolute;
 	top: 0;
 	left: 0;
 }
 
-.thumbnail[data-isvideo="1"]:before {
+.tn.vid:before {
 	display: block;
 	position: relative;
 	z-index: 1;

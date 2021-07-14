@@ -367,6 +367,8 @@ class fastback {
 			$this->makejs();
         } else if (!empty($_GET['flag'])) {
             $this->flag_photo();
+        } else if (!empty($_GET['test'])) {
+            $this->test();
 		} else {
 			$this->makehtml();
 		}
@@ -404,7 +406,7 @@ class fastback {
 				}
 			}
             $base = basename($row['file']);
-			$json['tags'][] = '<div class="thumbnail y' . substr($row['sorttime'],0,4) . ' m' . substr($row['sorttime'],5,2) . '" data-isvideo="' . ( $row['isvideo'] ? 1 : 0 ) . '" data-date="' . $row['sorttime'] . '" id="photo-' . $idx . '" data-alt="' . $base .  '"><img  src="' . htmlentities(substr($row['file'],2)) . '.jpg" " alt="' . $base . '" /></div>';
+			$json['tags'][] = '<div class="tn y' . substr($row['sorttime'],0,4) . ' m' . substr($row['sorttime'],5,2) . ( $row['isvideo'] ? ' vid' : '') . '" data-d=' . str_replace('-','',$row['sorttime']) . ' id=p' . $idx . '><img loading=lazy  src="' . htmlentities(substr($row['file'],2)) . '.jpg" " alt="' . $base . '"></div>';
 			$idx++;
 		}
 
@@ -427,6 +429,7 @@ class fastback {
 		<link rel="apple-touch-icon" href="' . $dirname . '/fastback_assets/favicon.png">
 		<title>Moore Photos</title>
 		<link rel="stylesheet" href="'.$dirname.'/fastback_assets/fastback.css">
+		<!-- Powered by https://github.com/stuporglue/fastback/ -->
     </head>
 	<body>
 		<div class="photos" id="photos"></div>
@@ -488,6 +491,9 @@ class fastback {
 		header("Cache-Control: no-cache");
         print json_encode(array('file_flagged' => $_GET['flag']));
     }
+
+	public function test() {
+	}
 }
 
 new fastback();

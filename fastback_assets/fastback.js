@@ -43,7 +43,7 @@ class Fastback {
 		jQuery(document).ready(this.docReady);
 		jQuery('.slider').on('change',this.sliderChange.bind(this));
 		jQuery('.photos').on('scroll',this.debounce_scroll.bind(this));
-		jQuery('.photos').on('click','.thumbnail',this.handleThumbClick.bind(this));
+		jQuery('.photos').on('click','.tn',this.handleThumbClick.bind(this));
 		jQuery('.scroller').on('mouseup','.nav',this.navClick.bind(this));
 		jQuery('#thumbclose').on('click',this.hideThumb.bind(this));
 		jQuery(document).on('keyup',this.keyupHandler.bind(this));
@@ -210,9 +210,9 @@ class Fastback {
 		this.scrolltimer = new Date().getTime();
 
 		var idx = this.binary_search_find_visible();
-		// window.location.hash = '#photo-' + idx;
-		var cur = jQuery('#photo-' + idx);
-		var year = cur.data('date').substr(0,4);
+		// window.location.hash = '#p' + idx;
+		var cur = jQuery('#p' + idx);
+		var year = cur.data('d').substr(0,4);
 		var activeyear = jQuery('.nav.active');
 		if(activeyear.length > 0 && activeyear.first().data('year') != year){
 			activeyear.removeClass('active');
@@ -221,18 +221,18 @@ class Fastback {
 	}
 
 	handleThumbClick(e){
-		var divwrap = jQuery(e.target).closest('div.thumbnail');
+		var divwrap = jQuery(e.target).closest('div.tn');
 		var img = divwrap.find('img');
 
 		var imghtml;
-		if (divwrap.data('isvideo') == 1) {
+		if (divwrap.hasClass('vid')){
 			imghtml = '<video controls><source src="' + fastback.originurl + img.attr('src').replace(/.jpg$/,'') + '">Your browser does not support this video format.</video>';
 		} else {
 			imghtml = '<img src="' + fastback.originurl + img.attr('src').replace(/.jpg$/,'') +'"/>';
 		}
 
 
-		var ctrlhtml = '<h2>' + divwrap.data('date') + '</h2>';
+		var ctrlhtml = '<h2>' + (divwrap.data('d') + '').replace(/(....)(..)(..)/,"$1-$2-$3") + '</h2>';
 		ctrlhtml += '<p><a class="download" href="' + fastback.originurl + img.attr('src').replace(/.jpg$/,'') + '" download>' + img.attr('alt') + '</a>';
 		ctrlhtml += '<br>';
 		ctrlhtml += '<a class="flag" onclick="return fastback.sendbyajax(this)" href=\"' + fastback.originurl + 'fastback.php?flag=' + encodeURIComponent('./' + img.attr('src').replace(/.jpg$/,'')) + '\">Flag Image</a>';
@@ -249,7 +249,7 @@ class Fastback {
 			fastback.pagesize += (rowwidth - leftover);
 		}
 
-		document.styleSheets[0].insertRule('.photos .thumbnail { width: ' + curwidthpercent + 'vw; height: ' + curwidthpercent + 'vw; }', document.styleSheets[0].cssRules.length);
+		document.styleSheets[0].insertRule('.photos .tn{ width: ' + curwidthpercent + 'vw; height: ' + curwidthpercent + 'vw; }', document.styleSheets[0].cssRules.length);
 		fastback.normalize_view();
 
 		var firstoffset = fastback.curthumbs.first().offset().top;
@@ -297,7 +297,7 @@ class Fastback {
 		var nextvisible = this.binary_search_find_visible();
 		// But check reality if we have photos loaded
 		if ( nextvisible !== false ) {
-			nextvisible = jQuery('#photo-' + nextvisible);
+			nextvisible = jQuery('#p' + nextvisible);
 			var offset = nextvisible.offset().top;
 			var cols = 1;
 			while ( nextvisible.next().offset().top == offset ) {
@@ -454,23 +454,23 @@ class Fastback {
 
 		// No overlap, new is left - Delete all and refresh
 		if ( newmax < curmin ) {
-			remove_from_end = jQuery('.photos .thumbnail');
+			remove_from_end = jQuery('.photos .tn');
 			movement = 'reload';
 		} else 
 			// Some overlap, new is slightly left - Delete some and slide
 		if ( curmax > newmax ) {
-			remove_from_end = jQuery('#photo-' + newmax).nextAll();
+			remove_from_end = jQuery('#p' + newmax).nextAll();
 			movement = 'slide';
 		}
 
 		// No overlap, new is right - Delete all and refresh
 		if ( curmax < newmin ) {
-			remove_from_start = jQuery('.photos .thumbnail');
+			remove_from_start = jQuery('.photos .tn');
 			movement = 'reload';
 		} else 
 			// Some overlap, new is slightly right - Delete some and slide
 		if ( curmin < newmin ) {
-			remove_from_start = jQuery('#photo-' + newmin).prevAll();
+			remove_from_start = jQuery('#p' + newmin).prevAll();
 			movement = 'slide';
 		}
 
@@ -502,12 +502,12 @@ class Fastback {
 		jQuery('#photos').append(append);
 
 		// if ( movement === 'reload' || (movement === 'slide' && starting_with !== undefined ) ) {
-		// 	window.location.hash = '#photo-' + anchor;
+		// 	window.location.hash = '#p' + anchor;
 		// }	
 
 		jQuery('.photos').fadeIn(500);
 
-		this.curthumbs = jQuery('.photos .thumbnail');
+		this.curthumbs = jQuery('.photos .tn');
 
 		this.normalizing = false;
 	}
@@ -516,7 +516,7 @@ class Fastback {
 		var re = new RegExp( ' data-date="....-' + ("0" + (new Date().getMonth() + 1)).slice(-2) + '-' + ("0" + new Date().getDate()).slice(-2) + '" ');
 		var found = fastback.tags.filter(function(e){return e.match(re);}).join("");
 		jQuery('#photos').html(found);
-		this.curthumbs = jQuery('.photos .thumbnail');
+		this.curthumbs = jQuery('.photos .tn');
 	}
 
 	keyupHandler(e) {
