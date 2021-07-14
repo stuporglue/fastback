@@ -349,6 +349,7 @@ body {
 
 /* smartphones, touchscreens */
 @media (hover: none) and (pointer: coarse) {
+	/*
 	#resizer {
 		display: none;
 	}
@@ -356,4 +357,5 @@ body {
 	.scroller {
 		height: 100%;
 	}
+	*/
 }

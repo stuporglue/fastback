@@ -47,13 +47,15 @@ class Fastback {
 		jQuery('.scroller').on('mouseup','.nav',this.navClick.bind(this));
 		jQuery('#thumbclose').on('click',this.hideThumb.bind(this));
 		jQuery(document).on('keyup',this.keyupHandler.bind(this));
-		jQuery('.photos').hammer({
-			recognizers: [
-				// RecognizerClass, [options], [recognizeWith, ...], [requireFailure, ...]
-				[Hammer.Pinch, { enable: true }]
-				// ,[Hammer.Swipe,{ direction: Hammer.DIRECTION_HORIZONTAL }]
-			]
-		}).on('pinchout pinchin', this.pinchhandler.bind(this));
+		/*
+			jQuery('.photos').hammer({
+				recognizers: [
+					// RecognizerClass, [options], [recognizeWith, ...], [requireFailure, ...]
+					[Hammer.Pinch, { enable: true }]
+					// ,[Hammer.Swipe,{ direction: Hammer.DIRECTION_HORIZONTAL }]
+				]
+			}).on('pinchout pinchin', this.pinchhandler.bind(this));
+		*/
 	}
 
 	pinchhandler(e) {
@@ -499,9 +501,9 @@ class Fastback {
 		jQuery('#photos').prepend(prepend);
 		jQuery('#photos').append(append);
 
-		if ( movement === 'reload' || (movement === 'slide' && starting_with !== undefined ) ) {
-			window.location.hash = '#photo-' + anchor;
-		}	
+		// if ( movement === 'reload' || (movement === 'slide' && starting_with !== undefined ) ) {
+		// 	window.location.hash = '#photo-' + anchor;
+		// }	
 
 		jQuery('.photos').fadeIn(500);
 
