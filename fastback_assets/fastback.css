@@ -55,7 +55,7 @@ body {
 }
 
 .photos .tn:after {
-	content: attr(data-date);
+	content: attr(data-d);
 	max-height: 50%;
 	max-width: 75%;
 	position: absolute;

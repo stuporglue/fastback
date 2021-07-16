@@ -1,12 +1,8 @@
 class Fastback {
 	// built-in properties
-	pagesize = 300;
-
-	minphotos = 500;
+	minphotos = 200;
 	minpages = 5;
 
-	prevfirstvisible = 0;
-	urltimer = 0;
 	notificationtimer;
 	curthumbs = [];
 	originurl = location.pathname.replace(/[^\/]+$/,'');
@@ -172,7 +168,11 @@ class Fastback {
 			maxloops--;
 		}
 
-		return jQuery(this.curthumbs[min]).attr('id').replace('photo-','');
+		var v = jQuery(this.curthumbs[min]).attr('id').replace('p','');
+		if ( typeof v.offset === 'function' ) {
+			console.log("Undefined offset");
+		}
+		return v;
 	}
 
 	showThumb(imghtml,notificationhtml) {
@@ -241,13 +241,8 @@ class Fastback {
 	}
 
 	sliderChange(e){
-		var rowwidth = e.target.value;
-		var curwidthpercent = 100/rowwidth
-		fastback.pagesize = Math.pow(rowwidth,2) * 2 * fastback.minpages; //(square * 2 for height, load 3 screens worth at a time)
-		var leftover = fastback.pagesize % rowwidth;
-		if ( leftover !== 0 ) {
-			fastback.pagesize += (rowwidth - leftover);
-		}
+		fastback.rowwidth = e.target.value;
+		var curwidthpercent = 100/fastback.rowwidth
 
 		document.styleSheets[0].insertRule('.photos .tn{ width: ' + curwidthpercent + 'vw; height: ' + curwidthpercent + 'vw; }', document.styleSheets[0].cssRules.length);
 		fastback.normalize_view();
@@ -298,6 +293,12 @@ class Fastback {
 		// But check reality if we have photos loaded
 		if ( nextvisible !== false ) {
 			nextvisible = jQuery('#p' + nextvisible);
+
+			if ( nextvisible.length === 0 ) {
+				// probably scrolling quickly and picked up on a photo that was just about to be removed
+				return false;
+			}
+
 			var offset = nextvisible.offset().top;
 			var cols = 1;
 			while ( nextvisible.next().offset().top == offset ) {
@@ -355,6 +356,11 @@ class Fastback {
 
 		// How many photos are we needing?
 		var mid_chunk = this.photos_on_screen();
+		if ( mid_chunk === false ) {
+			// couldn't get a midchunk, let's bounce.
+			this.normalizing = false;
+			return false;
+		}
 		var total_photocount = Math.max(this.minphotos,mid_chunk*this.minpages);
 
 		var orig_anchor = first_visible || 0;
@@ -420,8 +426,8 @@ class Fastback {
 		var curmax = -Infinity;
 		var movement;
 		if ( this.curthumbs.length !== 0) {
-			curmin = parseInt(this.curthumbs.first().attr('id').replace('photo-',''));
-			curmax = parseInt(this.curthumbs.last().attr('id').replace('photo-',''));
+			curmin = parseInt(this.curthumbs.first().attr('id').replace('p',''));
+			curmax = parseInt(this.curthumbs.last().attr('id').replace('p',''));
 		}
 
 		/*
@@ -513,7 +519,7 @@ class Fastback {
 	}
 
 	getYearPhotos() {
-		var re = new RegExp( ' data-date="....-' + ("0" + (new Date().getMonth() + 1)).slice(-2) + '-' + ("0" + new Date().getDate()).slice(-2) + '" ');
+		var re = new RegExp( ' data-d=....' + ("0" + (new Date().getMonth() + 1)).slice(-2) + '' + ("0" + new Date().getDate()).slice(-2) + ' ');
 		var found = fastback.tags.filter(function(e){return e.match(re);}).join("");
 		jQuery('#photos').html(found);
 		this.curthumbs = jQuery('.photos .tn');

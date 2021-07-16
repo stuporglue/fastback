@@ -57,7 +57,7 @@ class fastback {
 
 			// also regenerate the json
 			ob_start();
-			unlink($this->cache . '/fastback.json.gz');
+			@unlink($this->cache . '/fastback.json.gz');
 			$this->streamjson();
 			ob_end_clean();
 
@@ -108,7 +108,8 @@ class fastback {
 
 		chdir($this->photobase);
 		$filetypes = implode('\|',array_merge($this->supported_photo_types, $this->supported_video_types));
-		$cmd = 'find . -type f -regextype sed -iregex  "./[0-9]\{4\}/[0-9]\{2\}/[0-9]\{2\}/.*\(' . $filetypes . '\)$" -newermt ' . $lastmod;
+		$cmd = 'find . -type f -regextype sed -iregex  "./[0-9]\{4\}/[0-9]\{2\}/[0-9]\{2\}/.*\(' . $filetypes . '\)$" -newerat ' . $lastmod;
+		echo $cmd . "\n";
 		$modified_files_str = `$cmd`;
 		//print "$cmd\n";
 		$modified_files = explode("\n",$modified_files_str);
@@ -122,7 +123,6 @@ class fastback {
 		$multi_insert_tail = " ON CONFLICT(file) DO UPDATE SET isvideo=";
 		$collect_photo = array();
 		$collect_video = array();
-		$maxtime = 0;
 		$togo = count($modified_files);
 		foreach($modified_files as $k => $one_file){
 			$mtime = filemtime($one_file);
@@ -139,7 +139,7 @@ class fastback {
 			if ( in_array(strtolower($pathinfo['extension']),$this->supported_video_types) ) {
 				$collect_video[] = "('" . SQLite3::escapeString($one_file) . "','" . SQLite3::escapeString($mtime) . "','" . SQLite3::escapeString(preg_replace('|.*([0-9]{4})/([0-9]{2})/([0-9]{2})/.*|','\1-\2-\3',$one_file)) . "',0)";
 			} else if ( in_array(strtolower($pathinfo['extension']),$this->supported_photo_types) ) {
-				$collect_photo[] = "('" . SQLite3::escapeString($one_file) . "','" . SQLite3::escapeString($mtime) . "','" . SQLite3::escapeString(preg_replace('|.*([0-9]{4})/([0-9]{2})/([0-9]{2})/.*|','\1-\2-\3',$one_file)) . "',0)";
+				$collect_photo[] = "('" . SQLite3::escapeString($one_file) . "','" . SQLite3::escapeString($mtime) . "','" . SQLite3::escapeString(preg_replace('|.*([0-9]{4})/([0-9]{2})/([0-9]{2})/.*|','\1-\2-\3',$one_file)) . "',1)";
 			} else {
 				error_log("Don't know what to do with " . print_r($pathinfo,true));
 			}
@@ -159,17 +159,7 @@ class fastback {
 				$togo -= $this->process_limit;
 				print "Upserted {$this->process_limit}, $togo left to go\n";
 			}
-
-			$mtime_date = date('Ymd',$mtime);
-			if($mtime_date > $maxtime){
-				$maxtime = $mtime_date;
-			}
 		}
-
-		if ($maxtime > $today){
-			$maxtime = $today;
-		}
-
 
 		if ( count($collect_photo) > 0 ) {
 			$sql = $multi_insert . implode(",",$collect_photo) . $multi_insert_tail . '0';
@@ -187,7 +177,7 @@ class fastback {
 			print "Upserted some, $togo left to go\n";
 		}
 
-		$this->sql->query("INSERT INTO fastbackmeta (key,value) values ('lastmod',$maxtime) ON CONFLICT(key) DO UPDATE SET value=$maxtime");
+		$this->sql->query("INSERT INTO fastbackmeta (key,value) values ('lastmod',".date('Ymd').") ON CONFLICT(key) DO UPDATE SET value=".date('Ymd'));
 		$this->sql_disconnect();
 	}
 
@@ -391,7 +381,7 @@ class fastback {
 			exit();
 		}
 
-		$res = $this->sql->query("SELECT file,sorttime,isvideo FROM fastback WHERE thumbnail IS NOT NULL AND thumbnail NOT LIKE 'RESERVE%' ORDER BY sorttime DESC");
+		$res = $this->sql->query("SELECT file,sorttime,isvideo FROM fastback WHERE thumbnail IS NOT NULL AND thumbnail NOT LIKE 'RESERVE%' ORDER BY sorttime DESC,file");
 		$last_date = NULL;
 		$last_year = NULL;
 		$idx = 0;
