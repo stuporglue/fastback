@@ -70,20 +70,13 @@ body {
 	word-wrap: break-letter;
 }
 
-.y1980 ~ .y1980:after, .y1981 ~ .y1981:after, .y1982 ~ .y1982:after, .y1983 ~ .y1983:after, .y1984 ~ .y1984:after, .y1985 ~ .y1985:after,
-.y1986 ~ .y1986:after, .y1987 ~ .y1987:after, .y1988 ~ .y1988:after, .y1989 ~ .y1989:after, .y1990 ~ .y1990:after, .y1991 ~ .y1991:after,
-.y1992 ~ .y1992:after, .y1993 ~ .y1993:after, .y1994 ~ .y1994:after, .y1995 ~ .y1995:after, .y1996 ~ .y1996:after, .y1997 ~ .y1997:after,
-.y1998 ~ .y1998:after, .y1999 ~ .y1999:after, .y2000 ~ .y2000:after, .y2001 ~ .y2001:after, .y2002 ~ .y2002:after, .y2003 ~ .y2003:after,
-.y2004 ~ .y2004:after, .y2005 ~ .y2005:after, .y2006 ~ .y2006:after, .y2007 ~ .y2007:after, .y2008 ~ .y2008:after, .y2009 ~ .y2009:after,
-.y2010 ~ .y2010:after, .y2011 ~ .y2011:after, .y2012 ~ .y2012:after, .y2013 ~ .y2013:after, .y2014 ~ .y2014:after, .y2015 ~ .y2015:after,
-.y2016 ~ .y2016:after, .y2017 ~ .y2017:after, .y2018 ~ .y2018:after, .y2019 ~ .y2019:after, .y2020 ~ .y2020:after, .y2021 ~ .y2021:after,
-.y2022 ~ .y2022:after, .y2023 ~ .y2023:after, .y2024 ~ .y2024:after, .y2025 ~ .y2025:after, .y2026 ~ .y2026:after, .y2027 ~ .y2027:after,
-.y2028 ~ .y2028:after, .y2029 ~ .y2029:after, .y2030 ~ .y2030:after, .y2031 ~ .y2031:after, .y2032 ~ .y2032:after, .y2033 ~ .y2033:after,
-.y2034 ~ .y2034:after, .y2035 ~ .y2035:after, .y2036 ~ .y2036:after, .y2037 ~ .y2037:after, .y2038 ~ .y2038:after, .y2039 ~ .y2039:after,
-.y2040 ~ .y2040:after, .y2041 ~ .y2041:after, .y2042 ~ .y2042:after, .y2043 ~ .y2043:after, .y2044 ~ .y2044:after, .y2045 ~ .y2045:after,
-.y2046 ~ .y2046:after, .y2047 ~ .y2047:after, .y2048 ~ .y2048:after, .y2049 ~ .y2049:after, .y2050 ~ .y2050:after, .y2050 ~ .y2050:after {
+
+/*
+ * These types of tags are generated dynamically for all months in javascript
+.y2050.m01~.y2050.m01:after {
 	display: none;
 }
+*/
 
 .photos .tn img {
 	width: 100%;
@@ -251,6 +244,29 @@ body {
 	margin:0;
 	padding:0;
 }
+
+.thumbctrl {
+	width: 150px;
+	max-width: 30%;
+	height: calc(100% - 100px);
+	position: absolute;
+	top: 0;
+  opacity: 0;
+	background-color: rgba(255,255,255,0.8);
+	z-index: 100000;
+}
+
+.thumbctrl:hover {
+  opacity: 1;
+}
+
+#thumbleft {
+	left: 0;
+}
+#thumbright {
+	right: 0;
+}
+
 
 #thumbcontent {
 	overflow: hidden;

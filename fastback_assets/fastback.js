@@ -24,10 +24,17 @@ class Fastback {
 	constructor() {
 		var self = this;
 
+
+
 		$.getJSON(this.originurl + 'fastback.php?get=photojson', function(json) {
 			jQuery.extend(self,json);
 		}).then(function(){
 			self.load_nav();
+
+			// Set up dynamicly generated css
+			var newcss = Object.keys(self.yearmonthindex).map(function(d){ return d.replace(/(....)-(..)/,'.y$1.m$2~.y$1.m$2:after');	}).join(',') + '{display:none;}';
+
+			jQuery('body').append('<style>' + newcss + '</style>');
 
 			self.normalize_view();
 
@@ -40,9 +47,11 @@ class Fastback {
 		jQuery('.slider').on('change',this.sliderChange.bind(this));
 		jQuery('.photos').on('scroll',this.debounce_scroll.bind(this));
 		jQuery('.photos').on('click','.tn',this.handleThumbClick.bind(this));
+		jQuery('#thumbright').on('click',this.handleThumbNext.bind(this));
+		jQuery('#thumbleft').on('click',this.handleThumbPrev.bind(this));
 		jQuery('.scroller').on('mouseup','.nav',this.navClick.bind(this));
 		jQuery('#thumbclose').on('click',this.hideThumb.bind(this));
-		jQuery(document).on('keyup',this.keyupHandler.bind(this));
+		jQuery(document).on('keydown',this.keydownHandler.bind(this));
 		/*
 			jQuery('.photos').hammer({
 				recognizers: [
@@ -175,12 +184,6 @@ class Fastback {
 		return v;
 	}
 
-	showThumb(imghtml,notificationhtml) {
-		jQuery('#thumbcontent').html(imghtml);
-		jQuery('#thumbcontrols').html(notificationhtml);
-		jQuery('#thumb').show();
-	}
-
 	hideThumb() {
 		jQuery('#thumb').hide();
 		jQuery('#thumbcontent').html("");
@@ -232,12 +235,55 @@ class Fastback {
 		}
 
 
-		var ctrlhtml = '<h2>' + (divwrap.data('d') + '').replace(/(....)(..)(..)/,"$1-$2-$3") + '</h2>';
+		var ctrlhtml = '<h2>' + (divwrap.data('d') + '') + '</h2>';
 		ctrlhtml += '<p><a class="download" href="' + fastback.originurl + img.attr('src').replace(/.jpg$/,'') + '" download>' + img.attr('alt') + '</a>';
 		ctrlhtml += '<br>';
 		ctrlhtml += '<a class="flag" onclick="return fastback.sendbyajax(this)" href=\"' + fastback.originurl + 'fastback.php?flag=' + encodeURIComponent('./' + img.attr('src').replace(/.jpg$/,'')) + '\">Flag Image</a>';
 		ctrlhtml += '</p>';
-		this.showThumb(imghtml,ctrlhtml);
+		jQuery('#thumbcontent').html(imghtml);
+		jQuery('#thumbcontrols').html(ctrlhtml);
+		jQuery('#thumb').data('curphoto',divwrap);
+		jQuery('#thumb').show();
+	}
+
+	_hanleThumbMove(prev_next) {
+		var t = jQuery('#thumb');
+
+		if(!t.is(':visible')){
+			return;
+		}
+
+		var p = jQuery('#photos');
+		var cur = t.data('curphoto');
+		var newp;
+
+		if ( prev_next == 'prev' ) {
+			newp = cur.prev();	
+		} else {
+			newp = cur.next();
+		}
+
+		if ( newp.length === 0 ) {
+			return;
+		}
+
+		var vert = newp.position().top;
+
+		if ( vert < 0 || vert > p.height() ) {
+			p.animate({
+				scrollTop: p.scrollTop() + vert
+			}, 2000);
+		}
+
+		newp.trigger('click');
+	}
+
+	handleThumbNext(){
+		this._hanleThumbMove('next');
+	}
+
+	handleThumbPrev(){
+		this._hanleThumbMove('prev');
 	}
 
 	sliderChange(e){
@@ -407,7 +453,7 @@ class Fastback {
 		var newmax = Math.floor((anchor + after) / this.rowwidth) * this.rowwidth - 1;
 
 		if ( newmax >= this.tags.length ) {
-			tmpmax = Math.floor(this.tags.length / this.rowwidth) * this.rowwidth - 1;
+			var tmpmax = Math.floor(this.tags.length / this.rowwidth) * this.rowwidth - 1;
 			newmin -= (newmax - tmpmax);
 			newmax = tmpmax;
 
@@ -519,15 +565,23 @@ class Fastback {
 	}
 
 	getYearPhotos() {
-		var re = new RegExp( ' data-d=....' + ("0" + (new Date().getMonth() + 1)).slice(-2) + '' + ("0" + new Date().getDate()).slice(-2) + ' ');
+		var re = new RegExp( ' data-d=....-' + ("0" + (new Date().getMonth() + 1)).slice(-2) + '-' + ("0" + new Date().getDate()).slice(-2) + ' ');
 		var found = fastback.tags.filter(function(e){return e.match(re);}).join("");
 		jQuery('#photos').html(found);
 		this.curthumbs = jQuery('.photos .tn');
 	}
 
-	keyupHandler(e) {
-		if (e.key === "Escape") { 
+	keydownHandler(e) {
+		switch(e.key){
+			case 'Escape':
 			this.hideThumb();
+			break;
+			case 'ArrowRight':
+			this.handleThumbNext();
+			break;
+			case 'ArrowLeft':
+			this.handleThumbPrev();
+			break;
 		}
 	}
 }

@@ -78,13 +78,11 @@ class fastback {
 		$res = $this->sql->query($q_create_meta);
 		//var_dump($res);
 
-		$q_create_files = "CREATE TABLE IF NOT EXISTS fastback ( file TEXT PRIMARY KEY, isvideo BOOL, mtime INTEGER, sorttime DATE, thumbnail TEXT)";
+		$q_create_files = "CREATE TABLE IF NOT EXISTS fastback ( file TEXT PRIMARY KEY, isvideo BOOL, flagged BOOL, mtime INTEGER, sorttime DATE, thumbnail TEXT)";
 
 		$res = $this->sql->query($q_create_files);
 		//var_dump($res);
         
-		$q_create_files = "CREATE TABLE IF NOT EXISTS flagged ( file TEXT PRIMARY KEY )";
-
 		$res = $this->sql->query($q_create_files);
 	}
 
@@ -221,7 +219,7 @@ class fastback {
 				}
 			}
 			$this->sql_connect();
-			$res = $this->sql->querySingle("SELECT COUNT(*) FROM fastback WHERE thumbnail IS NULL",);
+			$res = $this->sql->querySingle("SELECT COUNT(*) FROM fastback WHERE thumbnail IS NULL AND flagged IS NOT TRUE",);
 			print "PARENT: $res more to go\n";
 			$this->sql_disconnect();
 			sleep(1);
@@ -234,7 +232,7 @@ class fastback {
 		do {
 			$queue = array();
 			$this->sql_connect();
-			$res = $this->sql->query("UPDATE fastback SET thumbnail='RESERVED-" . getmypid() . "' WHERE thumbnail IS NULL AND FILE != '' LIMIT " . $this->process_limit);
+			$res = $this->sql->query("UPDATE fastback SET thumbnail='RESERVED-" . getmypid() . "' WHERE flagged IS NOT TRUE AND thumbnail IS NULL AND FILE != '' LIMIT " . $this->process_limit);
 			$q_queue = "SELECT file FROM fastback WHERE thumbnail='RESERVED-" . getmypid() . "'";
 			$res = $this->sql->query($q_queue);
 			while($row = $res->fetchArray(SQLITE3_ASSOC)){
@@ -381,7 +379,7 @@ class fastback {
 			exit();
 		}
 
-		$res = $this->sql->query("SELECT file,sorttime,isvideo FROM fastback WHERE thumbnail IS NOT NULL AND thumbnail NOT LIKE 'RESERVE%' ORDER BY sorttime DESC,file");
+		$res = $this->sql->query("SELECT file,sorttime,isvideo FROM fastback WHERE thumbnail IS NOT NULL AND thumbnail NOT LIKE 'RESERVE%' AND flagged IS NOT TRUE ORDER BY sorttime DESC,file");
 		$last_date = NULL;
 		$last_year = NULL;
 		$idx = 0;
@@ -396,7 +394,7 @@ class fastback {
 				}
 			}
             $base = basename($row['file']);
-			$json['tags'][] = '<div class="tn y' . substr($row['sorttime'],0,4) . ' m' . substr($row['sorttime'],5,2) . ( $row['isvideo'] ? ' vid' : '') . '" data-d=' . str_replace('-','',$row['sorttime']) . ' id=p' . $idx . '><img loading=lazy  src="' . htmlentities(substr($row['file'],2)) . '.jpg" " alt="' . $base . '"></div>';
+			$json['tags'][] = '<div class="tn y' . substr($row['sorttime'],0,4) . ' m' . substr($row['sorttime'],5,2) . ( $row['isvideo'] ? ' vid' : '') . '" data-d=' . $row['sorttime'] . ' id=p' . $idx . '><img loading=lazy  src="' . htmlentities(substr($row['file'],2)) . '.jpg" alt="' . $base . '"></div>';
 			$idx++;
 		}
 
@@ -450,7 +448,7 @@ class fastback {
 			<input type="range" min="1" max="10" value="5" class="slider" id="myRange">
 		</div>
 		<div id="notification"></div>
-		<div id="thumb"><div id="thumbcontent"></div><div id="thumbcontrols"></div><div id="thumbclose">🆇</div></div>
+		<div id="thumb"><div id="thumbcontent"></div><div id="thumbcontrols"></div><div id="thumbclose">🆇</div><div id="thumbleft" class="thumbctrl">LEFT</div><div id="thumbright" class="thumbctrl">RIGHT</div></div>
 	</body>
 	<script src="'.$dirname.'/fastback_assets/hammer.min.js"></script>
 	<script src="'.$dirname.'/fastback_assets/jquery.min.js"></script>
@@ -473,7 +471,7 @@ class fastback {
     public function flag_photo(){
         $photo = $_GET['flag'];
 		$this->sql_connect();
-        $stmt = $this->sql->prepare("INSERT INTO flagged (file) VALUES (:file) ON CONFLICT(file) DO UPDATE SET file=file");
+        $stmt = $this->sql->prepare("UPDATE fastback SET flagged=1 WHERE file=:file");
         $stmt->bindValue(':file',$_GET['flag']);
         $stmt->execute();
         $this->sql_disconnect();
