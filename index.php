@@ -332,6 +332,7 @@ class fastback {
 							$cmd = "vipsthumbnail --size=120x120 --output=$shellthumb --smartcrop=attention $tmpshellthumb";
 							echo "\tChild $childno -- $cmd\n";
 							$res = `$cmd`;
+							unlink($tmpthumb);
 						}
 
 					} else {
