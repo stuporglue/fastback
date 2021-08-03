@@ -1,6 +1,6 @@
 <?php
 /**
- * See config.ini.sample for settings
+ * See fastback.ini.sample for settings
  */
 declare(ticks=1);
 
@@ -72,8 +72,8 @@ class fastback {
 		$this->photourl = dirname($_SERVER['SCRIPT_NAME']) . '/';
 		$this->staticurl = dirname($_SERVER['SCRIPT_NAME']) . '/';
 
-		if ( file_exists(__DIR__ . '/config.ini') ) {
-			$settings = parse_ini_file(__DIR__ . '/config.ini');
+		if ( file_exists(__DIR__ . '/fastback.ini') ) {
+			$settings = parse_ini_file(__DIR__ . '/fastback.ini');
 			foreach($settings as $k => $v) {
 				$this->$k = $v;
 			}
