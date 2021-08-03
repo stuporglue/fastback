@@ -5,11 +5,16 @@
 
 	notificationtimer;
 	curthumbs = [];
-	originurl = location.pathname.replace(/[^\/]+$/,'');
 
 	disablehandlers = false;
 
 	rowwidth = 5;
+
+	// Properties required in constructor
+	cacheurl;
+	photourl;
+	staticurl;
+	fastbackurl;
 
 	// Properties loaded from json
 	years;
@@ -21,12 +26,12 @@
 	last_scroll_timestamp = 0;
 	scroll_time = 50;
 
-	constructor() {
+	constructor(args) {
 		var self = this;
 
+		jQuery.extend(this,args);
 
-
-		$.getJSON(this.originurl + 'fastback.php?get=photojson', function(json) {
+		$.getJSON(this.fastbackurl + '?get=photojson', function(json) {
 			jQuery.extend(self,json);
 		}).then(function(){
 			self.load_nav();
@@ -271,16 +276,16 @@
 
 		var imghtml;
 		if (divwrap.hasClass('vid')){
-			imghtml = '<video controls><source src="' + this.originurl + img.attr('src').replace(/.jpg$/,'') + '">Your browser does not support this video format.</video>';
+			imghtml = '<video controls><source src="' + this.photourl + img.attr('src').replace(/.jpg$/,'') + '">Your browser does not support this video format.</video>';
 		} else {
-			imghtml = '<img src="' + this.originurl + img.attr('src').replace(/.jpg$/,'') +'"/>';
+			imghtml = '<img src="' + this.photourl + img.attr('src').replace(/.jpg$/,'') +'"/>';
 		}
 
 
 		var ctrlhtml = '<h2>' + (divwrap.data('d') + '') + '</h2>';
-		ctrlhtml += '<p><a class="download" href="' + this.originurl + img.attr('src').replace(/.jpg$/,'') + '" download>' + img.attr('alt') + '</a>';
+		ctrlhtml += '<p><a class="download" href="' + this.photourl + img.attr('src').replace(/.jpg$/,'') + '" download>' + img.attr('alt') + '</a>';
 		ctrlhtml += '<br>';
-		ctrlhtml += '<a class="flag" onclick="return fastback.sendbyajax(this)" href=\"' + this.originurl + 'fastback.php?flag=' + encodeURIComponent('./' + img.attr('src').replace(/.jpg$/,'')) + '\">Flag Image</a>';
+		ctrlhtml += '<a class="flag" onclick="return fastback.sendbyajax(this)" href=\"' + this.fastbackurl + '?flag=' + encodeURIComponent('./' + img.attr('src').replace(/.jpg$/,'')) + '\">Flag Image</a>';
 		ctrlhtml += '</p>';
 		jQuery('#thumbcontent').html(imghtml);
 		jQuery('#thumbcontrols').html(ctrlhtml);
@@ -654,5 +659,3 @@
 		console.log(data);
 	}
 }
-
-var fastback = new Fastback();

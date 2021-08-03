@@ -13,3 +13,10 @@ Prerequisites
 * vipsthumbnail installed
 * Sqlite3 support
 * find
+
+Commands
+--------
+
+* php index.php reset
+ - Will wipe SQLITE fastbaack table and re-find all photos
+	- Does not delete thumbnails

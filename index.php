@@ -1,4 +1,7 @@
 <?php
+/**
+ * See config.ini.sample for settings
+ */
 declare(ticks=1);
 
 ini_set('display_errors', 1);
@@ -7,8 +10,22 @@ error_reporting(E_ALL);
 
 class fastback {
 
-	var $cache = "/tmp/";
-	var $photobase = __DIR__;
+	// Folder path to cache directory. sqlite and thumbnails will be stored here
+	// Optional, will create a cache folder in the currend directory as the default
+	var $filecache;
+
+	// URL path to cache directory. 
+	// Optional, will use current web path + cache as default
+	var $cacheurl;
+
+	// File path to full sized photos
+	// Optional, will use current directory as default
+	var $photobase;
+
+	// URL path to full sized photos
+	// Optional, will use current web path as default
+	var $photourl;
+
 	var $db_lock;
 
 	var $process_limit = 1000;
@@ -44,11 +61,16 @@ class fastback {
 	var $sql;
 
 
-
 	/**
 	 * Kick it off
 	 */
 	function __construct(){
+
+		$this->filecache = __DIR__ . '/cache/';
+		$this->cacheurl = dirname($_SERVER['SCRIPT_NAME']) . '/cache/';
+		$this->photobase = __DIR__ . '/';
+		$this->photourl = dirname($_SERVER['SCRIPT_NAME']) . '/';
+		$this->staticurl = dirname($_SERVER['SCRIPT_NAME']) . '/';
 
 		if ( file_exists(__DIR__ . '/config.ini') ) {
 			$settings = parse_ini_file(__DIR__ . '/config.ini');
@@ -57,6 +79,13 @@ class fastback {
 			}
 		}
 
+		// Ensure single trailing slashes
+		$this->filecache = rtrim($this->filecache,'/') . '/';
+		$this->cacheurl = rtrim($this->cacheurl,'/') . '/';
+		$this->photobase = rtrim($this->photobase,'/') . '/';
+		$this->photourl = rtrim($this->photourl,'/') . '/';
+		$this->staticurl = rtrim($this->staticurl,'/') . '/';
+
 		// Hard work should be done via cli
 		if (php_sapi_name() === 'cli') {
 			$this->load_db_cache();
@@ -64,8 +93,8 @@ class fastback {
 
 			// also regenerate the json
 			ob_start();
-			@unlink($this->cache . '/fastback.json.gz');
-			$this->streamjson();
+			@unlink($this->filecache . '/fastback.json.gz');
+			$this->sendjson();
 			ob_end_clean();
 
 		} else {
@@ -99,8 +128,8 @@ class fastback {
 	public function load_db_cache() {
 		global $argv;
 
-		if ( !file_exists($this->cache) ) {
-			mkdir($this->cache,0700,TRUE);
+		if ( !file_exists($this->filecache) ) {
+			mkdir($this->filecache,0700,TRUE);
 		}
 
 		$this->sql_connect();
@@ -116,6 +145,7 @@ class fastback {
 		}
 
 		chdir($this->photobase);
+		print "Searching for files in " . getcwd() . "\n";
 		$filetypes = implode('\|',array_merge($this->supported_photo_types, $this->supported_video_types));
 		$cmd = 'find . -type f -regextype sed -iregex  "./[0-9]\{4\}/[0-9]\{2\}/[0-9]\{2\}/.*\(' . $filetypes . '\)$" -newerat ' . $lastmod;
 		echo $cmd . "\n";
@@ -144,11 +174,10 @@ class fastback {
 				continue;
 			}
 
-
 			if ( in_array(strtolower($pathinfo['extension']),$this->supported_video_types) ) {
-				$collect_video[] = "('" . SQLite3::escapeString($one_file) . "','" . SQLite3::escapeString($mtime) . "','" . SQLite3::escapeString(preg_replace('|.*([0-9]{4})/([0-9]{2})/([0-9]{2})/.*|','\1-\2-\3',$one_file)) . "',0)";
+				$collect_video[] = "('" . SQLite3::escapeString($one_file) . "','" . SQLite3::escapeString($mtime) . "','" . SQLite3::escapeString(preg_replace('|.*([0-9]{4})/([0-9]{2})/([0-9]{2})/.*|','\1-\2-\3',$one_file)) . "',1)";
 			} else if ( in_array(strtolower($pathinfo['extension']),$this->supported_photo_types) ) {
-				$collect_photo[] = "('" . SQLite3::escapeString($one_file) . "','" . SQLite3::escapeString($mtime) . "','" . SQLite3::escapeString(preg_replace('|.*([0-9]{4})/([0-9]{2})/([0-9]{2})/.*|','\1-\2-\3',$one_file)) . "',1)";
+				$collect_photo[] = "('" . SQLite3::escapeString($one_file) . "','" . SQLite3::escapeString($mtime) . "','" . SQLite3::escapeString(preg_replace('|.*([0-9]{4})/([0-9]{2})/([0-9]{2})/.*|','\1-\2-\3',$one_file)) . "',0)";
 			} else {
 				error_log("Don't know what to do with " . print_r($pathinfo,true));
 			}
@@ -261,7 +290,7 @@ class fastback {
 			$made_thumbs = array();
 			while($file = array_pop($queue)){
 
-				$thumbnailfile = $this->cache . ltrim($file,'./') . '.jpg';
+				$thumbnailfile = $this->filecache . '/' . ltrim($file,'./') . '.jpg';
 
 				// Make it if needed
 				if ( !file_exists($thumbnailfile) ) {
@@ -327,22 +356,21 @@ class fastback {
 
 		} while (count($made_thumbs) > 0);
 
-		@unlink($this->cache . 'fastback.json');
+		@unlink($this->filecache . '/fastback.json');
 	}
 
 	private function sql_connect($try_no = 1){
 		if (php_sapi_name() === 'cli') {
-			$this->db_lock = fopen($this->cache . '/fastback.lock','w');
+			$this->db_lock = fopen($this->filecache . '/fastback.lock','w');
 			if( flock($this->db_lock,LOCK_EX)){
-				$this->sql = new SQLite3($this->cache .'fastback.sqlite');
+				$this->sql = new SQLite3($this->filecache . '/fastback.sqlite');
 			} else {
 				throw new Exception("Couldn't lock db");
 			}
 
 			$this->setup_db();
 		} else {
-			// $this->sql = new SQLite3($this->cache .'fastback.sqlite',SQLITE3_OPEN_READONLY);
-			$this->sql = new SQLite3($this->cache .'fastback.sqlite');
+			$this->sql = new SQLite3($this->filecache .'/fastback.sqlite');
 		}
 
 		if (empty($this->meta)){
@@ -359,9 +387,10 @@ class fastback {
 		unset($this->sql);
 	}
 
+	// One file with various output options, depending on the $_GET flags
 	public function makeoutput() {
 		if (!empty($_GET['get']) && $_GET['get'] == 'photojson'){
-			$this->streamjson();
+			$this->sendjson();
 		} else if (!empty($_GET['get']) && $_GET['get'] == 'js') {
 			$this->makejs();
         } else if (!empty($_GET['flag'])) {
@@ -373,14 +402,17 @@ class fastback {
 		}
 	}
 
-	public function streamjson() {
+	/**
+	 * Generate or send a cached version of the photo json
+	 */
+	public function sendjson() {
 		$json = array(
 			'yearmonthindex' => array(),
 			'tags' => array(),
 			);
 
 		$this->sql_connect();
-		$cf = $this->cache . '/fastback.json.gz';
+		$cf = $this->filecache . '/fastback.json.gz';
 		@header("Cache-Control: \"max-age=1209600, public");
 		@header("Content-Type: application/json");
 		@header("Content-Encoding: gzip");
@@ -412,22 +444,24 @@ class fastback {
 		$this->sql_disconnect();
 
 		$str = json_encode($json,JSON_PRETTY_PRINT);
-		file_put_contents('compress.zlib://' . $cf,$str);
+		@file_put_contents('compress.zlib://' . $cf,$str);
 		print($str);
 	}
 
+	/**
+	 * Generate the output html for the webpage, including any dynamicly generated CSS or HTML
+	 */
 	public function makehtml(){
-		$dirname = dirname($_SERVER['REQUEST_URI']);
 		$html = '<!DOCTYPE html>
 <html lang="en">
 	<head>
 		<meta charset="UTF-8">
-		<base href="'. $this->cache . '">
+		<base href="'. $this->cacheurl . '/">
 		<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
-		<link rel="shortcut icon" href="' . $dirname . '/fastback_assets/favicon.png"> 
-		<link rel="apple-touch-icon" href="' . $dirname . '/fastback_assets/favicon.png">
+		<link rel="shortcut icon" href="' . $this->staticurl . '/fastback_assets/favicon.png"> 
+		<link rel="apple-touch-icon" href="' . $this->staticurl . '/fastback_assets/favicon.png">
 		<title>Moore Photos</title>
-		<link rel="stylesheet" href="'.$dirname.'/fastback_assets/fastback.css">
+		<link rel="stylesheet" href="'. $this->staticurl .'/fastback_assets/fastback.css">
 		<!-- Powered by https://github.com/stuporglue/fastback/ -->
     </head>
 	<body>
@@ -460,15 +494,25 @@ class fastback {
 		</div>
 		<div id="notification"></div>
 		<div id="thumb" data-ythreshold=150><div id="thumbcontent"></div><div id="thumbcontrols"></div><div id="thumbclose">🆇</div><div id="thumbleft" class="thumbctrl">LEFT</div><div id="thumbright" class="thumbctrl">RIGHT</div></div>
-	<script src="'.$dirname.'/fastback_assets/jquery.min.js"></script>
+	<script src="'. $this->staticurl .'/fastback_assets/jquery.min.js"></script>
 
 	<!-- https://github.com/benmajor/jQuery-Touch-Events -->
-	<!-- script src="'.$dirname.'/fastback_assets/jquery.mobile-events.js"></script -->
+	<!-- script src="'. $this->staticurl .'/fastback_assets/jquery.mobile-events.js"></script -->
 
-	<script src="'.$dirname.'/fastback_assets/hammer.js"></script>
-	<script src="'.$dirname.'/fastback_assets/jquery.hammer.js"></script>
+	<script src="'.$this->staticurl.'/fastback_assets/hammer.js"></script>
+	<script src="'.$this->staticurl.'/fastback_assets/jquery.hammer.js"></script>
 
-	<script src="'.$dirname.'/fastback_assets/fastback.js?ts=' . time() . '"></script>
+	<script src="'.$this->staticurl.'/fastback_assets/fastback.js?ts=' . time() . '"></script>
+	<script>
+		var FastbackBase = "' . $_SERVER['SCRIPT_NAME'] . '";
+		var FastbackBase = "' . $_SERVER['SCRIPT_NAME'] . '";
+		var fastback = new Fastback({
+			cacheurl: "' . $this->cacheurl . '",
+			photourl: "' . $this->photourl . '",
+			staticurl: "' . $this->staticurl . '",
+			fastbackurl: "' . $_SERVER['SCRIPT_NAME'] . '"
+		});
+	</script>
 
 	</body>
 </html>';
