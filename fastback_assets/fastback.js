@@ -1,4 +1,4 @@
-class Fastback {
+﻿class Fastback {
 	// built-in properties
 	minphotos = 200;
 	minpages = 5;
@@ -38,59 +38,101 @@ class Fastback {
 
 			self.normalize_view();
 
-			var photoswidth = jQuery('.photos')[0].offsetWidth - jQuery('.photos')[0].clientWidth;
-			jQuery('.photos').css('width','calc(100% + ' + photoswidth + ')');
-			jQuery('.photos').focus();
+			var photoswidth = jQuery('#photos')[0].offsetWidth - jQuery('#photos')[0].clientWidth;
+			// jQuery('#photos').css('width','calc(100% + ' + photoswidth + ')');
+			jQuery('#photos').focus();
 		});
 
 		jQuery(document).ready(this.docReady);
-		jQuery('.slider').on('change',this.sliderChange.bind(this));
-		jQuery('.photos').on('scroll',this.debounce_scroll.bind(this));
-		jQuery('.photos').on('click','.tn',this.handleThumbClick.bind(this));
+		jQuery('#zoom').on('change',this.zoomChange.bind(this));
+		jQuery('#photos').on('click','.tn',this.handleThumbClick.bind(this));
 		jQuery('#thumbright').on('click',this.handleThumbNext.bind(this));
 		jQuery('#thumbleft').on('click',this.handleThumbPrev.bind(this));
 		jQuery('.scroller').on('mouseup','.nav',this.navClick.bind(this));
 		jQuery('#thumbclose').on('click',this.hideThumb.bind(this));
 		jQuery(document).on('keydown',this.keydownHandler.bind(this));
-		/*
-			jQuery('.photos').hammer({
-				recognizers: [
-					// RecognizerClass, [options], [recognizeWith, ...], [requireFailure, ...]
-					[Hammer.Pinch, { enable: true }]
-					// ,[Hammer.Swipe,{ direction: Hammer.DIRECTION_HORIZONTAL }]
-				]
-			}).on('pinchout pinchin', this.pinchhandler.bind(this));
+
+/*
+		jQuery('#thumb').on('swiperight',this.handleThumbNext.bind(this));
+		jQuery('#thumb').on('swipeleft',this.handleThumbPrev.bind(this));
+		jQuery('#thumb').on('swipeup',this.hideThumb.bind(this));
 		*/
+
+		jQuery('#thumb').hammer({recognizers: [ 
+				[Hammer.Swipe,{ direction: Hammer.DIRECTION_ALL }],
+		]}).on('swiperight swipeup swipeleft', this.handleThumbSwipe.bind(this));
+
+		jQuery('#photos').hammer({ recognizers: [ 
+				[Hammer.Pinch, { enable: true }],
+				[Hammer.Swipe,{ direction: Hammer.DIRECTION_VERTICAL }],
+		]}).on('pinch pinchend pinchstart swipeup swipedown', this.handlePhotoTouch.bind(this));
+
+		// jQuery('#photos').on('scroll',this.debounce_scroll.bind(this));
+		// jQuery('#photos').css('touch-action', 'pan-y !important');
+		// jQuery('body').append('<style>#photos{touch-action: pan-y !important;}</style>');
+		//
+		function fixSafariScrolling(event) {
+			event.target.style.overflowY = 'hidden';
+			setTimeout(function () { event.target.style.overflowY = 'auto'; });
+		}
+
+		jQuery('#photos')[0].addEventListener('webkitAnimationEnd', fixSafariScrolling);
 	}
 
-	pinchhandler(e) {
-		this.pinchhandler.debounce = this.pinchhandler.debounce || 300;
-		var last_ts = this.pinchhandler.last_ts || 0;
-		this.pinchhandler.last_ts = e.timeStamp;
+	handlePhotoTouch(e) {
+		if ( e.type == 'pinchstart' ) {
+			this.handlePhotoTouch.origZoom = this.rowwidth;
+			// jQuery('#photos').css('touch-action', 'none');
+		} else if ( e.type == 'pinch' ){
 
-		if ( e.timeStamp - last_ts <  this.pinchhandler.debounce ) {
-			console.log("Too soon. Skipping this pinch");
-			return;
+			console.log(e.gesture.scale);
+
+			if ( this.handlePhotoTouch.origZoom === undefined ) {
+				this.handlePhotoTouch.origZoom = this.rowwidth;
+			}
+
+			var slots;
+
+			if ( e.gesture.scale > 1 ) {
+				slots = Math.floor(e.gesture.scale);
+				console.log("Zooming in " + slots + " slots");
+				this.rowwidth = this.handlePhotoTouch.origZoom - slots;
+				if ( this.rowwidth < 1 ) {
+					this.rowwidth = 1;
+				}
+			} else {
+				slots = Math.floor(1/e.gesture.scale);
+				console.log("Zooming out " + slots + " slots");
+				this.rowwidth = this.handlePhotoTouch.origZoom + slots;
+				if ( this.rowwidth > 10 ) {
+					this.rowwidth = 10;
+				}
+			}
+
+			this.zoomSizeChange(this.rowwidth);
+
+			var focus = jQuery(document.elementFromPoint(e.gesture.center.x,e.gesture.center.y)).closest('div.tn').attr('id').replace('p','');
+			if ( parseInt(focus) == focus) {
+				this.normalize_view(focus);
+			}
+
+		} else if ( e.type == 'pinchend' ) {
+			this.zoomFinalizeSizeChange();
+			this.handlePhotoTouch.origZoom = undefined;
+			//jQuery('#photos').css('touch-action', 'pan-y !important');
 		}
 
-		var mr = jQuery('#myRange');
-		var cur = mr.val();
-		if ( e.type == 'pinchout' ) {
-			console.log("Using " + e.type + " with staritng value of " + cur + ". New val should be " + Math.max(cur-1,1) + "(pinchout)");
-			mr.val(Math.max(cur - 1,1)).trigger('change');
-		} else if ( e.type == 'pinchin' ) {
-			console.log("Using " + e.type + " with staritng value of " + cur + ". New val should be " + Math.min(cur+1,10) + "(pinchin)");
-			mr.val(Math.min(cur + 1,10)).trigger('change');
+		else if ( e.type == 'swipeup' || e.type == 'swipedown' ) {
+			this.showNotification(e.type);		
+			this.debounce_scroll(e);
 		}
 
-		this.pinchhandler.debounce = 1;
-		this.pinchhandler.last_ts = this.pinchhandler.last_ts + this.pinchhandler.debounce;
 	}
 
 	// Append as many photos as needed to meet the page size
 
 	load_nav() {
-		var keys = Object.keys(fastback.yearmonthindex).sort().reverse();
+		var keys = Object.keys(this.yearmonthindex).sort().reverse();
 		var html = '<div class="nav" data-year="onthisdate"><div class="year">Today</div></div>';
 
 		var y;
@@ -229,16 +271,16 @@ class Fastback {
 
 		var imghtml;
 		if (divwrap.hasClass('vid')){
-			imghtml = '<video controls><source src="' + fastback.originurl + img.attr('src').replace(/.jpg$/,'') + '">Your browser does not support this video format.</video>';
+			imghtml = '<video controls><source src="' + this.originurl + img.attr('src').replace(/.jpg$/,'') + '">Your browser does not support this video format.</video>';
 		} else {
-			imghtml = '<img src="' + fastback.originurl + img.attr('src').replace(/.jpg$/,'') +'"/>';
+			imghtml = '<img src="' + this.originurl + img.attr('src').replace(/.jpg$/,'') +'"/>';
 		}
 
 
 		var ctrlhtml = '<h2>' + (divwrap.data('d') + '') + '</h2>';
-		ctrlhtml += '<p><a class="download" href="' + fastback.originurl + img.attr('src').replace(/.jpg$/,'') + '" download>' + img.attr('alt') + '</a>';
+		ctrlhtml += '<p><a class="download" href="' + this.originurl + img.attr('src').replace(/.jpg$/,'') + '" download>' + img.attr('alt') + '</a>';
 		ctrlhtml += '<br>';
-		ctrlhtml += '<a class="flag" onclick="return fastback.sendbyajax(this)" href=\"' + fastback.originurl + 'fastback.php?flag=' + encodeURIComponent('./' + img.attr('src').replace(/.jpg$/,'')) + '\">Flag Image</a>';
+		ctrlhtml += '<a class="flag" onclick="return fastback.sendbyajax(this)" href=\"' + this.originurl + 'fastback.php?flag=' + encodeURIComponent('./' + img.attr('src').replace(/.jpg$/,'')) + '\">Flag Image</a>';
 		ctrlhtml += '</p>';
 		jQuery('#thumbcontent').html(imghtml);
 		jQuery('#thumbcontrols').html(ctrlhtml);
@@ -246,7 +288,17 @@ class Fastback {
 		jQuery('#thumb').show();
 	}
 
-	_hanleThumbMove(prev_next) {
+	handleThumbSwipe(e) {
+		if ( e.type == 'swiperight' ) {
+			this.handleThumbNext();
+		} else if ( e.type == 'swipeleft' ) {
+			this.handleThumbPrev();
+		} else if ( e.type == 'swipeup' ) {
+			this.hideThumb();
+		}
+	}
+
+	_handleThumbMove(prev_next) {
 		var t = jQuery('#thumb');
 
 		if(!t.is(':visible')){
@@ -279,27 +331,39 @@ class Fastback {
 	}
 
 	handleThumbNext(){
-		this._hanleThumbMove('next');
+		this._handleThumbMove('next');
 	}
 
 	handleThumbPrev(){
-		this._hanleThumbMove('prev');
+		this._handleThumbMove('prev');
 	}
 
-	sliderChange(e){
-		fastback.rowwidth = e.target.value;
-		var curwidthpercent = 100/fastback.rowwidth
+	zoomSizeChange(newSize){
+		this.rowwidth = newSize;
 
-		document.styleSheets[0].insertRule('.photos .tn{ width: ' + curwidthpercent + 'vw; height: ' + curwidthpercent + 'vw; }', document.styleSheets[0].cssRules.length);
-		fastback.normalize_view();
+		jQuery('#photos').addClass('up' + this.rowwidth);
+		var removeme = jQuery('#photos').attr('class').split(' ').filter(function(e){return e.match(/^up[0-9]/);});
 
-		var firstoffset = fastback.curthumbs.first().offset().top;
-		for(var i = 1;i<fastback.curthumbs.length;i++){
-			if (fastback.curthumbs.eq(i).offset().top !== firstoffset){
-				fastback.rowwidth = i;
+		var dontremove = removeme.indexOf('up' + this.rowwidth);
+		removeme.splice(dontremove,1);
+		removeme.forEach(function(c){jQuery('#photos').removeClass(c);})
+	}
+
+	zoomFinalizeSizeChange() {
+		this.normalize_view();
+
+		var firstoffset = this.curthumbs.first().offset().top;
+		for(var i = 1;i<this.curthumbs.length;i++){
+			if (this.curthumbs.eq(i).offset().top !== firstoffset){
+				this.rowwidth = i;
 				break;
 			}
 		}
+	}
+
+	zoomChange(e){
+		this.zoomSizeChange(e.target.value);
+		this.zoomFinalizeSizeChange();
 	}
 
 	navClick(e) {
@@ -506,7 +570,7 @@ class Fastback {
 
 		// No overlap, new is left - Delete all and refresh
 		if ( newmax < curmin ) {
-			remove_from_end = jQuery('.photos .tn');
+			remove_from_end = jQuery('#photos .tn');
 			movement = 'reload';
 		} else 
 			// Some overlap, new is slightly left - Delete some and slide
@@ -517,7 +581,7 @@ class Fastback {
 
 		// No overlap, new is right - Delete all and refresh
 		if ( curmax < newmin ) {
-			remove_from_start = jQuery('.photos .tn');
+			remove_from_start = jQuery('#photos .tn');
 			movement = 'reload';
 		} else 
 			// Some overlap, new is slightly right - Delete some and slide
@@ -545,7 +609,7 @@ class Fastback {
 		console.log(this.last_scroll_factors);
 
 		if ( movement === 'reload' ) {
-			jQuery('.photos').fadeOut(500);
+			jQuery('#photos').fadeOut(500);
 		}
 
 		remove_from_start.remove();
@@ -554,35 +618,40 @@ class Fastback {
 		jQuery('#photos').append(append);
 
 		// if ( movement === 'reload' || (movement === 'slide' && starting_with !== undefined ) ) {
-		// 	window.location.hash = '#p' + anchor;
-		// }	
+			// 	window.location.hash = '#p' + anchor;
+			// }	
 
-		jQuery('.photos').fadeIn(500);
+			jQuery('#photos').fadeIn(500);
 
-		this.curthumbs = jQuery('.photos .tn');
+			this.curthumbs = jQuery('#photos .tn');
 
-		this.normalizing = false;
+			this.normalizing = false;
 	}
 
 	getYearPhotos() {
 		var re = new RegExp( ' data-d=....-' + ("0" + (new Date().getMonth() + 1)).slice(-2) + '-' + ("0" + new Date().getDate()).slice(-2) + ' ');
-		var found = fastback.tags.filter(function(e){return e.match(re);}).join("");
+		var found = this.tags.filter(function(e){return e.match(re);}).join("");
 		jQuery('#photos').html(found);
-		this.curthumbs = jQuery('.photos .tn');
+		this.curthumbs = jQuery('#photos .tn');
 	}
 
 	keydownHandler(e) {
 		switch(e.key){
 			case 'Escape':
-			this.hideThumb();
-			break;
+				this.hideThumb();
+				break;
 			case 'ArrowRight':
-			this.handleThumbNext();
-			break;
+				this.handleThumbNext();
+				break;
 			case 'ArrowLeft':
-			this.handleThumbPrev();
-			break;
+				this.handleThumbPrev();
+				break;
 		}
+	}
+
+	handlePinch(e,$target,data) {
+		console.log(e);
+		console.log(data);
 	}
 }
 

@@ -1,4 +1,4 @@
-html,body {
+﻿html,body {
 	margin: 0;
 	padding: 0;
 	height: 100%;
@@ -6,7 +6,7 @@ html,body {
 	overflow: hidden;
 }
 
-.photos .tn, 
+#photos .tn, 
 .body {
 	background-image: url('loading.png');
 }
@@ -18,15 +18,16 @@ body {
 	overflow-anchor: auto; 
 }
 
-.photos {
+#photos {
 	/* scroll-snap-type: y mandatory; */
+	/* touch-action: pan-y !important; */
 	position: absolute;
 	left: 0;
 	vertical-align: top;
 	box-sizing: border-box;
 	width: calc(100% + 17px);
 	height: 100%;
-	overflow-y: auto;
+	overflow-y: hidden;
 	overflow-x: hidden;
 	opacity: 1;
 	-webkit-transition: opacity 0.1s ease-in-out;
@@ -35,12 +36,21 @@ body {
 	-o-transition: opacity 0.1s ease-in-out;
 }
 
-.photos .tn{
+#photos.up1  .tn { width: calc(100vw/1); height: calc(100vw/1); }
+#photos.up2  .tn { width: calc(100vw/2); height: calc(100vw/2); }
+#photos.up3  .tn { width: calc(100vw/3); height: calc(100vw/3); }
+#photos.up4  .tn { width: calc(100vw/4); height: calc(100vw/4); }
+#photos.up5  .tn, #photos .tn { width: calc(100vw/5); height: calc(100vw/5); }
+#photos.up6  .tn { width: calc(100vw/6); height: calc(100vw/6); }
+#photos.up7  .tn { width: calc(100vw/7); height: calc(100vw/7); }
+#photos.up8  .tn { width: calc(100vw/8); height: calc(100vw/8); }
+#photos.up9  .tn { width: calc(100vw/9); height: calc(100vw/9); }
+#photos.up10 .tn { width: calc(100vw/10); height: calc(100vw/10); }
+
+#photos .tn{
 	margin: 0;
 	padding: 0;
 	border: 0;
-	width: 20vw;
-	height: 20vw;
 	display: inline-block;
 	float: left;
 	box-sizing: border-box;
@@ -54,7 +64,7 @@ body {
 	position: relative;
 }
 
-.photos .tn:after {
+.tn:after {
 	content: attr(data-d);
 	max-height: 50%;
 	max-width: 75%;
@@ -70,7 +80,6 @@ body {
 	word-wrap: break-letter;
 }
 
-
 /*
  * These types of tags are generated dynamically for all months in javascript
 .y2050.m01~.y2050.m01:after {
@@ -78,7 +87,7 @@ body {
 }
 */
 
-.photos .tn img {
+#photos .tn img {
 	width: 100%;
 	height: 100%;
 }
@@ -164,7 +173,7 @@ body {
 	direction: rtl
 }
 
-.slider {
+#zoom {
 	-webkit-appearance: none;  /* Override default CSS styles */
 	appearance: none;
 	width: 100%; /* Full-width */
@@ -182,12 +191,12 @@ body {
 }
 
 /* Mouse-over effects */
-.slider:hover {
+#zoom:hover {
 	opacity: 1; /* Fully shown on mouse-over */
 }
 
 /* The slider handle (use -webkit- (Chrome, Opera, Safari, Edge) and -moz- (Firefox) to override default look) */
-.slider::-webkit-slider-thumb {
+#zoom::-webkit-slider-thumb {
 	-webkit-appearance: none; /* Override default look */
 	appearance: none;
 	width: 25px; /* Set a specific slider handle width */
@@ -196,7 +205,7 @@ body {
 	cursor: pointer; /* Cursor on hover */
 }
 
-.slider::-moz-range-thumb {
+#zoom::-moz-range-thumb {
 	width: 25px; /* Set a specific slider handle width */
 	height: 25px; /* Slider handle height */
 	background: #04AA6D; /* Green background */
@@ -365,7 +374,6 @@ body {
 
 /* smartphones, touchscreens */
 @media (hover: none) and (pointer: coarse) {
-	/*
 	#resizer {
 		display: none;
 	}
@@ -373,5 +381,8 @@ body {
 	.scroller {
 		height: 100%;
 	}
-	*/
+
+	.thumbctrl {
+		display: none;
+	}
 }

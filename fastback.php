@@ -445,15 +445,21 @@ class fastback {
 			</div>
 		</div></div>
 		<div id="resizer">
-			<input type="range" min="1" max="10" value="5" class="slider" id="myRange">
+			<input type="range" min="1" max="10" value="5" class="slider" id="zoom">
 		</div>
 		<div id="notification"></div>
-		<div id="thumb"><div id="thumbcontent"></div><div id="thumbcontrols"></div><div id="thumbclose">🆇</div><div id="thumbleft" class="thumbctrl">LEFT</div><div id="thumbright" class="thumbctrl">RIGHT</div></div>
-	</body>
-	<script src="'.$dirname.'/fastback_assets/hammer.min.js"></script>
+		<div id="thumb" data-ythreshold=150><div id="thumbcontent"></div><div id="thumbcontrols"></div><div id="thumbclose">🆇</div><div id="thumbleft" class="thumbctrl">LEFT</div><div id="thumbright" class="thumbctrl">RIGHT</div></div>
 	<script src="'.$dirname.'/fastback_assets/jquery.min.js"></script>
+
+	<!-- https://github.com/benmajor/jQuery-Touch-Events -->
+	<!-- script src="'.$dirname.'/fastback_assets/jquery.mobile-events.js"></script -->
+
+	<script src="'.$dirname.'/fastback_assets/hammer.js"></script>
 	<script src="'.$dirname.'/fastback_assets/jquery.hammer.js"></script>
-	<script src="'.$dirname.'/fastback_assets/fastback.js"></script>
+
+	<script src="'.$dirname.'/fastback_assets/fastback.js?ts=' . time() . '"></script>
+
+	</body>
 </html>';
 		print $html;
 	}
