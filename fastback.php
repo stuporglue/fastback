@@ -7,9 +7,8 @@ error_reporting(E_ALL);
 
 class fastback {
 
-	var $cache = "/shared/big/no_backup/web_cache/"; 
-	var $photobase = "/shared/big/Photos/";
-	var $db_lock_file = '/shared/big/no_backup/web_cache/fastback.lock';
+	var $cache = "/tmp/";
+	var $photobase = __DIR__;
 	var $db_lock;
 
 	var $process_limit = 1000;
@@ -50,6 +49,14 @@ class fastback {
 	 * Kick it off
 	 */
 	function __construct(){
+
+		if ( file_exists(__DIR__ . '/config.ini') ) {
+			$settings = parse_ini_file(__DIR__ . '/config.ini');
+			foreach($settings as $k => $v) {
+				$this->$k = $v;
+			}
+		}
+
 		// Hard work should be done via cli
 		if (php_sapi_name() === 'cli') {
 			$this->load_db_cache();
@@ -91,6 +98,10 @@ class fastback {
 	 */
 	public function load_db_cache() {
 		global $argv;
+
+		if ( !file_exists($this->cache) ) {
+			mkdir($this->cache,0700,TRUE);
+		}
 
 		$this->sql_connect();
 
@@ -321,7 +332,7 @@ class fastback {
 
 	private function sql_connect($try_no = 1){
 		if (php_sapi_name() === 'cli') {
-			$this->db_lock = fopen($this->db_lock_file,'w');
+			$this->db_lock = fopen($this->cache . '/fastback.lock','w');
 			if( flock($this->db_lock,LOCK_EX)){
 				$this->sql = new SQLite3($this->cache .'fastback.sqlite');
 			} else {
