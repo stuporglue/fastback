@@ -308,21 +308,32 @@ class fastback {
 						echo "\tChild $childno -- $cmd\n";
 						$res = `$cmd`;
 					} else if ( in_array(strtolower($pathinfo['extension']),$this->supported_video_types) ) {
-						$cmd = "ffmpeg -ss 10 -i $shellfile -vframes 1 $shellthumb 2>&1 > /tmp/fastback.ffmpeg.log.$childno";
+
+						$tmpthumb = $this->filecache . 'tmpthumb_' . getmypid() . '.jpg';
+						$tmpshellthumb = escapeshellarg($tmpthumb);
+
+						$cmd = "ffmpeg -y -ss 10 -i $shellfile -vframes 1 $tmpshellthumb 2>&1 > /tmp/fastback.ffmpeg.log.$childno";
 						echo "\tChild $childno -- $cmd\n";
 						$res = `$cmd`;
 
-						if ( !file_exists($thumbnailfile)) {
-							$cmd = "ffmpeg -ss 2 -i $shellfile -vframes 1 $shellthumb 2>&1 > /tmp/fastback.ffmpeg.log.$childno";
+						if ( !file_exists($tmpthumb)) {
+							$cmd = "ffmpeg -y -ss 2 -i $shellfile -vframes 1 $tmpshellthumb 2>&1 > /tmp/fastback.ffmpeg.log.$childno";
 							echo "\tChild $childno -- $cmd\n";
 							$res = `$cmd`;
 						}
 
-						if ( !file_exists($thumbnailfile)) {
-							$cmd = "ffmpeg -ss 00:00:00 -i $shellfile -frames:v 1 $shellthumb 2>&1 > /tmp/fastback.ffmpeg.log.$childno";
+						if ( !file_exists($tmpthumb)) {
+							$cmd = "ffmpeg -y -ss 00:00:00 -i $shellfile -frames:v 1 $tmpshellthumb 2>&1 > /tmp/fastback.ffmpeg.log.$childno";
 							echo "\tChild $childno -- $cmd\n";
 							$res = `$cmd`;
 						}
+
+						if ( file_exists($tmpthumb) ) {
+							$cmd = "vipsthumbnail --size=120x120 --output=$shellthumb --smartcrop=attention $tmpshellthumb";
+							echo "\tChild $childno -- $cmd\n";
+							$res = `$cmd`;
+						}
+
 					} else {
 						print "What do I do with ";
 						print_r($pathinfo);
