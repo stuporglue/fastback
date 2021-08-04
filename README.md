@@ -44,3 +44,12 @@ Cache files
 * fastback.json.gz - A cache of the json for the photos
 * fastback.lock - A lock file to help us open the sqlite database safely with the ability to wait a bit if it's in use.
 
+
+$_GET options
+-------------
+
+* ?debug=true - Enables debug output and avoids the cache
+* ?flag=filepath - Flags a file (marks file and hides it in JSON output during next time json is compiled)
+* ?get=photojson - Returns the json of all the files
+* ?test=(anything) - Runs the PHP test function. Useful for testing things. Empty by default
+

@@ -31,6 +31,8 @@ class fastback {
 	var $process_limit = 1000;
 	var $cores = 5;
 
+	var $debug = false;
+
 	var $supported_photo_types = array(
 		// Photo formats
 		'png',
@@ -71,6 +73,10 @@ class fastback {
 		$this->photobase = __DIR__ . '/';
 		$this->photourl = dirname($_SERVER['SCRIPT_NAME']) . '/';
 		$this->staticurl = dirname($_SERVER['SCRIPT_NAME']) . '/';
+
+		if ( !empty($_GET['debug']) && $_GET['debug'] === 'true' ) {
+			$this->debug = true;
+		}
 
 		if ( file_exists(__DIR__ . '/fastback.ini') ) {
 			$settings = parse_ini_file(__DIR__ . '/fastback.ini');
@@ -470,10 +476,10 @@ class fastback {
 		<meta charset="UTF-8">
 		<base href="'. $this->cacheurl . '/">
 		<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
-		<link rel="shortcut icon" href="' . $this->staticurl . '/fastback_assets/favicon.png"> 
-		<link rel="apple-touch-icon" href="' . $this->staticurl . '/fastback_assets/favicon.png">
+		<link rel="shortcut icon" href="' . $this->staticurl . '/fastback_assets/favicon.png' . ($this->debug ? '?ts=' . time() : '') . '"> 
+		<link rel="apple-touch-icon" href="' . $this->staticurl . '/fastback_assets/favicon.png' . ($this->debug ? '?ts=' . time() : '') . '">
 		<title>Moore Photos</title>
-		<link rel="stylesheet" href="'. $this->staticurl .'/fastback_assets/fastback.css">
+		<link rel="stylesheet" href="'. $this->staticurl .'/fastback_assets/fastback.css' . ($this->debug ? '?ts=' . time() : '') . '">
 		<!-- Powered by https://github.com/stuporglue/fastback/ -->
     </head>
 	<body>
@@ -506,15 +512,15 @@ class fastback {
 		</div>
 		<div id="notification"></div>
 		<div id="thumb" data-ythreshold=150><div id="thumbcontent"></div><div id="thumbcontrols"></div><div id="thumbclose">🆇</div><div id="thumbleft" class="thumbctrl">LEFT</div><div id="thumbright" class="thumbctrl">RIGHT</div></div>
-	<script src="'. $this->staticurl .'/fastback_assets/jquery.min.js"></script>
+	<script src="'. $this->staticurl .'/fastback_assets/jquery.min.js' . ($this->debug ? '?ts=' . time() : '') . '"></script>
 
 	<!-- https://github.com/benmajor/jQuery-Touch-Events -->
-	<!-- script src="'. $this->staticurl .'/fastback_assets/jquery.mobile-events.js"></script -->
+	<!-- script src="'. $this->staticurl .'/fastback_assets/jquery.mobile-events.js' . ($this->debug ? '?ts=' . time() : '') . '"></script -->
 
-	<script src="'.$this->staticurl.'/fastback_assets/hammer.js"></script>
-	<script src="'.$this->staticurl.'/fastback_assets/jquery.hammer.js"></script>
+	<script src="'.$this->staticurl.'/fastback_assets/hammer.js' . ($this->debug ? '?ts=' . time() : '') . '"></script>
+	<script src="'.$this->staticurl.'/fastback_assets/jquery.hammer.js' . ($this->debug ? '?ts=' . time() : '') . '"></script>
 
-	<script src="'.$this->staticurl.'/fastback_assets/fastback.js?ts=' . time() . '"></script>
+	<script src="'.$this->staticurl.'/fastback_assets/fastback.js' . ($this->debug ? '?ts=' . time() : '') . '"></script>
 	<script>
 		var FastbackBase = "' . $_SERVER['SCRIPT_NAME'] . '";
 		var FastbackBase = "' . $_SERVER['SCRIPT_NAME'] . '";
@@ -522,7 +528,8 @@ class fastback {
 			cacheurl: "' . $this->cacheurl . '",
 			photourl: "' . $this->photourl . '",
 			staticurl: "' . $this->staticurl . '",
-			fastbackurl: "' . $_SERVER['SCRIPT_NAME'] . '"
+			fastbackurl: "' . $_SERVER['SCRIPT_NAME'] . '",
+			debug: ' . $this->debug . '
 		});
 	</script>
 

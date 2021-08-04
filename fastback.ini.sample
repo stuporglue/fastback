@@ -17,3 +17,7 @@ photourl = "/shared/big/Photos/famvacation_2021/"
 ; URL path to static assets
 ; Optional, will use current web path as default
 staticurl = "/famvacation_2021/"
+
+; URL path to static assets
+; Optional, will use current web path as default
+staticurl = "/famvacation_2021/"

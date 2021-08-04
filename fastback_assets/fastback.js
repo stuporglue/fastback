@@ -1,4 +1,9 @@
 ﻿class Fastback {
+
+	/**
+	* Note: any property can be set in the constructor
+	*/
+
 	// built-in properties
 	minphotos = 200;
 	minpages = 5;
@@ -9,6 +14,8 @@
 	disablehandlers = false;
 
 	rowwidth = 5;
+
+	debug = false;
 
 	// Properties required in constructor
 	cacheurl;
@@ -31,7 +38,12 @@
 
 		jQuery.extend(this,args);
 
-		$.getJSON(this.fastbackurl + '?get=photojson', function(json) {
+		if ( this.debug ) {
+			console.log("Fastback initialized with:");
+			console.log(args);
+		}
+
+		$.getJSON(this.fastbackurl + '?get=photojson' + ( this.debug ? '&debug=true' : ''), function(json) {
 			jQuery.extend(self,json);
 		}).then(function(){
 			self.load_nav();
@@ -44,7 +56,6 @@
 			self.normalize_view();
 
 			var photoswidth = jQuery('#photos')[0].offsetWidth - jQuery('#photos')[0].clientWidth;
-			// jQuery('#photos').css('width','calc(100% + ' + photoswidth + ')');
 			jQuery('#photos').focus();
 		});
 
@@ -57,58 +68,75 @@
 		jQuery('#thumbclose').on('click',this.hideThumb.bind(this));
 		jQuery(document).on('keydown',this.keydownHandler.bind(this));
 
-/*
 		jQuery('#thumb').on('swiperight',this.handleThumbNext.bind(this));
 		jQuery('#thumb').on('swipeleft',this.handleThumbPrev.bind(this));
 		jQuery('#thumb').on('swipeup',this.hideThumb.bind(this));
-		*/
 
 		jQuery('#thumb').hammer({recognizers: [ 
-				[Hammer.Swipe,{ direction: Hammer.DIRECTION_ALL }],
+			[Hammer.Swipe,{ direction: Hammer.DIRECTION_ALL }],
 		]}).on('swiperight swipeup swipeleft', this.handleThumbSwipe.bind(this));
 
-		jQuery('#photos').hammer({ recognizers: [ 
-				[Hammer.Pinch, { enable: true }],
-				[Hammer.Swipe,{ direction: Hammer.DIRECTION_VERTICAL }],
-		]}).on('pinch pinchend pinchstart swipeup swipedown', this.handlePhotoTouch.bind(this));
+		jQuery('#photos').on('scroll',this.debounce_scroll.bind(this));
 
-		// jQuery('#photos').on('scroll',this.debounce_scroll.bind(this));
+
+		//https://stackoverflow.com/questions/11183174/simplest-way-to-detect-a-pinch/11183333#11183333
+		jQuery('#photos').on({
+			touchstart: this.handlePhotoPinch.bind(this),
+			touchmove: this.handlePhotoPinch.bind(this),
+			touchend: this.handlePhotoPinch.bind(this)
+		});
+
 		// jQuery('#photos').css('touch-action', 'pan-y !important');
 		// jQuery('body').append('<style>#photos{touch-action: pan-y !important;}</style>');
-		//
+
+		/*
 		function fixSafariScrolling(event) {
 			event.target.style.overflowY = 'hidden';
 			setTimeout(function () { event.target.style.overflowY = 'auto'; });
 		}
 
 		jQuery('#photos')[0].addEventListener('webkitAnimationEnd', fixSafariScrolling);
+		*/
 	}
 
-	handlePhotoTouch(e) {
-		if ( e.type == 'pinchstart' ) {
-			this.handlePhotoTouch.origZoom = this.rowwidth;
-			// jQuery('#photos').css('touch-action', 'none');
-		} else if ( e.type == 'pinch' ){
+	handlePhotoPinch(e){
+		if ( e.touches.length != 2 ) {
+			return;
+		}
 
-			console.log(e.gesture.scale);
+		var dist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
 
-			if ( this.handlePhotoTouch.origZoom === undefined ) {
-				this.handlePhotoTouch.origZoom = this.rowwidth;
-			}
+		if ( e.type == 'touchstart') {
+
+			// Create the pinch object and set initial distance
+			this.handlePhotoPinch.pinch = {
+				origZoom: this.rowwidth,
+				origDist: dist,
+				curDist: dist,
+				distChange: 0
+			};
+		} else if ( e.type == 'touchmove' ) {
+
+			this.handlePhotoPinch.pinch.curDist = dist;
+			this.handlePhotoPinch.pinch.distChange = this.handlePhotoPinch.pinch.curDist / this.handlePhotoPinch.pinch.origDist;
 
 			var slots;
 
-			if ( e.gesture.scale > 1 ) {
-				slots = Math.floor(e.gesture.scale);
-				console.log("Zooming in " + slots + " slots");
-				this.rowwidth = this.handlePhotoTouch.origZoom - slots;
+			if ( this.handlePhotoPinch.pinch.distChange > 1 ) {
+				slots = Math.floor(this.handlePhotoPinch.pinch.distChange);
+				if ( this.debug ) {
+					console.log("Zooming in " + slots + " slots");
+				}
+				this.rowwidth = this.handlePhotoPinch.pinch.origZoom - slots;
 				if ( this.rowwidth < 1 ) {
 					this.rowwidth = 1;
 				}
 			} else {
-				slots = Math.floor(1/e.gesture.scale);
-				console.log("Zooming out " + slots + " slots");
-				this.rowwidth = this.handlePhotoTouch.origZoom + slots;
+				slots = Math.floor(1/this.handlePhotoPinch.pinch.distChange);
+				if ( this.debug ) {
+					console.log("Zooming out " + slots + " slots");
+				}
+				this.rowwidth = this.handlePhotoPinch.pinch.origZoom + slots;
 				if ( this.rowwidth > 10 ) {
 					this.rowwidth = 10;
 				}
@@ -116,22 +144,27 @@
 
 			this.zoomSizeChange(this.rowwidth);
 
-			var focus = jQuery(document.elementFromPoint(e.gesture.center.x,e.gesture.center.y)).closest('div.tn').attr('id').replace('p','');
+			var center = {
+				x: (e.touches[0].pageX + e.touches[1].pageX) / 2,
+				y: (e.touches[0].pageY + e.touches[1].pageY) / 2
+			};
+
+			var focus = jQuery(document.elementFromPoint(center.x,center.y)).closest('div.tn').attr('id').replace('p','');
 			if ( parseInt(focus) == focus) {
 				this.normalize_view(focus);
 			}
-
-		} else if ( e.type == 'pinchend' ) {
+		} else if ( e.type == 'touchend' ) {
 			this.zoomFinalizeSizeChange();
-			this.handlePhotoTouch.origZoom = undefined;
-			//jQuery('#photos').css('touch-action', 'pan-y !important');
+			this.handlePhotoPinch.pinch = undefined;
 		}
 
-		else if ( e.type == 'swipeup' || e.type == 'swipedown' ) {
-			this.showNotification(e.type);		
-			this.debounce_scroll(e);
+		if ( isNaN(parseInt(this.rowwidth))) {
+			if ( this.debug ) {
+				console.log("Something happend in pinch and my rowwidth is NaN. Resetting to 5"); 
+			}
+			this.rowwidth = 5;
+			this.normalize_view();
 		}
-
 	}
 
 	// Append as many photos as needed to meet the page size
@@ -196,7 +229,9 @@
 
 			if ( (min + ',' + mid + ',' + max) == old ) {
 				// We're getting stuck in some conditions, not sure where yet
-				console.log("Stuck in binary_search_find_visible");
+				if ( this.debug ) {
+					console.log("Stuck in binary_search_find_visible");
+				}
 			}
 			old = min + ',' + mid + ',' + max;
 
@@ -225,7 +260,7 @@
 		}
 
 		var v = jQuery(this.curthumbs[min]).attr('id').replace('p','');
-		if ( typeof v.offset === 'function' ) {
+		if ( typeof v.offset === 'function' && this.debug ) {
 			console.log("Undefined offset");
 		}
 		return v;
@@ -611,7 +646,9 @@
 			'newmax': newmax
 		};
 
-		console.log(this.last_scroll_factors);
+		if ( this.debug ) {
+			console.log(this.last_scroll_factors);
+		}
 
 		if ( movement === 'reload' ) {
 			jQuery('#photos').fadeOut(500);
@@ -652,10 +689,5 @@
 				this.handleThumbPrev();
 				break;
 		}
-	}
-
-	handlePinch(e,$target,data) {
-		console.log(e);
-		console.log(data);
 	}
 }

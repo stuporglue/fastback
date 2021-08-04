@@ -27,7 +27,7 @@ body {
 	box-sizing: border-box;
 	width: calc(100% + 17px);
 	height: 100%;
-	overflow-y: hidden;
+	overflow-y: auto;
 	overflow-x: hidden;
 	opacity: 1;
 	-webkit-transition: opacity 0.1s ease-in-out;
