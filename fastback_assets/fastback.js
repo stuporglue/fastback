@@ -285,7 +285,7 @@
 	}
 
 	showNotification(html,timer){
-		jQuery('#notification').html(html).addClass('new');
+		jQuery('#notification').html(html).show(500).addClass('new');
 
 		if ( this.notificationtimer !== undefined ) {
 			clearTimeout(this.notificationtimer);
@@ -293,7 +293,7 @@
 
 		if (timer !== undefined ) {
 			this.notificationtimer = setTimeout(function(){
-				jQuery('#notification').removeClass('new');
+				jQuery('#notification').removeClass('new').hide(500);
 			},timer);
 		}
 	}

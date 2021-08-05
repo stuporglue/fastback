@@ -26,6 +26,9 @@ class fastback {
 	// Optional, will use current web path as default
 	var $photourl;
 
+	// Only show dates on photos when it's a new month
+	var $limitdates = true;
+
 	var $db_lock;
 
 	var $process_limit = 1000;
