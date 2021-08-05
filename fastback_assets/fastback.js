@@ -35,6 +35,9 @@
 	last_scroll_timestamp = 0;
 	scroll_time = 100;
 
+	// Browser type
+	isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+
 	// Browser supported file types - will be shown directly. 
 	// Anything not in this list will be proxied into a jpg
 	browser_supported_file_types = [ 
@@ -51,6 +54,11 @@
 		if ( this.debug ) {
 			console.log("Fastback initialized with:");
 			console.log(args);
+		}
+
+		if ( this.isSafari ) {
+			this.browser_supported_file_types.push('mov')
+			this.browser_supported_file_types.push('mpg')
 		}
 
 		$.getJSON(this.fastbackurl + '?get=photojson' + ( this.debug ? '&debug=true' : ''), function(json) {
@@ -405,7 +413,7 @@
 		var fullsize = this.photourl + img.attr('src').replace(/.jpg$/,'');
 
 		// File type not found, proxy a jpg instead
-		var supported_type = (this.browser_supported_file_types.indexOf(fullsize.replace(/.*\./,'')) != -1);
+		var supported_type = (this.browser_supported_file_types.indexOf(fullsize.replace(/.*\./,'').toLowerCase()) != -1);
 		if ( !supported_type ) {
 			fullsize = this.fastbackurl + '?proxy=' + encodeURIComponent(fullsize);	
 		}
