@@ -5,7 +5,7 @@
 	*/
 
 	// built-in properties
-	minphotos = 200;
+	minphotos = 300;
 	minpages = 5;
 
 	notificationtimer;
@@ -31,7 +31,7 @@
 
 	last_scroll_factors;
 	last_scroll_timestamp = 0;
-	scroll_time = 50;
+	scroll_time = 100;
 
 	constructor(args) {
 		var self = this;
@@ -57,17 +57,28 @@
 
 			var photoswidth = jQuery('#photos')[0].offsetWidth - jQuery('#photos')[0].clientWidth;
 			jQuery('#photos').focus();
-		});
 
-		jQuery(document).ready(this.docReady);
+			self.addListeners();
+		});
+	}
+
+	addListeners() {
+
+		// Click and change handlers
 		jQuery('#zoom').on('change',this.zoomChange.bind(this));
 		jQuery('#photos').on('click','.tn',this.handleThumbClick.bind(this));
 		jQuery('#thumbright').on('click',this.handleThumbNext.bind(this));
 		jQuery('#thumbleft').on('click',this.handleThumbPrev.bind(this));
 		jQuery('.scroller').on('mouseup','.nav',this.navClick.bind(this));
 		jQuery('#thumbclose').on('click',this.hideThumb.bind(this));
+
+		// Key presses
 		jQuery(document).on('keydown',this.keydownHandler.bind(this));
 
+		// Scrolling
+		jQuery('#photos').on('scroll',this.debounce_scroll.bind(this));
+
+		// Touch stuff
 		jQuery('#thumb').on('swiperight',this.handleThumbNext.bind(this));
 		jQuery('#thumb').on('swipeleft',this.handleThumbPrev.bind(this));
 		jQuery('#thumb').on('swipeup',this.hideThumb.bind(this));
@@ -76,9 +87,6 @@
 			[Hammer.Swipe,{ direction: Hammer.DIRECTION_ALL }],
 		]}).on('swiperight swipeup swipeleft', this.handleThumbSwipe.bind(this));
 
-		jQuery('#photos').on('scroll',this.debounce_scroll.bind(this));
-
-
 		//https://stackoverflow.com/questions/11183174/simplest-way-to-detect-a-pinch/11183333#11183333
 		jQuery('#photos').on({
 			touchstart: this.handlePhotoPinch.bind(this),
@@ -86,17 +94,10 @@
 			touchend: this.handlePhotoPinch.bind(this)
 		});
 
-		// jQuery('#photos').css('touch-action', 'pan-y !important');
-		// jQuery('body').append('<style>#photos{touch-action: pan-y !important;}</style>');
-
-		/*
-		function fixSafariScrolling(event) {
-			event.target.style.overflowY = 'hidden';
-			setTimeout(function () { event.target.style.overflowY = 'auto'; });
-		}
-
-		jQuery('#photos')[0].addEventListener('webkitAnimationEnd', fixSafariScrolling);
-		*/
+		// https://stackoverflow.com/questions/37808180/disable-viewport-zooming-ios-10-safari
+		// document.addEventListener('touchmove', function (event) {
+		//   if (event.scale !== 1) { event.preventDefault(); }
+		// }, false);
 	}
 
 	handlePhotoPinch(e){
@@ -171,6 +172,12 @@
 
 	load_nav() {
 		var keys = Object.keys(this.yearmonthindex).sort().reverse();
+		var years = Array.from(new Set(keys.map(function(e){return e.replace(/-.*/,'')})));
+
+		if ( years.length < 2 ) {
+			return;
+		}
+
 		var html = '<div class="nav" data-year="onthisdate"><div class="year">Today</div></div>';
 
 		var y;
@@ -311,11 +318,10 @@
 
 		var imghtml;
 		if (divwrap.hasClass('vid')){
-			imghtml = '<video controls><source src="' + this.photourl + img.attr('src').replace(/.jpg$/,'') + '">Your browser does not support this video format.</video>';
+			imghtml = '<video controls><source src="' + this.photourl + img.attr('src').replace(/.jpg$/,'') + '#t=0.0001">Your browser does not support this video format.</video>';
 		} else {
 			imghtml = '<img src="' + this.photourl + img.attr('src').replace(/.jpg$/,'') +'"/>';
 		}
-
 
 		var ctrlhtml = '<h2>' + (divwrap.data('d') + '') + '</h2>';
 		ctrlhtml += '<p><a class="download" href="' + this.photourl + img.attr('src').replace(/.jpg$/,'') + '" download>' + img.attr('alt') + '</a>';
@@ -468,9 +474,14 @@
 			return;
 		}
 
-		if ( e.timeStamp - this.last_scroll_timestamp > this.scroll_time ) {
-			this.normalize_view();
-		}
+		var self = this;
+
+		clearTimeout($.data(this, 'scrollTimer'));
+
+		$.data(this, 'scrollTimer', setTimeout(function() {
+			// do something
+			self.normalize_view();
+		}, this.scroll_time));
 
 		this.last_scroll_timestamp = e.timeStamp;
 	}
@@ -654,20 +665,31 @@
 			jQuery('#photos').fadeOut(500);
 		}
 
+		/*
+		 * Safari is the new IE. It always needs special treatment and I hate dealing with it.
+		 * https://stackoverflow.com/questions/9834143/jquery-keep-window-from-changing-scroll-position-while-prepending-items-to-a-l
+		 */
+		// Get the current scroll top
+		var first_visible_photo = jQuery('#p' + first_visible);
+		if ( first_visible_photo.length > 0){
+			var curOffset = first_visible_photo.offset().top - $('#photos').scrollTop();
+		}
+
 		remove_from_start.remove();
 		remove_from_end.remove();
 		jQuery('#photos').prepend(prepend);
 		jQuery('#photos').append(append);
 
-		// if ( movement === 'reload' || (movement === 'slide' && starting_with !== undefined ) ) {
-			// 	window.location.hash = '#p' + anchor;
-			// }	
+		// Set the new scroll top
+		if ( first_visible_photo.length > 0 ) {
+			$('#photos').scrollTop(first_visible_photo.offset().top - curOffset);
+		}
 
-			jQuery('#photos').fadeIn(500);
+		jQuery('#photos').fadeIn(500);
 
-			this.curthumbs = jQuery('#photos .tn');
+		this.curthumbs = jQuery('#photos .tn');
 
-			this.normalizing = false;
+		this.normalizing = false;
 	}
 
 	getYearPhotos() {

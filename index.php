@@ -62,6 +62,8 @@ class fastback {
 
 	var $sql;
 
+	var $sortorder = 'DESC';
+
 
 	/**
 	 * Kick it off
@@ -91,6 +93,7 @@ class fastback {
 		$this->photobase = rtrim($this->photobase,'/') . '/';
 		$this->photourl = rtrim($this->photourl,'/') . '/';
 		$this->staticurl = rtrim($this->staticurl,'/') . '/';
+		$this->sortorder = ($this->sortorder == 'ASC' ? 'ASC' : 'DESC');
 
 		// Hard work should be done via cli
 		if (php_sapi_name() === 'cli') {
@@ -440,7 +443,7 @@ class fastback {
 			exit();
 		}
 
-		$res = $this->sql->query("SELECT file,sorttime,isvideo FROM fastback WHERE thumbnail IS NOT NULL AND thumbnail NOT LIKE 'RESERVE%' AND flagged IS NOT TRUE ORDER BY sorttime DESC,file");
+		$res = $this->sql->query("SELECT file,sorttime,isvideo FROM fastback WHERE thumbnail IS NOT NULL AND thumbnail NOT LIKE 'RESERVE%' AND flagged IS NOT TRUE ORDER BY sorttime " . $this->sortorder . ",file");
 		$last_date = NULL;
 		$last_year = NULL;
 		$idx = 0;
@@ -514,9 +517,6 @@ class fastback {
 		<div id="thumb" data-ythreshold=150><div id="thumbcontent"></div><div id="thumbcontrols"></div><div id="thumbclose">🆇</div><div id="thumbleft" class="thumbctrl">LEFT</div><div id="thumbright" class="thumbctrl">RIGHT</div></div>
 	<script src="'. $this->staticurl .'/fastback_assets/jquery.min.js' . ($this->debug ? '?ts=' . time() : '') . '"></script>
 
-	<!-- https://github.com/benmajor/jQuery-Touch-Events -->
-	<!-- script src="'. $this->staticurl .'/fastback_assets/jquery.mobile-events.js' . ($this->debug ? '?ts=' . time() : '') . '"></script -->
-
 	<script src="'.$this->staticurl.'/fastback_assets/hammer.js' . ($this->debug ? '?ts=' . time() : '') . '"></script>
 	<script src="'.$this->staticurl.'/fastback_assets/jquery.hammer.js' . ($this->debug ? '?ts=' . time() : '') . '"></script>
 
@@ -529,7 +529,7 @@ class fastback {
 			photourl: "' . $this->photourl . '",
 			staticurl: "' . $this->staticurl . '",
 			fastbackurl: "' . $_SERVER['SCRIPT_NAME'] . '",
-			debug: ' . $this->debug . '
+			debug: ' . ($this->debug ? 'true' : 'false'). '
 		});
 	</script>
 

@@ -15,12 +15,10 @@ body {
 	background-repeat: no-repeat;
 	background-position: center center;
 	background-size: 100px;
-	overflow-anchor: auto; 
+	overflow-anchor: auto;  /* Not supported by Safari on ios :-( */
 }
 
 #photos {
-	/* scroll-snap-type: y mandatory; */
-	/* touch-action: pan-y !important; */
 	position: absolute;
 	left: 0;
 	vertical-align: top;
@@ -170,7 +168,8 @@ body {
 	position: fixed;
 	bottom: 0;
 	width: 100%;
-	direction: rtl
+	direction: rtl;
+	z-index: 1000;
 }
 
 #zoom {
