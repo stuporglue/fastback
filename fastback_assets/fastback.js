@@ -35,6 +35,14 @@
 	last_scroll_timestamp = 0;
 	scroll_time = 100;
 
+	// Browser supported file types - will be shown directly. 
+	// Anything not in this list will be proxied into a jpg
+	browser_supported_file_types = [ 
+	// videos
+	'mp4','m4v', 'ogg',
+	// images
+	'jpg','jpeg','gif','png' ];
+
 	constructor(args) {
 		var self = this;
 
@@ -394,10 +402,18 @@
 		var img = divwrap.find('img');
 
 		var imghtml;
-		if (divwrap.hasClass('vid')){
-			imghtml = '<video controls><source src="' + this.photourl + img.attr('src').replace(/.jpg$/,'') + '#t=0.0001">Your browser does not support this video format.</video>';
+		var fullsize = this.photourl + img.attr('src').replace(/.jpg$/,'');
+
+		// File type not found, proxy a jpg instead
+		var supported_type = (this.browser_supported_file_types.indexOf(fullsize.replace(/.*\./,'')) != -1);
+		if ( !supported_type ) {
+			fullsize = this.fastbackurl + '?proxy=' + encodeURIComponent(fullsize);	
+		}
+
+		if (divwrap.hasClass('vid') && supported_type){
+			imghtml = '<video controls><source src="' + fullsize + '#t=0.0001">Your browser does not support this video format.</video>';
 		} else {
-			imghtml = '<img src="' + this.photourl + img.attr('src').replace(/.jpg$/,'') +'"/>';
+			imghtml = '<img src="' + fullsize +'"/>';
 		}
 
 		var ctrlhtml = '<h2>' + (divwrap.data('d') + '') + '</h2>';

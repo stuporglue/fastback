@@ -31,7 +31,10 @@ class fastback {
 
 	var $db_lock;
 
-	var $process_limit = 1000;
+	// Max number of thumbnails to reserve per child process
+	var $process_limit = 50;
+
+	// Max number of child processes
 	var $cores = 5;
 
 	var $debug = false;
@@ -421,6 +424,8 @@ class fastback {
             $this->flag_photo();
         } else if (!empty($_GET['test'])) {
             $this->test();
+		} else if (!empty($_GET['proxy'])) {
+			$this->proxy();
 		} else {
 			$this->makehtml();
 		}
@@ -565,6 +570,39 @@ class fastback {
     }
 
 	public function test() {
+	}
+
+	public function proxy() {
+		$file = $_GET['proxy'];
+
+		if ( strpos($file,$this->photobase) !== 0 ) {
+			die("Only photos in photobase can be proxied");
+		}
+
+		if ( !file_exists($file) ) {
+			print $file . "\n";
+			die("File doesn't exist");
+		}
+
+		$mime = mime_content_type($file);
+		$mime = explode('/',$mime);
+
+		if ( $mime[1] == 'x-tga' ) {
+			$mime[0] = 'video';
+			$mime[1] = 'mpeg2';
+		}
+
+		if ( $mime[0] == 'image' ) {
+			header("Content-Type: image/jpeg");
+			$cmd = 'convert ' . escapeshellarg($file) . ' JPG:-';
+			passthru($cmd);
+		} else if ($mime[0] == 'video' ) {
+			header("Content-Type: image/jpeg");
+			$cmd = "ffmpeg -ss 00:00:00 -i " . escapeshellarg($file) . " -frames:v 1 -f singlejpeg - ";
+			passthru($cmd);
+		} else {
+			die("Unsupported file type");
+		}
 	}
 }
 
