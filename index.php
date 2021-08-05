@@ -123,7 +123,7 @@ class fastback {
 		$res = $this->sql->query($q_create_meta);
 		//var_dump($res);
 
-		$q_create_files = "CREATE TABLE IF NOT EXISTS fastback ( file TEXT PRIMARY KEY, isvideo BOOL, flagged BOOL, mtime INTEGER, sorttime DATE, thumbnail TEXT)";
+		$q_create_files = "CREATE TABLE IF NOT EXISTS fastback ( file TEXT PRIMARY KEY, isvideo BOOL, flagged BOOL, mtime INTEGER, sorttime DATETIME, thumbnail TEXT)";
 
 		$res = $this->sql->query($q_create_files);
 		//var_dump($res);
@@ -529,7 +529,8 @@ class fastback {
 			photourl: "' . $this->photourl . '",
 			staticurl: "' . $this->staticurl . '",
 			fastbackurl: "' . $_SERVER['SCRIPT_NAME'] . '",
-			debug: ' . ($this->debug ? 'true' : 'false'). '
+			debug: ' . ($this->debug ? 'true' : 'false'). ',
+			limitdates: ' . ($this->limitdates ? 'true' : 'false') . '
 		});
 	</script>
 

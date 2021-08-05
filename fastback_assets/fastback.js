@@ -17,6 +17,8 @@
 
 	debug = false;
 
+	limitdates = true;
+
 	// Properties required in constructor
 	cacheurl;
 	photourl;
@@ -49,9 +51,11 @@
 			self.load_nav();
 
 			// Set up dynamicly generated css
-			var newcss = Object.keys(self.yearmonthindex).map(function(d){ return d.replace(/(....)-(..)/,'.y$1.m$2~.y$1.m$2:after');	}).join(',') + '{display:none;}';
+			if ( this.limitdates ) {
+				var newcss = Object.keys(self.yearmonthindex).map(function(d){ return d.replace(/(....)-(..)/,'.y$1.m$2~.y$1.m$2:after');	}).join(',') + '{display:none;}';
 
-			jQuery('body').append('<style>' + newcss + '</style>');
+				jQuery('body').append('<style>' + newcss + '</style>');
+			}
 
 			self.normalize_view();
 
@@ -195,8 +199,6 @@
 
 				html += '<div class="nav" data-year="' + y + '"><div class="year">' + y + '</div>';
 			}
-
-			// html += '<div class="month" data-month="' + keys[k] + '">' + months[m] + '</div>';
 
 			lastyear = y;
 		}
@@ -474,15 +476,21 @@
 			return;
 		}
 
-		var self = this;
 
-		clearTimeout($.data(this, 'scrollTimer'));
+		if ( e.timeStamp - this.last_scroll_timestamp < this.scroll_time ) {
+			return;
+		}
 
-		$.data(this, 'scrollTimer', setTimeout(function() {
-			// do something
-			self.normalize_view();
-		}, this.scroll_time));
+		// var self = this;
 
+		//clearTimeout($.data(this, 'scrollTimer'));
+
+		//$.data(this, 'scrollTimer', setTimeout(function() {
+		//	// do something
+		//	self.normalize_view();
+		//}, this.scroll_time));
+
+		this.normalize_view();
 		this.last_scroll_timestamp = e.timeStamp;
 	}
 
