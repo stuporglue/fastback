@@ -51,7 +51,7 @@
 			self.load_nav();
 
 			// Set up dynamicly generated css
-			if ( this.limitdates ) {
+			if ( self.limitdates ) {
 				var newcss = Object.keys(self.yearmonthindex).map(function(d){ return d.replace(/(....)-(..)/,'.y$1.m$2~.y$1.m$2:after');	}).join(',') + '{display:none;}';
 
 				jQuery('body').append('<style>' + newcss + '</style>');
@@ -67,7 +67,6 @@
 	}
 
 	addListeners() {
-
 		// Click and change handlers
 		jQuery('#zoom').on('change',this.zoomChange.bind(this));
 		jQuery('#photos').on('click','.tn',this.handleThumbClick.bind(this));
@@ -83,10 +82,6 @@
 		jQuery('#photos').on('scroll',this.debounce_scroll.bind(this));
 
 		// Touch stuff
-		jQuery('#thumb').on('swiperight',this.handleThumbNext.bind(this));
-		jQuery('#thumb').on('swipeleft',this.handleThumbPrev.bind(this));
-		jQuery('#thumb').on('swipeup',this.hideThumb.bind(this));
-
 		jQuery('#thumb').hammer({recognizers: [ 
 			[Hammer.Swipe,{ direction: Hammer.DIRECTION_ALL }],
 		]}).on('swiperight swipeup swipeleft', this.handleThumbSwipe.bind(this));
@@ -98,14 +93,76 @@
 			touchend: this.handlePhotoPinch.bind(this)
 		});
 
-		// https://stackoverflow.com/questions/37808180/disable-viewport-zooming-ios-10-safari
-		// document.addEventListener('touchmove', function (event) {
-		//   if (event.scale !== 1) { event.preventDefault(); }
-		// }, false);
+		jQuery('#thumb').on({
+			touchstart: this.handleThumbSwipe.bind(this),
+			touchmove: this.handleThumbSwipe.bind(this),
+			touchend: this.handleThumbSwipe.bind(this)
+		});
+	}
+
+	handleThumbSwipe(e) {
+
+		/*
+		// https://stackoverflow.com/questions/2264072/detect-a-finger-swipe-through-javascript-on-the-iphone-and-android
+
+		var xDown = null;                                                        
+		var yDown = null;
+
+		function getTouches(evt) {
+		return evt.touches ||             // browser API
+				evt.originalEvent.touches; // jQuery
+		}                                                     
+																				
+		function handleTouchStart(evt) {
+			const firstTouch = getTouches(evt)[0];                                      
+			xDown = firstTouch.clientX;                                      
+			yDown = firstTouch.clientY;                                      
+		};                                                
+																				
+		function handleTouchMove(evt) {
+			if ( ! xDown || ! yDown ) {
+				return;
+			}
+
+			var xUp = evt.touches[0].clientX;                                    
+			var yUp = evt.touches[0].clientY;
+
+			var xDiff = xDown - xUp;
+			var yDiff = yDown - yUp;
+																				
+			if ( Math.abs( xDiff ) > Math.abs( yDiff ) ) {/*most significant
+				if ( xDiff > 0 ) {
+					//* right swipe 
+				} else {
+					// /* left swipe 
+				}                       
+			} else {
+				if ( yDiff > 0 ) {
+					// /* down swipe 
+				} else { 
+					// /* up swipe 
+				}                                                                 
+			}
+			xDown = null;
+			yDown = null;                                             
+		};
+		*/
+
+		
+
+
+		if ( e.type == 'swiperight' ) {
+			this.handleThumbNext();
+		} else if ( e.type == 'swipeleft' ) {
+			this.handleThumbPrev();
+		} else if ( e.type == 'swipeup' ) {
+			this.hideThumb();
+		}
 	}
 
 	handlePhotoPinch(e){
-		if ( e.touches.length != 2 ) {
+
+		if ( e.touches.length !== 2 ) {
 			return;
 		}
 
@@ -182,11 +239,14 @@
 			return;
 		}
 
+		var newhtml = '<div id="deepnav">';
+
 		var html = '<div class="nav" data-year="onthisdate"><div class="year">Today</div></div>';
 
 		var y;
 		var m;
 		var lastyear = "";
+		var lastmonth = "";
 		var months = {'01':'Jan','02':'Feb','03':'Mar','04':'Apr','05':'May','06':'Jun','07':'Jul','08':'Aug','09':'Sep','10':'Oct','11':'Nov','12':'Dec'};
 		for(var k=0;k<keys.length;k++){
 			y = keys[k].substr(0,4);
@@ -195,17 +255,29 @@
 			if ( y !== lastyear ) {
 				if ( k !== 0 ) {
 					html += '</div></div>';
+					newhtml += '</div></div>';
 				}
 
 				html += '<div class="nav" data-year="' + y + '"><div class="year">' + y + '</div>';
+				newhtml += '<div class="nav" data-year="' + y + '"><div class="year"><h2>' + y + '</h2>';
+
+				lastmonth = "";
 			}
 
+			if ( m !== lastmonth ) {
+				newhtml += '<div class="month" data-month="'+m+'">' + months[m] + '</div>';
+			}
+
+			lastmonth = m;
 			lastyear = y;
 		}
 
 		html += '</div></div>';
+		newhtml += '</div></div>';
 
 		jQuery('.scroller').append(html);
+
+		jQuery('body').append(newhtml);
 	}
 
 	gotodate(date){
@@ -339,6 +411,7 @@
 		jQuery('#thumb').show();
 	}
 
+/*
 	handleThumbSwipe(e) {
 		if ( e.type == 'swiperight' ) {
 			this.handleThumbNext();
@@ -348,6 +421,7 @@
 			this.hideThumb();
 		}
 	}
+	*/
 
 	_handleThumbMove(prev_next) {
 		var t = jQuery('#thumb');

@@ -78,12 +78,6 @@ body {
 	word-wrap: break-letter;
 }
 
-/*
- * These types of tags are generated dynamically for all months in javascript
-.y2050.m01~.y2050.m01:after {
-	display: none;
-}
-*/
 
 #photos .tn img {
 	width: 100%;
@@ -265,7 +259,7 @@ body {
 }
 
 .thumbctrl:hover {
-  opacity: 1;
+	opacity: 1;
 }
 
 #thumbleft {
@@ -385,4 +379,45 @@ body {
 	.thumbctrl {
 		display: none;
 	}
+}
+
+#deepnav {
+	position: absolute;
+	top: 0;
+	right: 0;
+	z-index: 10000;
+	width: 150px;
+	height: 150px;
+	background: white;
+	overflow: hidden;
+	text-align: center;
+	display: none;
+}
+
+#deepnav .nav {
+	display: none;
+}
+#deepnav .nav:first-child {
+	display: block;
+}
+
+#deepnav .year h2 {
+	font-size: 18px;
+	margin: 5px 0;
+}
+
+
+#deepnav .month {
+	display: inline-block;
+	border: 2px outset blue;
+	width: calc(33% - 8px);
+	box-sizing: border-box;
+	margin: 4px;
+	padding: 4px;
+	border-radius: 3px;
+}
+#deepnav .month:hover {
+	cursor: pointer;
+	border: 2px inset blue;
+	background-color: #eee;
 }
