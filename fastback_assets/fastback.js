@@ -257,6 +257,9 @@
 			}
 
 			// Allow for a little bit of slop since the scroll stop seems to be a bit fuzzy
+			if (jQuery(this.curthumbs[mid]).length === 0 && this.debug) {
+				console.log("Mid has no offset and is " + mid);	
+			}
 			if (jQuery(this.curthumbs[mid]).offset().top >= 0) {
 				// Go left
 				max = mid;
