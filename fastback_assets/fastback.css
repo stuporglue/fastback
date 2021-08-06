@@ -381,6 +381,10 @@ body {
 	}
 }
 
+.scroller {
+	display: none;
+}
+
 #deepnav {
 	position: absolute;
 	top: 0;
@@ -391,7 +395,6 @@ body {
 	background: white;
 	overflow: hidden;
 	text-align: center;
-	display: none;
 }
 
 #deepnav .nav {

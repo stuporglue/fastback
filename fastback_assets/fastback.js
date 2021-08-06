@@ -1,52 +1,56 @@
 ﻿class Fastback {
 
-	/**
-	* Note: any property can be set in the constructor
-	*/
+	setProps() {
 
-	// built-in properties
-	minphotos = 300;
-	minpages = 5;
+		/**
+		* Note: any property can be set in the constructor
+		*/
 
-	notificationtimer;
-	curthumbs = [];
+		// built-in properties
+		this.minphotos = 300;
+		this.minpages = 5;
 
-	disablehandlers = false;
+		this.notificationtimer = undefined;
+		this.curthumbs = [];
 
-	rowwidth = 5;
+		this.disablehandlers = false;
 
-	debug = false;
+		this.rowwidth = 5;
 
-	limitdates = true;
+		this.debug = false;
 
-	// Properties required in constructor
-	cacheurl;
-	photourl;
-	staticurl;
-	fastbackurl;
+		this.limitdates = true;
 
-	// Properties loaded from json
-	years;
-	yearsindex;
-	yearmonthindex;
-	tags;
+		// Properties required in constructor
+		this.cacheurl = undefined;
+		this.photourl = undefined;
+		this.staticurl = undefined;
+		this.fastbackurl = undefined;
 
-	last_scroll_factors;
-	last_scroll_timestamp = 0;
-	scroll_time = 100;
+		// Properties loaded from json
+		this.years = undefined;
+		this.yearsindex = undefined;
+		this.yearmonthindex = undefined;
+		this.tags = undefined;
 
-	// Browser type
-	isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+		this.last_scroll_factors = undefined;
+		this.last_scroll_timestamp = 0;
+		this.scroll_time = 100;
 
-	// Browser supported file types - will be shown directly. 
-	// Anything not in this list will be proxied into a jpg
-	browser_supported_file_types = [ 
-	// videos
-	'mp4','m4v', 'ogg',
-	// images
-	'jpg','jpeg','gif','png' ];
+		// Browser type
+		this.isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+
+		// Browser supported file types - will be shown directly. 
+		// Anything not in this list will be proxied into a jpg
+		this.browser_supported_file_types = [ 
+			// videos
+			'mp4','m4v', 'ogg',
+			// images
+		'jpg','jpeg','gif','png' ];
+	}
 
 	constructor(args) {
+		this.setProps();
 		var self = this;
 
 		jQuery.extend(this,args);
@@ -57,8 +61,8 @@
 		}
 
 		if ( this.isSafari ) {
-			this.browser_supported_file_types.push('mov')
-			this.browser_supported_file_types.push('mpg')
+			this.browser_supported_file_types.push('mov');
+			this.browser_supported_file_types.push('mpg');
 		}
 
 		$.getJSON(this.fastbackurl + '?get=photojson' + ( this.debug ? '&debug=true' : ''), function(json) {
@@ -126,45 +130,45 @@
 
 		function getTouches(evt) {
 		return evt.touches ||             // browser API
-				evt.originalEvent.touches; // jQuery
+		evt.originalEvent.touches; // jQuery
 		}                                                     
-																				
+
 		function handleTouchStart(evt) {
-			const firstTouch = getTouches(evt)[0];                                      
-			xDown = firstTouch.clientX;                                      
-			yDown = firstTouch.clientY;                                      
+		const firstTouch = getTouches(evt)[0];                                      
+		xDown = firstTouch.clientX;                                      
+		yDown = firstTouch.clientY;                                      
 		};                                                
-																				
+
 		function handleTouchMove(evt) {
-			if ( ! xDown || ! yDown ) {
-				return;
-			}
+		if ( ! xDown || ! yDown ) {
+		return;
+		}
 
-			var xUp = evt.touches[0].clientX;                                    
-			var yUp = evt.touches[0].clientY;
+		var xUp = evt.touches[0].clientX;                                    
+		var yUp = evt.touches[0].clientY;
 
-			var xDiff = xDown - xUp;
-			var yDiff = yDown - yUp;
-																				
-			if ( Math.abs( xDiff ) > Math.abs( yDiff ) ) {/*most significant
-				if ( xDiff > 0 ) {
-					//* right swipe 
-				} else {
-					// /* left swipe 
-				}                       
-			} else {
-				if ( yDiff > 0 ) {
-					// /* down swipe 
-				} else { 
-					// /* up swipe 
-				}                                                                 
-			}
-			xDown = null;
-			yDown = null;                                             
+		var xDiff = xDown - xUp;
+		var yDiff = yDown - yUp;
+
+		if ( Math.abs( xDiff ) > Math.abs( yDiff ) ) {/*most significant
+		if ( xDiff > 0 ) {
+		//* right swipe 
+		} else {
+		// /* left swipe 
+		}                       
+		} else {
+		if ( yDiff > 0 ) {
+		// /* down swipe 
+		} else { 
+		// /* up swipe 
+		}                                                                 
+		}
+		xDown = null;
+		yDown = null;                                             
 		};
 		*/
 
-		
+
 
 
 		if ( e.type == 'swiperight' ) {
@@ -249,15 +253,13 @@
 
 	load_nav() {
 		var keys = Object.keys(this.yearmonthindex).sort().reverse();
-		var years = Array.from(new Set(keys.map(function(e){return e.replace(/-.*/,'')})));
+		var years = Array.from(new Set(keys.map(function(e){return e.replace(/-.*/,'');})));
 
 		if ( years.length < 2 ) {
 			return;
 		}
 
 		var newhtml = '<div id="deepnav">';
-
-		var html = '<div class="nav" data-year="onthisdate"><div class="year">Today</div></div>';
 
 		var y;
 		var m;
@@ -270,12 +272,10 @@
 
 			if ( y !== lastyear ) {
 				if ( k !== 0 ) {
-					html += '</div></div>';
 					newhtml += '</div></div>';
 				}
 
-				html += '<div class="nav" data-year="' + y + '"><div class="year">' + y + '</div>';
-				newhtml += '<div class="nav" data-year="' + y + '"><div class="year"><h2>' + y + '</h2>';
+				newhtml += '<div class="nav" data-year="' + y + '"><div class="year"><span class="prevyear yearnav">&lt;&lt;</span><h2 data-year="'+y+'">' + y + '</h2><span class="nextyear yearnav">&gt;&gt;/span>';
 
 				lastmonth = "";
 			}
@@ -288,7 +288,6 @@
 			lastyear = y;
 		}
 
-		html += '</div></div>';
 		newhtml += '</div></div>';
 
 		jQuery('.scroller').append(html);
@@ -435,15 +434,15 @@
 		jQuery('#thumb').show();
 	}
 
-/*
+	/*
 	handleThumbSwipe(e) {
-		if ( e.type == 'swiperight' ) {
-			this.handleThumbNext();
-		} else if ( e.type == 'swipeleft' ) {
-			this.handleThumbPrev();
-		} else if ( e.type == 'swipeup' ) {
-			this.hideThumb();
-		}
+	if ( e.type == 'swiperight' ) {
+	this.handleThumbNext();
+	} else if ( e.type == 'swipeleft' ) {
+	this.handleThumbPrev();
+	} else if ( e.type == 'swipeup' ) {
+	this.hideThumb();
+	}
 	}
 	*/
 
@@ -495,7 +494,7 @@
 
 		var dontremove = removeme.indexOf('up' + this.rowwidth);
 		removeme.splice(dontremove,1);
-		removeme.forEach(function(c){jQuery('#photos').removeClass(c);})
+		removeme.forEach(function(c){jQuery('#photos').removeClass(c);});
 	}
 
 	zoomFinalizeSizeChange() {
@@ -559,7 +558,7 @@
 			}
 
 			var offset = nextvisible.offset().top;
-			var cols = 1;
+			cols = 1;
 			while ( nextvisible.next().offset().top == offset ) {
 				cols++;
 				nextvisible = nextvisible.next();
@@ -587,8 +586,8 @@
 		//clearTimeout($.data(this, 'scrollTimer'));
 
 		//$.data(this, 'scrollTimer', setTimeout(function() {
-		//	// do something
-		//	self.normalize_view();
+			//	// do something
+			//	self.normalize_view();
 		//}, this.scroll_time));
 
 		this.normalize_view();
@@ -775,13 +774,14 @@
 		}
 
 		/*
-		 * Safari is the new IE. It always needs special treatment and I hate dealing with it.
-		 * https://stackoverflow.com/questions/9834143/jquery-keep-window-from-changing-scroll-position-while-prepending-items-to-a-l
-		 */
+		* Safari is the new IE. It always needs special treatment and I hate dealing with it.
+		* https://stackoverflow.com/questions/9834143/jquery-keep-window-from-changing-scroll-position-while-prepending-items-to-a-l
+		*/
 		// Get the current scroll top
 		var first_visible_photo = jQuery('#p' + first_visible);
+		var curOffset;
 		if ( first_visible_photo.length > 0){
-			var curOffset = first_visible_photo.offset().top - $('#photos').scrollTop();
+			curOffset = first_visible_photo.offset().top - $('#photos').scrollTop();
 		}
 
 		remove_from_start.remove();
