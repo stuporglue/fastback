@@ -30,7 +30,6 @@
 		// Properties loaded from json
 		this.years = undefined;
 		this.yearsindex = undefined;
-		this.yearmonthindex = undefined;
 		this.tags = undefined;
 
 		this.last_scroll_factors = undefined;
@@ -70,13 +69,6 @@
 		}).then(function(){
 			self.load_nav();
 
-			// Set up dynamicly generated css
-			if ( self.limitdates ) {
-				var newcss = Object.keys(self.yearmonthindex).map(function(d){ return d.replace(/(....)-(..)/,'.y$1.m$2~.y$1.m$2:after');	}).join(',') + '{display:none;}';
-
-				jQuery('body').append('<style>' + newcss + '</style>');
-			}
-
 			self.normalize_view();
 
 			var photoswidth = jQuery('#photos')[0].offsetWidth - jQuery('#photos')[0].clientWidth;
@@ -92,7 +84,6 @@
 		jQuery('#photos').on('click','.tn',this.handleThumbClick.bind(this));
 		jQuery('#thumbright').on('click',this.handleThumbNext.bind(this));
 		jQuery('#thumbleft').on('click',this.handleThumbPrev.bind(this));
-		jQuery('.scroller').on('mouseup','.nav',this.navClick.bind(this));
 		jQuery('#thumbclose').on('click',this.hideThumb.bind(this));
 
 		// Key presses
@@ -252,54 +243,99 @@
 	// Append as many photos as needed to meet the page size
 
 	load_nav() {
-		var keys = Object.keys(this.yearmonthindex).sort().reverse();
-		var years = Array.from(new Set(keys.map(function(e){return e.replace(/-.*/,'');})));
+		// first date (in tags list) -- The default is Descending view, so this should be the greatest date
+		var fd = fastback.tags[0].match(/data-d="([^"]+)/)[1].replace(/ .*/,'');
 
-		if ( years.length < 2 ) {
-			return;
+		// last date (in tags list)
+		var ld = fastback.tags[fastback.tags.length - 1].match(/data-d="([^"]+)/)[1].replace(/ .*/,'');
+
+		// If fd is not the greatest date, swap 'em
+		if ( fd > ld ) {
+			[fd,ld] = [ld,fd];
 		}
 
-		var newhtml = '<div id="deepnav">';
+		jQuery('#datepicker').datepicker({
+			minDate: new Date(fd + new Date().toISOString().replace(/.*T/,'T')),
+			maxDate: new Date(ld + new Date().toISOString().replace(/.*T/,'T')),
+			changeYear: true,
+			changeMonth: true, 
+			yearRange: 'c-100:c+100',
+			onSelect: this.gotodate.bind(this)
+		});
 
-		var y;
-		var m;
-		var lastyear = "";
-		var lastmonth = "";
-		var months = {'01':'Jan','02':'Feb','03':'Mar','04':'Apr','05':'May','06':'Jun','07':'Jul','08':'Aug','09':'Sep','10':'Oct','11':'Nov','12':'Dec'};
-		for(var k=0;k<keys.length;k++){
-			y = keys[k].substr(0,4);
-			m = keys[k].substr(5,2);
-
-			if ( y !== lastyear ) {
-				if ( k !== 0 ) {
-					newhtml += '</div></div>';
-				}
-
-				newhtml += '<div class="nav" data-year="' + y + '"><div class="year"><span class="prevyear yearnav">&lt;&lt;</span><h2 data-year="'+y+'">' + y + '</h2><span class="nextyear yearnav">&gt;&gt;/span>';
-
-				lastmonth = "";
-			}
-
-			if ( m !== lastmonth ) {
-				newhtml += '<div class="month" data-month="'+m+'">' + months[m] + '</div>';
-			}
-
-			lastmonth = m;
-			lastyear = y;
-		}
-
-		newhtml += '</div></div>';
-
-		jQuery('.scroller').append(html);
-
-		jQuery('body').append(newhtml);
+		jQuery('#onthisday').on('click',this.onthisdate.bind(this));
 	}
 
+	onthisdate() {
+		jQuery('#photos').fadeOut(500);
+		this.disablehandlers = true;
+		this.last_scroll_factors = undefined;
+		this.getYearPhotos();
+		jQuery('#photos').fadeIn(500);
+	}
+
+	/**
+	* Go to the photo closest to a specified date
+	*/
 	gotodate(date){
-		// Find the first date for the year indicated
-		var idx = this.yearmonthindex[Object.keys(this.yearmonthindex).filter(function(k){return k.substr(0,4)==date;}).sort().reverse()[0]];
-		this.normalize_view(idx);
-		this.showNotification(date,5000);
+		jQuery('#photos').fadeOut(500);
+
+		if ( this.disablehandlers ) {
+			this.disablehandlers = false;
+			jQuery('#photos').html("");
+			this.curthumbs = [];
+		}
+
+		console.log("Going to " + date);
+		var targetdate = date.replace(/(..)\/(..)\/(....)/,"$3-$1-$2");
+
+		// There's no guarantee that the requested date will have photos.
+		// normalize_view arround either:
+		//	1) The fist item with a matching date OR
+		//	2) If we are in Ascending Date order, the last item with a date before the requested OR
+		//	3) If we are in Descending DAte order, the last item with a date after the requested
+
+		var first = 0;
+		var last = fastback.tags.length - 1;
+
+		var datere = new RegExp('data-d="([^ "]+)');
+
+		// first date (in tags list)
+		var fd = fastback.tags[first].match(datere)[1];
+
+		// last date (in tags list)
+		var ld = fastback.tags[last].match(datere)[1];
+
+		var direction = 'desc';
+		if ( fd < ld ) {
+			direction = 'asc';
+		}
+
+		var foundidx;
+		var curdate;
+		var i = 0;
+		for (i = 0;i < fastback.tags.length;i++){
+			curdate = fastback.tags[i].match(datere)[1];
+			if ( curdate === targetdate ) {
+				break;
+			} else if ( 
+				(direction === 'desc' && curdate < targetdate )  ||
+				( direction === 'asc' && curdate > targetdate ) 
+			) {
+				// too far!
+				if ( i > 0 ) {
+					i = i - 1;
+					break;
+				} else {
+					i = 0;
+					break;
+				}
+			}
+		}
+
+		this.normalize_view(i);
+		this.showNotification(curdate,5000);
+		jQuery('#photos').fadeIn(500);
 	}
 
 	/**
@@ -514,24 +550,6 @@
 		this.zoomFinalizeSizeChange();
 	}
 
-	navClick(e) {
-		var year = jQuery(e.target).closest('.nav').data('year');
-		jQuery('#photos').fadeOut(500);
-
-		if ( parseInt(year) == year ) {
-			if ( this.disablehandlers ) {
-				this.disablehandlers = false;
-				jQuery('#photos').html("");
-				this.curthumbs = [];
-			}
-			this.gotodate(year);
-		} else if (year == 'onthisdate') {
-			this.disablehandlers = true;
-			this.getYearPhotos();
-		}
-		jQuery('#photos').fadeIn(500);
-	}
-
 	sendbyajax(link) {
 		var thelink = link;
 		jQuery.get(thelink.href).then(function(){
@@ -572,23 +590,14 @@
 
 	debounce_scroll(e) {
 
+		// When showing all photos on today's date, don't do the scroll handlers
 		if (this.disablehandlers) {
 			return;
 		}
 
-
 		if ( e.timeStamp - this.last_scroll_timestamp < this.scroll_time ) {
 			return;
 		}
-
-		// var self = this;
-
-		//clearTimeout($.data(this, 'scrollTimer'));
-
-		//$.data(this, 'scrollTimer', setTimeout(function() {
-			//	// do something
-			//	self.normalize_view();
-		//}, this.scroll_time));
 
 		this.normalize_view();
 		this.last_scroll_timestamp = e.timeStamp;
@@ -642,6 +651,8 @@
 		// Move anchor to the start of the row
 		var anchor = Math.floor(orig_anchor / this.rowwidth) * this.rowwidth;
 
+		// At this point, anchor is the thing to use, not first_visible
+
 		// Same as last time, bail
 		if ( 
 			this.last_scroll_factors !== undefined && 
@@ -656,7 +667,7 @@
 
 		if ( 
 			this.last_scroll_factors !== undefined && 
-			Math.abs(this.last_scroll_factors.anchor - first_visible) < mid_chunk 
+			Math.abs(this.last_scroll_factors.anchor - anchor) < mid_chunk 
 		) {
 			// console.log("Not scrolling till we get at least a page to load");
 			// return;
@@ -778,7 +789,7 @@
 		* https://stackoverflow.com/questions/9834143/jquery-keep-window-from-changing-scroll-position-while-prepending-items-to-a-l
 		*/
 		// Get the current scroll top
-		var first_visible_photo = jQuery('#p' + first_visible);
+		var first_visible_photo = jQuery('#p' + anchor);
 		var curOffset;
 		if ( first_visible_photo.length > 0){
 			curOffset = first_visible_photo.offset().top - $('#photos').scrollTop();
@@ -790,8 +801,12 @@
 		jQuery('#photos').append(append);
 
 		// Set the new scroll top
-		if ( first_visible_photo.length > 0 ) {
+		if ( first_visible_photo.length > 0 && starting_with !== undefined ) {
 			$('#photos').scrollTop(first_visible_photo.offset().top - curOffset);
+		}
+
+		if ( starting_with !== undefined ) {
+			jQuery('#photos').scrollTop(jQuery('#photos').scrollTop() + jQuery('#p' + anchor).offset().top);
 		}
 
 		jQuery('#photos').fadeIn(500);
@@ -802,10 +817,11 @@
 	}
 
 	getYearPhotos() {
-		var re = new RegExp( ' data-d=....-' + ("0" + (new Date().getMonth() + 1)).slice(-2) + '-' + ("0" + new Date().getDate()).slice(-2) + ' ');
+		var re = new RegExp( ' data-d="....-' + ("0" + (new Date().getMonth() + 1)).slice(-2) + '-' + ("0" + new Date().getDate()).slice(-2) + ' ');
 		var found = this.tags.filter(function(e){return e.match(re);}).join("");
 		jQuery('#photos').html(found);
 		this.curthumbs = jQuery('#photos .tn');
+		jQuery('#photos').scrollTop(0);
 	}
 
 	keydownHandler(e) {

@@ -25,3 +25,8 @@
 ; Sort order of files ASC = oldest first, DESC = newest first
 ; Optional, defaults to newest first (scrolling down for older)
 ; sortorder = ASC
+
+; Which date labels should be shown? 
+; Optional, defaults to month
+; Valid values: year, month, day
+; datelabels = month

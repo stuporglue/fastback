@@ -26,18 +26,22 @@ class fastback {
 	// Optional, will use current web path as default
 	var $photourl;
 
-	// Only show dates on photos when it's a new month
-	var $limitdates = true;
+	var $datelabels = 'month';
 
-	var $db_lock;
+	// Max number of thumbnails to reserve per child process for thumbnail processing
+	var $process_limit = 1000;
 
-	// Max number of thumbnails to reserve per child process
-	var $process_limit = 50;
+	// Max number of SQL statements to do per upsert
+	var $upsert_limit = 10000;
 
 	// Max number of child processes
 	var $cores = 5;
 
+	// Are we debugging
 	var $debug = false;
+
+	// Is the db locked by us?
+	var $db_lock;
 
 	var $supported_photo_types = array(
 		// Photo formats
@@ -197,20 +201,20 @@ class fastback {
 				error_log("Don't know what to do with " . print_r($pathinfo,true));
 			}
 
-			if ( count($collect_photo) >= $this->process_limit) {
+			if ( count($collect_photo) >= $this->upsert_limit) {
 				$sql = $multi_insert . implode(",",$collect_photo) . $multi_insert_tail . '0';
 				$this->sql->query($sql);
 				$collect_photo = array();
-				$togo -= $this->process_limit;
-				print "Upserted {$this->process_limit}, $togo left to go\n";
+				$togo -= $this->upsert_limit;
+				print "Upserted {$this->upsert_limit}, $togo left to go\n";
 			}
 
-			if ( count($collect_video) >= $this->process_limit) {
+			if ( count($collect_video) >= $this->upsert_limit) {
 				$sql = $multi_insert . implode(",",$collect_video) . $multi_insert_tail . '1';
 				$this->sql->query($sql);
 				$collect_video = array();
-				$togo -= $this->process_limit;
-				print "Upserted {$this->process_limit}, $togo left to go\n";
+				$togo -= $this->upsert_limit;
+				print "Upserted {$this->upsert_limit}, $togo left to go\n";
 			}
 		}
 
@@ -436,7 +440,6 @@ class fastback {
 	 */
 	public function sendjson() {
 		$json = array(
-			'yearmonthindex' => array(),
 			'tags' => array(),
 			);
 
@@ -451,22 +454,49 @@ class fastback {
 			exit();
 		}
 
-		$res = $this->sql->query("SELECT file,sorttime,isvideo FROM fastback WHERE thumbnail IS NOT NULL AND thumbnail NOT LIKE 'RESERVE%' AND flagged IS NOT TRUE ORDER BY sorttime " . $this->sortorder . ",file");
+		$res = $this->sql->query("SELECT file,DATETIME(sorttime) AS sorttime,isvideo FROM fastback WHERE thumbnail IS NOT NULL AND thumbnail NOT LIKE 'RESERVE%' AND flagged IS NOT TRUE ORDER BY sorttime " . $this->sortorder . ",file");
 		$last_date = NULL;
 		$last_year = NULL;
 		$idx = 0;
 		while($row = $res->fetchArray(SQLITE3_ASSOC)){
-			if ( $last_date != $row['sorttime'] ) {
-				$last_date = $row['sorttime'];
 
-				$this_year_month = substr($last_date,0,7);
+			preg_match('|((....)-(..)-(..)) ..:..:..|',$row['sorttime'],$curdates);
 
-				if (empty($json['yearmonthindex'][$this_year_month])) {
-					$json['yearmonthindex'][$this_year_month] = $idx;
-				}
+			if ( count($curdates) < 2 ) {
+				var_dump($row);
+				continue;
 			}
+
+			$new_date = $curdates[1];
+
+			$showdatelabel = false;
+			if ( $this->datelabels === 'all' ) {
+				$showdatelabel = true;
+			} else if ( $last_date != $new_date ) {
+
+				if ( $this->datelabels == 'day' ) {
+					$showdatelabel = true;
+				} else if ( $this->datelabels == 'month' ) {
+					$last = explode('-',$last_date);
+					$new = explode('-',$new_date);
+
+					if ( $last[0] != $new[0] || $last[1] != $new[1] ) {
+						$showdatelabel = true;
+					}
+				} else if ( $this->datelabels == 'year' ) {
+					$last = explode('-');
+					$new = explode('-');
+
+					if ( $last[0] != $new[0] ) {
+						$showdatelabel = true;
+					}
+				}
+
+				$last_date = $new_date;
+			}
+
             $base = basename($row['file']);
-			$json['tags'][] = '<div class="tn y' . substr($row['sorttime'],0,4) . ' m' . substr($row['sorttime'],5,2) . ( $row['isvideo'] ? ' vid' : '') . '" data-d=' . $row['sorttime'] . ' id=p' . $idx . '><img loading=lazy  src="' . htmlentities(substr($row['file'],2)) . '.jpg" alt="' . $base . '"></div>';
+			$json['tags'][] = '<div class="tn' . ($showdatelabel ? ' dlabel' : '') .  ( $row['isvideo'] ? ' vid' : '') . '" ' . ($showdatelabel ? ' data-dlabel="'.preg_replace('| .*|','',$new_date).'"' : '') . ' data-d="' . $row['sorttime'] . '" id=p' . $idx . '><img loading=lazy src="' . htmlentities(substr($row['file'],2)) . '.jpg" alt="' . $base . '"></div>';
 			$idx++;
 		}
 
@@ -490,40 +520,23 @@ class fastback {
 		<link rel="shortcut icon" href="' . $this->staticurl . '/fastback_assets/favicon.png' . ($this->debug ? '?ts=' . time() : '') . '"> 
 		<link rel="apple-touch-icon" href="' . $this->staticurl . '/fastback_assets/favicon.png' . ($this->debug ? '?ts=' . time() : '') . '">
 		<title>Moore Photos</title>
+		<link rel="stylesheet" href="'. $this->staticurl .'/fastback_assets/jquery-ui-1.12.1/jquery-ui.min.css' . ($this->debug ? '?ts=' . time() : '') . '">
 		<link rel="stylesheet" href="'. $this->staticurl .'/fastback_assets/fastback.css' . ($this->debug ? '?ts=' . time() : '') . '">
 		<!-- Powered by https://github.com/stuporglue/fastback/ -->
     </head>
 	<body>
 		<div class="photos" id="photos"></div>
-		<div class="scroller"></div>
-		<div class="calendarpick"><div class="year"></div><div class="calendar">
-			<div class="calendarrow">
-				<div id="calpick-jan">Jan</div>
-				<div id="calpick-feb">Feb</div>
-				<div id="calpick-mar">Mar</div>
-			</div>
-			<div class="calendarrow">
-				<div id="calpick-apr">Apr</div>
-				<div id="calpick-may">May</div>
-				<div id="calpick-jun">Jun</div>
-			</div>
-			<div class="calendarrow">
-				<div id="calpick-jul">Jul</div>
-				<div id="calpick-aug">Aug</div>
-				<div id="calpick-sep">Sep</div>
-			</div>
-			<div class="calendarrow">
-				<div id="calpick-oct">Oct</div>
-				<div id="calpick-nov">Nov</div>
-				<div id="calpick-dec">Dec</div>
-			</div>
-		</div></div>
 		<div id="resizer">
 			<input type="range" min="1" max="10" value="5" class="slider" id="zoom">
 		</div>
 		<div id="notification"></div>
 		<div id="thumb" data-ythreshold=150><div id="thumbcontent"></div><div id="thumbcontrols"></div><div id="thumbclose">🆇</div><div id="thumbleft" class="thumbctrl">LEFT</div><div id="thumbright" class="thumbctrl">RIGHT</div></div>
+		<div id="deepnav">
+			<input id="datepicker" type="text">
+			<div id="onthisday">On This Day...</div>
+		</div>
 	<script src="'. $this->staticurl .'/fastback_assets/jquery.min.js' . ($this->debug ? '?ts=' . time() : '') . '"></script>
+	<script src="'. $this->staticurl .'/fastback_assets/jquery-ui-1.12.1/jquery-ui.min.js' . ($this->debug ? '?ts=' . time() : '') . '"></script>
 
 	<script src="'.$this->staticurl.'/fastback_assets/hammer.js' . ($this->debug ? '?ts=' . time() : '') . '"></script>
 	<script src="'.$this->staticurl.'/fastback_assets/jquery.hammer.js' . ($this->debug ? '?ts=' . time() : '') . '"></script>
@@ -537,8 +550,7 @@ class fastback {
 			photourl: "' . $this->photourl . '",
 			staticurl: "' . $this->staticurl . '",
 			fastbackurl: "' . $_SERVER['SCRIPT_NAME'] . '",
-			debug: ' . ($this->debug ? 'true' : 'false'). ',
-			limitdates: ' . ($this->limitdates ? 'true' : 'false') . '
+			debug: ' . ($this->debug ? 'true' : 'false'). '
 		});
 	</script>
 

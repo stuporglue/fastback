@@ -62,8 +62,8 @@ body {
 	position: relative;
 }
 
-.tn:after {
-	content: attr(data-d);
+.tn.dlabel:after {
+	content: attr(data-dlabel);
 	max-height: 50%;
 	max-width: 75%;
 	position: absolute;
@@ -91,72 +91,6 @@ body {
 	-ms-transition:		height 0.1s ease-in-out;
 	-o-transition:		height 0.1s ease-in-out;
 }
-
-.scroller {
-	position: fixed;
-	right: 0;
-	height: 100%;
-	box-sizing: border-box;
-	display: table;
-	-webkit-transition: opacity 0.1s ease-in-out;
-	-moz-transition: opacity 0.1s ease-in-out;
-	-ms-transition: opacity 0.1s ease-in-out;
-	-o-transition: opacity 0.1s ease-in-out;
-	cursor: pointer;
-	height: calc(100% - 30px);
-	z-index: 9;
-}
-
-.scroller:hover {
-	-webkit-transition: opacity 0.1s ease-in-out;
-	-moz-transition: opacity 0.1s ease-in-out;
-	-ms-transition: opacity 0.1s ease-in-out;
-	-o-transition: opacity 0.1s ease-in-out;
-}
-
-.scroller:hover .nav {
-	opacity: 0.6;
-}
-
-.scroller .nav {
-	text-align: center;
-	display: table-row;
-	background-color: white;
-	-webkit-transition: opacity 0.1s ease-in-out;
-	-moz-transition: opacity 0.1s ease-in-out;
-	-ms-transition: opacity 0.1s ease-in-out;
-	-o-transition: opacity 0.1s ease-in-out;
-	opacity: .4;
-}
-
-
-.scroller .nav:hover {
-	opacity: 1;
-	font-size: 25px;
-	-webkit-transition: opacity 0.1s ease-in-out;
-	-moz-transition: opacity 0.1s ease-in-out;
-	-ms-transition: opacity 0.1s ease-in-out;
-	-o-transition: opacity 0.1s ease-in-out;
-}
-
-.scroller .nav .year {
-	display: table-cell;
-	vertical-align: middle;
-}
-
-.scroller .nav.active {
-	opacity: 1;
-	font-weight: bold;
-}
-.scroller .nav.active .year {
-	opacity: 1;
-	font-weight: bold;
-}
-
-.calendarpick {
-	display: none;
-}
-
 
 #resizer {
 	position: fixed;
@@ -372,17 +306,9 @@ body {
 		display: none;
 	}
 
-	.scroller {
-		height: 100%;
-	}
-
 	.thumbctrl {
 		display: none;
 	}
-}
-
-.scroller {
-	display: none;
 }
 
 #deepnav {
@@ -423,4 +349,16 @@ body {
 	cursor: pointer;
 	border: 2px inset blue;
 	background-color: #eee;
+}
+
+#onthisday {
+	margin: 10px;
+	border: 3px outset black;
+	border-radius: 4px;
+	cursor: pointer;
+}
+
+#onthisday:hover {
+	border: 3px inset black;
+	background-color: #ccc;
 }
