@@ -43,7 +43,7 @@
 		// Anything not in this list will be proxied into a jpg
 		this.browser_supported_file_types = [ 
 			// videos
-			'mp4','m4v', 'ogg',
+			'mp4','m4v', 'ogg', 'mov',
 			// images
 		'jpg','jpeg','gif','png' ];
 	}
@@ -454,7 +454,7 @@
 		}
 
 		if (divwrap.hasClass('vid') && supported_type){
-			imghtml = '<video controls><source src="' + fullsize + '#t=0.0001">Your browser does not support this video format.</video>';
+			imghtml = '<video controls poster="' + img.attr('src') + '"><source src="' + fullsize + '#t=0.0001">Your browser does not support this video format.</video>';
 		} else {
 			imghtml = '<img src="' + fullsize +'"/>';
 		}
