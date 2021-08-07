@@ -92,14 +92,6 @@ body {
 	-o-transition:		height 0.1s ease-in-out;
 }
 
-#resizer {
-	position: fixed;
-	bottom: 0;
-	width: 100%;
-	direction: rtl;
-	z-index: 1000;
-}
-
 #zoom {
 	-webkit-appearance: none;  /* Override default CSS styles */
 	appearance: none;
@@ -299,66 +291,72 @@ body {
 	opacity: 0.4;
 }
 
+#resizer {
+	position: fixed;
+	bottom: 0;
+	width: calc(100% - 60px);
+	direction: rtl;
+	z-index: 1000;
+}
+
+#calendaricon {
+	position: fixed;
+	bottom: 0;
+	right: 0;
+	z-index: 1000;
+	background-color: rgba(255,255,255,0.8);
+	width: 30px;
+	height: 30px;
+	background-image: url('calendar.png');
+	background-size: cover;
+}
+
+#datepicker {
+	display: block;
+	height: 100%;
+	width: 100%;
+	opacity: 0;
+}
+
+#rewindicon {
+	position: fixed;
+	bottom: 0;
+	right: 30px;
+	z-index: 1000;
+	background-color: rgba(255,255,255,0.8);
+	width: 30px;
+	height: 30px;
+	background-image: url('rewind.png');
+	background-size: cover;
+}
+
+#rewindicon.active {
+	background-color: yellow;
+	border: 2px inset black;
+	box-sizing: border-box;
+}
 
 /* smartphones, touchscreens */
 @media (hover: none) and (pointer: coarse) {
+	/*
 	#resizer {
-		display: none;
+	display: none;
 	}
+	 */
 
 	.thumbctrl {
 		display: none;
 	}
-}
 
-#deepnav {
-	position: absolute;
-	top: 0;
-	right: 0;
-	z-index: 10000;
-	width: 150px;
-	height: 150px;
-	background: white;
-	overflow: hidden;
-	text-align: center;
-}
+	#photos .tn.dlabel:after {
+		display: none;
+	}
 
-#deepnav .nav {
-	display: none;
-}
-#deepnav .nav:first-child {
-	display: block;
-}
+	#photos.up1 .tn.dlabel:after,
+	#photos.up2 .tn.dlabel:after,
+	#photos.up3 .tn.dlabel:after,
+	#photos.up4 .tn.dlabel:after {
+		display: inline-block;
+	}
 
-#deepnav .year h2 {
-	font-size: 18px;
-	margin: 5px 0;
-}
-
-
-#deepnav .month {
-	display: inline-block;
-	border: 2px outset blue;
-	width: calc(33% - 8px);
-	box-sizing: border-box;
-	margin: 4px;
-	padding: 4px;
-	border-radius: 3px;
-}
-#deepnav .month:hover {
-	cursor: pointer;
-	border: 2px inset blue;
-	background-color: #eee;
-}
-
-#onthisday {
-	margin: 10px;
-	border: 3px outset black;
-	border-radius: 4px;
-	cursor: pointer;
-}
-
-#onthisday:hover {
-	border: 3px inset black;
-	background-color: #ccc;
 }

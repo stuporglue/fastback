@@ -531,10 +531,8 @@ class fastback {
 		</div>
 		<div id="notification"></div>
 		<div id="thumb" data-ythreshold=150><div id="thumbcontent"></div><div id="thumbcontrols"></div><div id="thumbclose">🆇</div><div id="thumbleft" class="thumbctrl">LEFT</div><div id="thumbright" class="thumbctrl">RIGHT</div></div>
-		<div id="deepnav">
-			<input id="datepicker" type="text">
-			<div id="onthisday">On This Day...</div>
-		</div>
+		<div id="calendaricon"><input readonly id="datepicker" type="text"></div>
+		<div id="rewindicon"></div>
 	<script src="'. $this->staticurl .'/fastback_assets/jquery.min.js' . ($this->debug ? '?ts=' . time() : '') . '"></script>
 	<script src="'. $this->staticurl .'/fastback_assets/jquery-ui-1.12.1/jquery-ui.min.js' . ($this->debug ? '?ts=' . time() : '') . '"></script>
 

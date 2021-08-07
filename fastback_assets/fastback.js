@@ -98,11 +98,13 @@
 		]}).on('swiperight swipeup swipeleft', this.handleThumbSwipe.bind(this));
 
 		//https://stackoverflow.com/questions/11183174/simplest-way-to-detect-a-pinch/11183333#11183333
-		jQuery('#photos').on({
-			touchstart: this.handlePhotoPinch.bind(this),
-			touchmove: this.handlePhotoPinch.bind(this),
-			touchend: this.handlePhotoPinch.bind(this)
-		});
+		if ( !this.isSafari) {
+			jQuery('#photos').on({
+				touchstart: this.handlePhotoPinch.bind(this),
+				touchmove: this.handlePhotoPinch.bind(this),
+				touchend: this.handlePhotoPinch.bind(this)
+			});
+		}
 
 		jQuery('#thumb').on({
 			touchstart: this.handleThumbSwipe.bind(this),
@@ -158,9 +160,6 @@
 		yDown = null;                                             
 		};
 		*/
-
-
-
 
 		if ( e.type == 'swiperight' ) {
 			this.handleThumbNext();
@@ -263,11 +262,12 @@
 			onSelect: this.gotodate.bind(this)
 		});
 
-		jQuery('#onthisday').on('click',this.onthisdate.bind(this));
+		jQuery('#rewindicon').on('click',this.onthisdate.bind(this));
 	}
 
 	onthisdate() {
 		jQuery('#photos').fadeOut(500);
+		jQuery('#rewindicon').addClass('active');
 		this.disablehandlers = true;
 		this.last_scroll_factors = undefined;
 		this.getYearPhotos();
@@ -278,6 +278,7 @@
 	* Go to the photo closest to a specified date
 	*/
 	gotodate(date){
+		jQuery('#rewindicon').removeClass('active');
 		jQuery('#photos').fadeOut(500);
 
 		if ( this.disablehandlers ) {
@@ -469,18 +470,6 @@
 		jQuery('#thumb').data('curphoto',divwrap);
 		jQuery('#thumb').show();
 	}
-
-	/*
-	handleThumbSwipe(e) {
-	if ( e.type == 'swiperight' ) {
-	this.handleThumbNext();
-	} else if ( e.type == 'swipeleft' ) {
-	this.handleThumbPrev();
-	} else if ( e.type == 'swipeup' ) {
-	this.hideThumb();
-	}
-	}
-	*/
 
 	_handleThumbMove(prev_next) {
 		var t = jQuery('#thumb');
