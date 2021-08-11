@@ -97,15 +97,6 @@
 			[Hammer.Swipe,{ direction: Hammer.DIRECTION_ALL }],
 		]}).on('swiperight swipeup swipeleft', this.handleThumbSwipe.bind(this));
 
-		//https://stackoverflow.com/questions/11183174/simplest-way-to-detect-a-pinch/11183333#11183333
-		if ( !this.isSafari) {
-			jQuery('#photos').on({
-				touchstart: this.handlePhotoPinch.bind(this),
-				touchmove: this.handlePhotoPinch.bind(this),
-				touchend: this.handlePhotoPinch.bind(this)
-			});
-		}
-
 		jQuery('#thumb').on({
 			touchstart: this.handleThumbSwipe.bind(this),
 			touchmove: this.handleThumbSwipe.bind(this),
@@ -167,75 +158,6 @@
 			this.handleThumbPrev();
 		} else if ( e.type == 'swipeup' ) {
 			this.hideThumb();
-		}
-	}
-
-	handlePhotoPinch(e){
-
-		if ( e.touches.length !== 2 ) {
-			return;
-		}
-
-		var dist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
-
-		if ( e.type == 'touchstart') {
-
-			// Create the pinch object and set initial distance
-			this.handlePhotoPinch.pinch = {
-				origZoom: this.rowwidth,
-				origDist: dist,
-				curDist: dist,
-				distChange: 0
-			};
-		} else if ( e.type == 'touchmove' ) {
-
-			this.handlePhotoPinch.pinch.curDist = dist;
-			this.handlePhotoPinch.pinch.distChange = this.handlePhotoPinch.pinch.curDist / this.handlePhotoPinch.pinch.origDist;
-
-			var slots;
-
-			if ( this.handlePhotoPinch.pinch.distChange > 1 ) {
-				slots = Math.floor(this.handlePhotoPinch.pinch.distChange);
-				if ( this.debug ) {
-					console.log("Zooming in " + slots + " slots");
-				}
-				this.rowwidth = this.handlePhotoPinch.pinch.origZoom - slots;
-				if ( this.rowwidth < 1 ) {
-					this.rowwidth = 1;
-				}
-			} else {
-				slots = Math.floor(1/this.handlePhotoPinch.pinch.distChange);
-				if ( this.debug ) {
-					console.log("Zooming out " + slots + " slots");
-				}
-				this.rowwidth = this.handlePhotoPinch.pinch.origZoom + slots;
-				if ( this.rowwidth > 10 ) {
-					this.rowwidth = 10;
-				}
-			}
-
-			this.zoomSizeChange(this.rowwidth);
-
-			var center = {
-				x: (e.touches[0].pageX + e.touches[1].pageX) / 2,
-				y: (e.touches[0].pageY + e.touches[1].pageY) / 2
-			};
-
-			var focus = jQuery(document.elementFromPoint(center.x,center.y)).closest('div.tn').attr('id').replace('p','');
-			if ( parseInt(focus) == focus) {
-				this.normalize_view(focus);
-			}
-		} else if ( e.type == 'touchend' ) {
-			this.zoomFinalizeSizeChange();
-			this.handlePhotoPinch.pinch = undefined;
-		}
-
-		if ( isNaN(parseInt(this.rowwidth))) {
-			if ( this.debug ) {
-				console.log("Something happend in pinch and my rowwidth is NaN. Resetting to 5"); 
-			}
-			this.rowwidth = 5;
-			this.normalize_view();
 		}
 	}
 

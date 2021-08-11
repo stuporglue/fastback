@@ -49,14 +49,16 @@ class fastback {
 		'jpg',
 		'heic',
 		'jpeg',
+		'jp2',
 		'bmp',
 		'gif',
 		'tif',
 		'heic',
 	);
-		
+
 	var $supported_video_types = array(
 		// Video formats
+		'dv',
 		'3gp',
 		'avi',
 		'm4v',
@@ -107,14 +109,27 @@ class fastback {
 
 		// Hard work should be done via cli
 		if (php_sapi_name() === 'cli') {
-			$this->load_db_cache();
-			$this->make_thumbnails();
 
-			// also regenerate the json
-			ob_start();
-			@unlink($this->filecache . '/fastback.json.gz');
-			$this->sendjson();
-			ob_end_clean();
+			global $argv,$argc;
+
+			if ( isset($argv) && count($argv) > 1 ) {
+
+				if ( $argv[1] == 'reset' ) {
+					$this->reset_db_cache();
+				} else if ( $argv[1] == 'gettimes' ) {
+					$this->get_times();
+				}
+
+			} else {
+				$this->load_db_cache();
+				$this->make_thumbnails();
+
+				// also regenerate the json
+				ob_start();
+				@unlink($this->filecache . '/fastback.json.gz');
+				$this->sendjson();
+				ob_end_clean();
+			}
 
 		} else {
 			$this->makeoutput();
@@ -133,12 +148,26 @@ class fastback {
 		$res = $this->sql->query($q_create_meta);
 		//var_dump($res);
 
-		$q_create_files = "CREATE TABLE IF NOT EXISTS fastback ( file TEXT PRIMARY KEY, isvideo BOOL, flagged BOOL, mtime INTEGER, sorttime DATETIME, thumbnail TEXT)";
+		$q_create_files = "CREATE TABLE IF NOT EXISTS fastback ( file TEXT PRIMARY KEY, isvideo BOOL, flagged BOOL, mtime INTEGER, sorttime DATETIME, thumbnail TEXT, _util TEXT)";
 
 		$res = $this->sql->query($q_create_files);
 		//var_dump($res);
-        
+
 		$res = $this->sql->query($q_create_files);
+	}
+
+	/**
+	 * Reset the cache
+	 */
+	public function reset_db_cache() {
+		$this->sql_connect();
+
+		if ( count($argv) > 1 && $argv[1] == 'reset' ) {
+			$this->sql->query("DELETE FROM fastback");
+			$this->sql->query("UPDATE fastbackmeta SET lastmod='19000101'");
+		}
+
+		$this->sql_disconnect();
 	}
 
 	/**
@@ -156,11 +185,6 @@ class fastback {
 		$lastmod = '19000101';
 		if ( !empty($this->meta['lastmod']) ){
 			$lastmod = $this->meta['lastmod'];
-		}
-
-		if ( count($argv) > 1 && $argv[1] == 'reset' ) {
-			$lastmod = '19000101';
-			$this->sql->query("DELETE FROM fastback");
 		}
 
 		chdir($this->photobase);
@@ -291,7 +315,7 @@ class fastback {
 		do {
 			$queue = array();
 			$this->sql_connect();
-			$res = $this->sql->query("UPDATE fastback SET thumbnail='RESERVED-" . getmypid() . "' WHERE flagged IS NOT TRUE AND thumbnail IS NULL AND FILE != '' LIMIT " . $this->process_limit);
+			$res = $this->sql->query("UPDATE fastback SET thumbnail='RESERVED-" . getmypid() . "' WHERE flagged IS NOT TRUE AND thumbnail IS NULL AND file != '' LIMIT " . $this->process_limit);
 			$q_queue = "SELECT file FROM fastback WHERE thumbnail='RESERVED-" . getmypid() . "'";
 			$res = $this->sql->query($q_queue);
 			while($row = $res->fetchArray(SQLITE3_ASSOC)){
@@ -424,10 +448,10 @@ class fastback {
 			$this->sendjson();
 		} else if (!empty($_GET['get']) && $_GET['get'] == 'js') {
 			$this->makejs();
-        } else if (!empty($_GET['flag'])) {
-            $this->flag_photo();
-        } else if (!empty($_GET['test'])) {
-            $this->test();
+		} else if (!empty($_GET['flag'])) {
+			$this->flag_photo();
+		} else if (!empty($_GET['test'])) {
+			$this->test();
 		} else if (!empty($_GET['proxy'])) {
 			$this->proxy();
 		} else {
@@ -441,7 +465,7 @@ class fastback {
 	public function sendjson() {
 		$json = array(
 			'tags' => array(),
-			);
+		);
 
 		$this->sql_connect();
 		$cf = $this->filecache . '/fastback.json.gz';
@@ -495,7 +519,7 @@ class fastback {
 				$last_date = $new_date;
 			}
 
-            $base = basename($row['file']);
+			$base = basename($row['file']);
 			$json['tags'][] = '<div class="tn' . ($showdatelabel ? ' dlabel' : '') .  ( $row['isvideo'] ? ' vid' : '') . '" ' . ($showdatelabel ? ' data-dlabel="'.preg_replace('| .*|','',$new_date).'"' : '') . ' data-d="' . $row['sorttime'] . '" id=p' . $idx . '><img loading=lazy src="' . htmlentities(substr($row['file'],2)) . '.jpg" alt="' . $base . '"></div>';
 			$idx++;
 		}
@@ -512,44 +536,44 @@ class fastback {
 	 */
 	public function makehtml(){
 		$html = '<!DOCTYPE html>
-<html lang="en">
-	<head>
-		<meta charset="UTF-8">
-		<base href="'. $this->cacheurl . '/">
-		<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
-		<link rel="shortcut icon" href="' . $this->staticurl . '/fastback_assets/favicon.png' . ($this->debug ? '?ts=' . time() : '') . '"> 
-		<link rel="apple-touch-icon" href="' . $this->staticurl . '/fastback_assets/favicon.png' . ($this->debug ? '?ts=' . time() : '') . '">
-		<title>Moore Photos</title>
-		<link rel="stylesheet" href="'. $this->staticurl .'/fastback_assets/jquery-ui-1.12.1/jquery-ui.min.css' . ($this->debug ? '?ts=' . time() : '') . '">
-		<link rel="stylesheet" href="'. $this->staticurl .'/fastback_assets/fastback.css' . ($this->debug ? '?ts=' . time() : '') . '">
-		<!-- Powered by https://github.com/stuporglue/fastback/ -->
-    </head>
-	<body>
-		<div class="photos" id="photos"></div>
-		<div id="resizer">
+			<html lang="en">
+			<head>
+			<meta charset="UTF-8">
+			<base href="'. $this->cacheurl . '/">
+			<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
+			<link rel="shortcut icon" href="' . $this->staticurl . '/fastback_assets/favicon.png' . ($this->debug ? '?ts=' . time() : '') . '"> 
+			<link rel="apple-touch-icon" href="' . $this->staticurl . '/fastback_assets/favicon.png' . ($this->debug ? '?ts=' . time() : '') . '">
+			<title>Moore Photos</title>
+			<link rel="stylesheet" href="'. $this->staticurl .'/fastback_assets/jquery-ui-1.12.1/jquery-ui.min.css' . ($this->debug ? '?ts=' . time() : '') . '">
+			<link rel="stylesheet" href="'. $this->staticurl .'/fastback_assets/fastback.css' . ($this->debug ? '?ts=' . time() : '') . '">
+			<!-- Powered by https://github.com/stuporglue/fastback/ -->
+			</head>
+			<body>
+			<div class="photos" id="photos"></div>
+			<div id="resizer">
 			<input type="range" min="1" max="10" value="5" class="slider" id="zoom">
-		</div>
-		<div id="notification"></div>
-		<div id="thumb" data-ythreshold=150><div id="thumbcontent"></div><div id="thumbcontrols"></div><div id="thumbclose">🆇</div><div id="thumbleft" class="thumbctrl">LEFT</div><div id="thumbright" class="thumbctrl">RIGHT</div></div>
-		<div id="calendaricon"><input readonly id="datepicker" type="text"></div>
-		<div id="rewindicon"></div>
-	<script src="'. $this->staticurl .'/fastback_assets/jquery.min.js' . ($this->debug ? '?ts=' . time() : '') . '"></script>
-	<script src="'. $this->staticurl .'/fastback_assets/jquery-ui-1.12.1/jquery-ui.min.js' . ($this->debug ? '?ts=' . time() : '') . '"></script>
+			</div>
+			<div id="notification"></div>
+			<div id="thumb" data-ythreshold=150><div id="thumbcontent"></div><div id="thumbcontrols"></div><div id="thumbclose">🆇</div><div id="thumbleft" class="thumbctrl">LEFT</div><div id="thumbright" class="thumbctrl">RIGHT</div></div>
+			<div id="calendaricon"><input readonly id="datepicker" type="text"></div>
+			<div id="rewindicon"></div>
+			<script src="'. $this->staticurl .'/fastback_assets/jquery.min.js' . ($this->debug ? '?ts=' . time() : '') . '"></script>
+<script src="'. $this->staticurl .'/fastback_assets/jquery-ui-1.12.1/jquery-ui.min.js' . ($this->debug ? '?ts=' . time() : '') . '"></script>
 
-	<script src="'.$this->staticurl.'/fastback_assets/hammer.js' . ($this->debug ? '?ts=' . time() : '') . '"></script>
-	<script src="'.$this->staticurl.'/fastback_assets/jquery.hammer.js' . ($this->debug ? '?ts=' . time() : '') . '"></script>
+<script src="'.$this->staticurl.'/fastback_assets/hammer.js' . ($this->debug ? '?ts=' . time() : '') . '"></script>
+<script src="'.$this->staticurl.'/fastback_assets/jquery.hammer.js' . ($this->debug ? '?ts=' . time() : '') . '"></script>
 
-	<script src="'.$this->staticurl.'/fastback_assets/fastback.js' . ($this->debug ? '?ts=' . time() : '') . '"></script>
-	<script>
-		var FastbackBase = "' . $_SERVER['SCRIPT_NAME'] . '";
-		var FastbackBase = "' . $_SERVER['SCRIPT_NAME'] . '";
-		var fastback = new Fastback({
-			cacheurl: "' . $this->cacheurl . '",
-			photourl: "' . $this->photourl . '",
-			staticurl: "' . $this->staticurl . '",
-			fastbackurl: "' . $_SERVER['SCRIPT_NAME'] . '",
-			debug: ' . ($this->debug ? 'true' : 'false'). '
-		});
+<script src="'.$this->staticurl.'/fastback_assets/fastback.js' . ($this->debug ? '?ts=' . time() : '') . '"></script>
+<script>
+var FastbackBase = "' . $_SERVER['SCRIPT_NAME'] . '";
+var FastbackBase = "' . $_SERVER['SCRIPT_NAME'] . '";
+var fastback = new Fastback({
+cacheurl: "' . $this->cacheurl . '",
+	photourl: "' . $this->photourl . '",
+	staticurl: "' . $this->staticurl . '",
+	fastbackurl: "' . $_SERVER['SCRIPT_NAME'] . '",
+	debug: ' . ($this->debug ? 'true' : 'false'). '
+	});
 	</script>
 
 	</body>
@@ -567,17 +591,17 @@ class fastback {
 		}
 	}
 
-    public function flag_photo(){
-        $photo = $_GET['flag'];
+	public function flag_photo(){
+		$photo = $_GET['flag'];
 		$this->sql_connect();
-        $stmt = $this->sql->prepare("UPDATE fastback SET flagged=1 WHERE file=:file");
-        $stmt->bindValue(':file',$_GET['flag']);
-        $stmt->execute();
-        $this->sql_disconnect();
+		$stmt = $this->sql->prepare("UPDATE fastback SET flagged=1 WHERE file=:file");
+		$stmt->bindValue(':file',$_GET['flag']);
+		$stmt->execute();
+		$this->sql_disconnect();
 		header("Content-Type: application/json");
 		header("Cache-Control: no-cache");
-        print json_encode(array('file_flagged' => $_GET['flag']));
-    }
+		print json_encode(array('file_flagged' => $_GET['flag']));
+	}
 
 	public function test() {
 	}
@@ -613,6 +637,140 @@ class fastback {
 		} else {
 			die("Unsupported file type");
 		}
+	}
+
+	public function get_times() {
+
+		$this->sql_connect();
+
+		$this->sql->query("UPDATE fastback SET _util=NULL WHERE _util LIKE 'RESERVED%'");
+
+		$this->sql_disconnect();
+
+		// Make the children
+		$children = array();
+		for ($i = 0;$i < $this->cores; $i++){
+			switch($pid = pcntl_fork()){
+				case -1:
+					die("Forking failed");
+					break;
+				case 0:
+					// This is a child
+					$this->_get_times($i);
+					exit();
+					break;
+				default:
+					print "I made a kid $pid\n";
+					$children[] = $pid;
+					// This is the parent
+			}
+		}
+
+		// Reap the children
+		while(count($children) > 0){
+			foreach($children as $key => $child){
+				$res = pcntl_waitpid($child, $status, WNOHANG);
+				if($res == -1 || $res > 0) {
+					unset($children[$key]);
+				}
+			}
+			$this->sql_connect();
+			$res = $this->sql->querySingle("SELECT COUNT(*) FROM fastback WHERE LENGTH(sorttime) = 10 AND flagged IS NOT TRUE",);
+			print "PARENT: $res more to go\n";
+			$this->sql_disconnect();
+			sleep(1);
+		}
+	}
+
+	public function _get_times($childno = "Unknown") {
+		echo "Child $childno pid is " . getmypid() . "\n";
+
+$tags_to_consider = array(
+							"DateTimeOriginal",
+							"CreateDate",
+							"CreationDate",
+							"DateCreated",
+							"TrackCreateDate",
+							"MediaCreateDate",
+							"GPSDateTime",
+							"ModifyDate",
+							"MediaModifyDate",
+							"TrackModifyDate",
+						);
+
+
+
+		do { 
+			$updated_timestamps = array();
+
+			$this->sql_connect();
+			$this->sql->query('UPDATE fastback SET _util="RESERVED-' . getmypid() . '" WHERE LENGTH(sorttime) = 10 AND _util IS NULL AND file != "" AND flagged IS NOT TRUE  LIMIT ' . $this->process_limit);
+			$res = $this->sql->query('SELECT * FROM fastback WHERE _util="RESERVED-' . getmypid() . '"');
+
+			$queue = array();
+
+			while($row = $res->fetchArray(SQLITE3_ASSOC)){
+				$queue[] = $row['file'];
+			}
+			$this->sql_disconnect();
+
+			echo "\nChild $childno (" . getmypid() . ") reserved " . count($queue) . " images\n";
+
+			if ( count($queue) === 0 ) {
+				print "Child $childno exiting\n";
+				exit();
+			}
+
+			$updates = array();
+
+			while($file = array_pop($queue)) {
+				$found = false;
+				foreach($tags_to_consider as $maybetag){
+					$cmd = "exiftool -$maybetag -extracEmbedded " . escapeshellarg($this->photobase . $file) . " 2>/dev/null | head -1";
+					// echo "\tChild $childno -- $cmd\n";
+					$res = `$cmd`;
+					if ( !is_null($res) ) {
+						$found = true;
+						print "\tChild $childno Found timestamp using $maybetag in $file\n";
+						preg_match('/(\d{4})\D(\d{2})\D(\d{2}) (\d{2})\D(\d{2})\D(\d{2})[^ ]*/',trim($res),$matches);
+
+						// If we find an embedded timestamp, rebuild the path it's supposed to be at. 
+						// If it matches, update the time with the exif time. 
+						// If it doesn't match, update the sorttime with midnight.
+						$matchpath = "/$matches[1]/$matches[2]/$matches[3]/" . basename($file);
+
+						if ( strpos($file,$matchpath) !== FALSE ) {
+							$updated_timestamps[$file] = '"' . $matches[1] . '-' . $matches[2] . '-' . $matches[3] . ' ' . $matches[4] . ':' . $matches[5] . ':' . $matches[6] . '"';
+						} else {
+							$updated_timestamps[$file] = 'sorttime || " 00:00:00"';
+						}
+						break;
+					}
+				}
+
+				if ( !$found ){
+					print "\tChild $childno Found no timestamp using any tag in $file\n";
+					$updated_timestamps[$file] = 'sorttime || " 00:00:01"';
+				}
+			}
+
+			if ( count($updated_timestamps) > 0 ) {
+				$this->sql_connect();
+				$update_q = "UPDATE fastback SET _util=NULL, sorttime=CASE \n";
+				foreach($updated_timestamps as $file => $time){
+					$update_q .= " WHEN file='" . SQLite3::escapeString($file) . "' THEN " . $time . "\n";
+				}
+				$update_q .= " ELSE sorttime END
+					WHERE _util='RESERVED-" . getmypid() . "'";
+
+				$this->sql->query($update_q);
+				$this->sql_disconnect();
+				print "Child $childno just checked in " . count($updated_timestamps) . " new timestamps\n";
+			}
+
+		} while (count($updated_timestamps) > 0);
+
+		$this->sql_disconnect();
 	}
 }
 
