@@ -92,15 +92,15 @@ class fastback {
 		$this->photourl = dirname($_SERVER['SCRIPT_NAME']) . '/';
 		$this->staticurl = dirname($_SERVER['SCRIPT_NAME']) . '/';
 
-		if ( !empty($_GET['debug']) && $_GET['debug'] === 'true' ) {
-			$this->debug = true;
-		}
-
 		if ( file_exists(__DIR__ . '/fastback.ini') ) {
 			$settings = parse_ini_file(__DIR__ . '/fastback.ini');
 			foreach($settings as $k => $v) {
 				$this->$k = $v;
 			}
+		}
+
+		if ( (!empty($_GET['debug']) && $_GET['debug'] === 'true') ) {
+			$this->debug = true;
 		}
 
 		// Ensure single trailing slashes
@@ -116,58 +116,66 @@ class fastback {
 
 			global $argv,$argc;
 
-			if ( !isset($argv) || count($argv) < 2 ) {
-				$argv[1] = "default";
-			}
+			if ( !isset($argv) || count($argv) == 1 ) {
+				$argv[1] = 'handle_new';
+			} else {
+				if ( $argv[1] == 'debug' ) {
+					array_unshift($argv,'handle_new');
+				}
+
+				if ( isset($argv[2]) && $argv[2] == 'debug' ) {
+					$this->debug = true;
+				}
+			} 
 
 			$tasks = array();
 			switch($argv[1]) {
-			case 'dbtest':
+			case 'db_test':
 				$tasks = array('db_test');
-			case 'resetcache':
-				$tasks = array('reset_db_cache');
+			case 'reset_cache':
+				$tasks = array('reset_cache');
 				break;
-			case 'loadcache':
-				$tasks = array('load_db_cache');
+			case 'load_cache':
+				$tasks = array('load_cache');
 				break;
-			case 'makethumbs':
-				$tasks = array('make_thumbnails');
+			case 'make_thumbs':
+				$tasks = array('make_thumbs');
 				break;
-			case 'fakethumbs':
-				$tasks = array('fake_thumbnails');
+			case 'get_exif':
+				$tasks = array('get_exif');
 				break;
-			case 'gettime':
+			case 'get_time':
 				$tasks = array('get_times');
 				break;
-			case 'getgeo':
+			case 'get_geo':
 				$tasks = array('get_geo');
 				break;
-			case 'makejson':
-				$tasks = array('makejson');
+			case 'make_json':
+				$tasks = array('make_json');
 				break;
-			case 'makegeojson':
-				$tasks = array('makegeojson');
+			case 'make_geojson':
+				$tasks = array('make_geojson');
 				break;
-			case 'fullreset':
-				$tasks = array('reset_db_cache','load_db_cache','make_thumbnails','get_times','get_geo','makejson','makegeojson');
+			case 'full_reset':
+				$tasks = array('reset_cache','load_cache','make_thumbs','get_exif','get_times','get_geo','make json','make_geojson');
 				break;
 			case 'help':
-				$tasks = array('print_cli_usage');
+				$tasks = array('help');
 				break;
-			case 'default':
-				$tasks = array('load_db_cache','make_thumbnails','get_times','get_geo','makejson','makegeojson');
+			case 'handle_new':
+				$tasks = array('load_cache','make_thumbs','get_exif','get_times','get_geo','make_json','make_geojson');
 				break;
 			default:
-				$tasks = array('print_cli_usage');
+				$tasks = array('help');
 			}
 
 			pcntl_signal(SIGINT, function(){
-				print("\e[?25h"); // Show the cursor
+				$this->print_if_no_debug("\e[?25h"); // Show the cursor
 				exit();
 			});
 
 
-			print("\e[?25l"); // Hide the cursor
+			$this->print_if_no_debug("\e[?25l"); // Hide the cursor
 
 			print("You're using fastback photo gallery\n");
 			print("For help,run \"php ./index.php help\" on the command line");
@@ -175,19 +183,22 @@ class fastback {
 			print("\n");
 			print("\n");
 			print("\n");
-			print("\e[1A"); // Go up a line
-			print("\e[1000D"); // Go to start of line
+			$this->print_if_no_debug("\e[1A"); // Go up a line
+			$this->print_if_no_debug("\e[1000D"); // Go to start of line
 			for($i = 0; $i < count($tasks); $i++){
 				print(" " . str_pad("Working on task " . ($i + 1) . " of " . count($tasks) . " ({$tasks[$i]})",100));
-				print("\e[1000D"); // Go to start of line
+				if ($this->debug ) { print("\n"); }
+				$this->print_if_no_debug("\e[1000D"); // Go to start of line
+													  //
 				$this->{$tasks[$i]}(); // Every task should leave the cursor where it found it
+
 				print("*" . str_pad("Completed task " . ($i + 1) . " of " . count($tasks) . " ({$tasks[$i]})",100));
 				$this->print_status_line("",true); // Wipe the intermediate progress line
 				print("\n");
-				print("\e[1000D"); // Go to start of line
+				$this->print_if_no_debug("\e[1000D"); // Go to start of line
 			}
 
-			print("\e[?25l"); // Show cursor
+			$this->print_if_no_debug("\e[?25l"); // Show cursor
 
 		} else {
 			$this->makeoutput();
@@ -202,7 +213,7 @@ class fastback {
 		$q_create_meta = "Create TABLE IF NOT EXISTS fastbackmeta ( key VARCHAR(20) PRIMARY KEY, value VARCHAR(255))";
 		$res = $this->sql->query($q_create_meta);
 
-		$q_create_files = "CREATE TABLE IF NOT EXISTS fastback ( file TEXT PRIMARY KEY, isvideo BOOL, flagged BOOL, nullgeom BOOL, mtime INTEGER, sorttime DATETIME, thumbnail TEXT, _util TEXT)";
+		$q_create_files = "CREATE TABLE IF NOT EXISTS fastback ( file TEXT PRIMARY KEY, exif TEXT,isvideo BOOL, flagged BOOL, nullgeom BOOL, mtime INTEGER, sorttime DATETIME, thumbnail TEXT, _util TEXT)";
 		$res = $this->sql->query($q_create_files);
 
 		$this->sql->loadExtension('mod_spatialite.so');
@@ -228,7 +239,7 @@ class fastback {
 	/**
 	 * Reset the cache
 	 */
-	public function reset_db_cache() {
+	public function reset_cache() {
 		global $argv;
 		$this->sql_connect();
 
@@ -241,7 +252,7 @@ class fastback {
 	/**
 	 * Get all modified files into the db cache
 	 */
-	public function load_db_cache() {
+	public function load_cache() {
 		global $argv;
 
 		if ( !file_exists($this->filecache) ) {
@@ -331,110 +342,14 @@ class fastback {
 		$this->sql_disconnect();
 	}
 
-	/**
-	 * Just tell the DB that all the thumbs are made, even if they're not.
-	 */
-	public function fake_thumbnails() {
-		$this->sql_connect();
-		$this->sql->query('UPDATE fastback SET thumbnail=file || ".jpg" WHERE thumbnail IS NULL OR thumbnail LIKE "RESERVED%"');
-		$this->sql_disconnect();
-	}
-
-	/**
-	 * Build thumbnails in parallel
-	 *
-	 * This is the parent process
-	 */
-	public function make_thumbnails() {
-
-		$this->sql_connect();
-
-		$this->sql->query("UPDATE fastback SET thumbnail=NULL WHERE thumbnail LIKE 'RESERVED%'");
-
-		$this->sql_disconnect();
-
-		// Make the children
-		$children = array();
-		for ($i = 0;$i < $this->nproc; $i++){
-			switch($pid = pcntl_fork()){
-			case -1:
-				die("Forking failed");
-				break;
-			case 0:
-				// This is a child
-				$this->_make_thumbnails($i);
-				exit();
-				break;
-			default:
-				$children[] = $pid;
-				// This is the parent
-			}
-		}
-
-		$this->sql_connect();
-		$total = $this->sql->querySingle("SELECT COUNT(*) FROM fastback WHERE thumbnail IS NULL AND flagged IS NOT TRUE",);
-		$start = time();
-		$this->sql_disconnect();
-
-		// Reap the children
-		while(count($children) > 0){
-			foreach($children as $key => $child){
-				$res = pcntl_waitpid($child, $status, WNOHANG);
-				if($res == -1 || $res > 0) {
-					unset($children[$key]);
-				}
-			}
-			$this->sql_connect();
-			$togo = $this->sql->querySingle("SELECT COUNT(*) FROM fastback WHERE thumbnail IS NULL AND flagged IS NOT TRUE",);
-			$this->sql_disconnect();
-
-
-			if ( $total == 0 ) {
-				$percent = 100;
-			} else {
-				$percent = intval(100*($total - $togo) / $total);
-			}
-			
-			$processed = ($total - $togo);
-
-			if ( $processed === 0 ) {
-				$finish_string = "";
-			} else {
-				$seconds_left = intval((time() - $start)/$processed * $togo);
-				$minutes_left = intval($seconds_left / 60);
-				$seconds_left = $seconds_left % 60;
-				$hours_left = intval($minutes_left / 60);
-				$minutes_left = $minutes_left % 60;
-
-
-				$finish_string = " ETA " . str_pad($hours_left,2,'0',STR_PAD_LEFT) . ':' . str_pad($minutes_left,2,'0',STR_PAD_LEFT) . ':' . str_pad($seconds_left,2,'0',STR_PAD_LEFT);
-			}
-
-			$this->print_status_line("$percent% : Generated $processed of $total thumbnails.$finish_string");
-			sleep(1);
-		}
-	}
-
-	private function _make_thumbnails($childno = "Unknown") {
-
+	private function _make_thumbs($childno = "Unknown") {
 		do {
-			$queue = array();
-			$this->sql_connect();
-			$res = $this->sql->query("UPDATE fastback SET thumbnail='RESERVED-" . getmypid() . "' WHERE flagged IS NOT TRUE AND thumbnail IS NULL AND file != '' LIMIT " . $this->process_limit);
-			$q_queue = "SELECT file FROM fastback WHERE thumbnail='RESERVED-" . getmypid() . "'";
-			$res = $this->sql->query($q_queue);
-			while($row = $res->fetchArray(SQLITE3_ASSOC)){
-				$queue[] = $row['file'];
-			}
-			$this->sql_disconnect();
 
-			if ( count($queue) === 0 ) {
-				exit();
-			}
+			$queue = $this->get_queue("flagged IS NOT TRUE AND thumbnail IS NULL AND file != ''");
 
 			$made_thumbs = array();
 			$flag_these = array();
-			while($file = array_pop($queue)){
+			foreach($queue as $file => $row) {
 
 				$thumbnailfile = $this->filecache . '/' . ltrim($file,'./') . '.jpg';
 
@@ -513,7 +428,7 @@ class fastback {
 
 				$escaped = array();
 				foreach($flag_these as $file){
-					$escaped[] = '"' . SQLite3::escapeString($file) . '"';
+					$escaped[] = "'" . SQLite3::escapeString($file) . "'";
 				}
 
 				$update_q .= implode(",",$escaped);
@@ -525,8 +440,6 @@ class fastback {
 			}
 
 		} while (count($made_thumbs) > 0);
-
-		@unlink($this->filecache . '/fastback.json');
 	}
 
 	private function sql_connect($try_no = 1){
@@ -586,7 +499,7 @@ class fastback {
 	/**
 	 * Make the json cache file
 	 */
-	public function makejson(){
+	public function make_json(){
 		ob_start();
 		@unlink($this->filecache . '/fastback.json.gz');
 		$this->sendjson();
@@ -597,7 +510,7 @@ class fastback {
 	 * Make the geosjon cache file
 	 */
 
-	public function makegeojson() {
+	public function make_geojson() {
 		ob_start();
 		@unlink($this->filecache . '/fastback.geojson.gz');
 		$this->sendgeojson();
@@ -658,14 +571,15 @@ class fastback {
 				ob_start();
 				var_dump($row);
 				$err = ob_get_clean();
-				error_log($err);
+				$this->log($err);
+				die("We got a null sorttime");
 				continue;
 			}
 
 			preg_match('|((....)-(..)-(..)) ..:..:..|',$row['sorttime'],$curdates);
 
 			if ( count($curdates) < 2 ) {
-				var_dump($row);
+				die("We have a sort time of " . $row['sorttime']);
 				continue;
 			}
 
@@ -953,15 +867,48 @@ cacheurl: "' . $this->cacheurl . '",
 		}
 	}
 
+	/**
+	 * Build thumbnails in parallel
+	 *
+	 * This is the parent process
+	 */
+	public function make_thumbs() {
+		$this->_fork_em('_make_thumbs',"SELECT COUNT(*) FROM fastback WHERE thumbnail IS NULL AND flagged IS NOT TRUE");
+	}
+
+	public function get_exif() {
+		/*
+		 * Prep a text file for each of the children
+		 */
+
+		$exifdir = $this->filecache . '/fastback.exif/';
+		@mkdir($exifdir,0700,TRUE);
+		chdir($exifdir);
+		$this->sql_connect();
+		$res = $this->sql->query("SELECT file FROM fastback WHERE exif IS NULL");
+		$fh = fopen('fastback.missingexif','w');
+		while($row = $res->fetchArray(SQLITE3_ASSOC)){
+			fwrite($fh,$row['file']);
+		}
+		fclose($fh);
+		$this->sql_disconnect();
+
+		`split -d --number=l/{$this->nproc} 'fastback.missingexif' 'exif_job.'`;
+
+		chdir($this->photobase);
+
+		$this->_fork_em('_get_exif', "SELECT COUNT(*) FROM fastback WHERE exif IS NULL");
+	}
+
 	public function get_geo() {
-		$this->_fork_em('_get_geo', "SELECT COUNT(*) FROM fastback WHERE geom IS NULL AND nullgeom IS NOT TRUE");
+		$this->_fork_em('_get_geo', "SELECT COUNT(*) FROM fastback WHERE geom IS NULL AND nullgeom IS NOT TRUE AND exif IS NOT NULL");
 	}
 
 	public function get_times() {
-		$this->_fork_em('_get_times', "SELECT COUNT(*) FROM fastback WHERE LENGTH(sorttime) = 10 AND flagged IS NOT TRUE");
+		$this->_fork_em('_get_times', "SELECT COUNT(*) FROM fastback WHERE LENGTH(sorttime) = 10 AND flagged IS NOT TRUE AND exif IS NOT NULL");
 	}
 
-	public function _fork_em($childfunc,$statussql) {
+	private function _fork_em($childfunc,$statussql) {
 
 		$this->sql_connect();
 
@@ -995,6 +942,7 @@ cacheurl: "' . $this->cacheurl . '",
 
 		// Reap the children
 		while(count($children) > 0){
+			$this->log("Parent still has " . count($children) . " children");
 			foreach($children as $key => $child){
 				$res = pcntl_waitpid($child, $status, WNOHANG);
 				if($res == -1 || $res > 0) {
@@ -1031,9 +979,94 @@ cacheurl: "' . $this->cacheurl . '",
 		}
 	}
 
-	public function _get_times($childno = "Unknown") {
+	private function _get_times($childno = "Unknown") {
 
 		$tags_to_consider = array(
+			"DateTimeOriginal",
+			"CreateDate",
+			"CreationDate",
+			"DateCreated",
+			"TrackCreateDate",
+			"MediaCreateDate",
+			"GPSDateTime",
+			"ModifyDate",
+			"MediaModifyDate",
+			"TrackModifyDate",
+			"FileCreateDate",
+			"FileModifyDate",
+		);
+
+		do {
+			$updated_timestamps = array();
+			$flagged = array();
+
+			$queue = $this->get_queue("LENGTH(sorttime) = 10 AND _util IS NULL AND file != \"\" AND flagged IS NOT TRUE AND exif IS NOT NULL"); 
+
+			foreach($queue as $file => $row) {
+				$found = false;
+				$exif = json_decode($row['exif'],TRUE);
+
+				foreach($tags_to_consider as $tag) {
+					// Tag not found
+					if ( !array_key_exists($tag,$exif)) {
+						continue;
+					}
+
+					// Invalid date
+					if ( strpos($exif[$tag], '0000:00:00 00:00:00') !== FALSE ) {
+						continue;
+					}
+
+					preg_match('/(\d{4})\D(\d{2})\D(\d{2}) (\d{2})\D(\d{2})\D(\d{2})[^ ]*/',trim($exif[$tag]),$matches);
+
+					if ( count($matches) !== 7 ) {
+						$this->log("Coudln't regex a date from {$exif[$tag]}");
+						continue;
+					}
+
+					/* We trust the folder structure more than the exif info because we assume the user put media
+					 * in the right place. So, f we find an embedded timestamp, rebuild the path it's supposed to be at. 
+					 * If the date matches, update the time with the exif time. 
+				     * If it doesn't match, update the sorttime with midnight.
+					*/
+					$matchpath = "/$matches[1]/$matches[2]/$matches[3]/" . basename($file);
+
+					if ( strpos($file,$matchpath) !== FALSE ) {
+						$updated_timestamps[$file] = '"' . $matches[1] . '-' . $matches[2] . '-' . $matches[3] . ' ' . $matches[4] . ':' . $matches[5] . ':' . $matches[6] . '"';
+					} else {
+						$updated_timestamps[$file] = 'sorttime || " 00:00:00"';
+					}
+
+					$found = true;
+					break; // We found a timestamp we like, stop checking the others
+				}
+
+				if ( !$found ){
+					$updated_timestamps[$file] = 'sorttime || " 00:00:01"';
+				}
+			}
+
+			if ( count($updated_timestamps) > 0 ) {
+				$this->update_case_when("UPDATE fastback SET _util=NULL, sorttime=CASE",$updated_timestamps,"ELSE sorttime END WHERE _util='RESERVED-" . getmypid() . "'");
+			}
+
+		} while (count($updated_timestamps) > 0);
+
+		$this->sql_disconnect();
+	}
+
+	private function _get_exif($childno = "Unknown") {
+		// these are all the exif tags we might use right now
+		$tags_to_consider = array(
+			"-GPSPosition",
+			"-GPSCoordinates",
+			"-GPSLatitudeRef",
+			"-GPSLatitude",
+			"-GPSLongitudeRef",
+			"-GPSLongitude",
+			"-GPSAltitude",
+			"-GPSAltitudeRef",
+			"-FileName",
 			"-DateTimeOriginal",
 			"-CreateDate",
 			"-CreationDate",
@@ -1049,310 +1082,170 @@ cacheurl: "' . $this->cacheurl . '",
 
 		$tags = implode(' ',$tags_to_consider);
 
-		do { 
-			$updated_timestamps = array();
+		do {
+			$exif_info = array();
 
-			$this->sql_connect();
-			$this->sql->query('UPDATE fastback SET _util="RESERVED-' . getmypid() . '" WHERE LENGTH(sorttime) = 10 AND _util IS NULL AND file != "" AND flagged IS NOT TRUE ORDER BY file DESC LIMIT ' . $this->process_limit);
-			$res = $this->sql->query('SELECT * FROM fastback WHERE _util="RESERVED-' . getmypid() . '"');
+			// $queue = $this->get_queue("exif IS NULL AND _util IS NULL AND file != \"\" AND flagged IS NOT TRUE");
 
-			$queue = array();
+			// $exiffile = $this->filecache . '/fastback.exif/exif_job.' . $childno;
+			foreach($queue as $file => $row){
 
-			while($row = $res->fetchArray(SQLITE3_ASSOC)){
-				$queue[] = $row['file'];
-			}
-			$this->sql_disconnect();
-
-			if ( count($queue) === 0 ) {
-				exit();
-			}
-
-			while($file = array_pop($queue)) {
-				$found = false;
-					// Run with -lang en since it translates some values based on locale :-/
-					$cmd = "exiftool -lang en -s $tags -extractEmbedded " . escapeshellarg($this->photobase . $file) . " 2>/dev/null";
-					$fullres = trim(`$cmd`);
-					if ( !empty($fullres) ) {
-					$fullres = explode("\n",$fullres);
-						foreach($fullres as $res) {
-						if ( !empty($res) ) {
-
-							if ( strpos($res,'0000:00:00 00:00:00') !== FALSE ) {
-								continue;
-							}
-
-							$found = true;
-							preg_match('/(\d{4})\D(\d{2})\D(\d{2}) (\d{2})\D(\d{2})\D(\d{2})[^ ]*/',trim($res),$matches);
-
-							// If we find an embedded timestamp, rebuild the path it's supposed to be at. 
-							// If it matches, update the time with the exif time. 
-							// If it doesn't match, update the sorttime with midnight.
-							$matchpath = "/$matches[1]/$matches[2]/$matches[3]/" . basename($file);
-
-							if ( strpos($file,$matchpath) !== FALSE ) {
-								$updated_timestamps[$file] = '"' . $matches[1] . '-' . $matches[2] . '-' . $matches[3] . ' ' . $matches[4] . ':' . $matches[5] . ':' . $matches[6] . '"';
-							} else {
-								$updated_timestamps[$file] = 'sorttime || " 00:00:00"';
-							}
-							break;
-						}
-						}
+				$cmd = "exiftool -lang en -s -c '%.6f' $tags -extractEmbedded " . escapeshellarg($this->photobase . $file) . " 2>/dev/null";
+				$fullres = `$cmd`;
+				if ( !empty($fullres) ) {
+					$fullres = explode("\n",trim($fullres));
+					$exif_tags = array();
+					foreach($fullres as $line){
+						$vals = preg_split('/ .*: /',$line,2);
+						$exif_tags[$vals[0]] = $vals[1];
 					}
-
-				if ( !$found ){
-					$updated_timestamps[$file] = 'sorttime || " 00:00:01"';
+					$exif_info[$file] = json_encode($exif_tags);
+				} else {
+					$exif_info[$file] = '{}';
 				}
 			}
 
-			if ( count($updated_timestamps) > 0 ) {
-				$this->sql_connect();
-				$update_q = "UPDATE fastback SET _util=NULL, sorttime=CASE \n";
-				foreach($updated_timestamps as $file => $time){
-					$update_q .= " WHEN file='" . SQLite3::escapeString($file) . "' THEN " . $time . "\n";
-				}
-				$update_q .= " ELSE sorttime END
-					WHERE _util='RESERVED-" . getmypid() . "'";
-
-				$this->sql->query($update_q);
-				$this->sql_disconnect();
-			}
-
-		} while (count($updated_timestamps) > 0);
-
-		$this->sql_disconnect();
+			$this->update_case_when("UPDATE fastback SET _util=NULL, exif=CASE",$exif_info,"ELSE exif END WHERE _util='RESERVED-" . getmypid() . "'",True);
+		} while (!empty($exif_info));
 	}
 
-	public function _get_geo($childno = "Unknown") {
+	private function _get_geo($childno = "Unknown") {
 
-		$tags_to_consider = array(
-			"-GPSPosition",
-			"-GPSCoordinates",
-
-			"-GPSLatitudeRef",
-			"-GPSLatitude",
-			"-GPSLongitudeRef",
-			"-GPSLongitude",
-
-			"-GPSAltitude",
-			"-GPSAltitudeRef",
-			"-FileName",
-		);
-
-		$tags = implode(' ',$tags_to_consider);
-
-		do { 
+		do {
 			$updated_geoms = array();
 			$no_geoms = array();
 
-			$this->sql_connect();
-			$this->sql->query('UPDATE fastback SET _util="RESERVED-' . getmypid() . '" WHERE geom IS NULL AND _util IS NULL AND file != "" AND nullgeom IS NOT TRUE ORDER BY file DESC LIMIT ' . $this->process_limit);
-			$res = $this->sql->query('SELECT * FROM fastback WHERE _util="RESERVED-' . getmypid() . '"');
+			$query = $this->get_queue("geom IS NULL AND _util IS NULL AND file != \"\" AND nullgeom IS NOT TRUE AND exif IS NOT NULL");
 
-			$queue = array();
-
-			while($row = $res->fetchArray(SQLITE3_ASSOC)){
-				$queue[] = $row['file'];
-			}
-			$this->sql_disconnect();
-
-			if ( count($queue) === 0 ) {
-				exit();
-			}
-
-			while($file = array_pop($queue)) {
+			foreach($queue as $file => $row){
 				$found = false;
-					// Run with -lang en since it translates some values based on locale :-/
-					$cmd = "exiftool -lang en -s -c '%.6f' $tags -extractEmbedded " . escapeshellarg($this->photobase . $file) . " 2>/dev/null";
-					$fullres = `$cmd`;
+				$exif = json_decode($row['exif'],TRUE);
 
-					$xyz = array();
+				$xyz = array();
 
-					if ( !empty($fullres) ) {
-						$fullres = explode("\n",trim($fullres));
-						$exif_tags = array();
-						foreach($fullres as $line){
-							$vals = preg_split('/ .*: /',$line,2);
-							$exif_tags[$vals[0]] = $vals[1];
-						}
+				if ( array_key_exists('GPSPosition',$exif) ) {
+					// eg "38.741200 N, 90.642800 W"
+					$xyz = $this->parse_gps_line($exif['GPSPosition']);	
+				}
 
-						if ( array_key_exists('GPSPosition',$exif_tags) ) {
-							// eg "38.741200 N, 90.642800 W"
-							if ( preg_match('/([0-9.]+) (N|S), ([0-9.]+) (E|W)/',$exif_tags['GPSPosition'],$matches) ) {
+				if ( count($xyz) === 0 && array_key_exists('GPSCoordinates',$exif) ) {
+					// eg "38.741200 N, 90.642800 W"
+					$xyz = $this->parse_gps_line($exif['GPSCoordinates']);	
+				}
 
-								if ( count($matches) == 5) {
+				if ( count($xyz) === 0 && 
+					array_key_exists('GPSLatitudeRef',$exif) && 
+					array_key_exists('GPSLatitude',$exif) && 
+					array_key_exists('GPSLongitude',$exif) && 
+					array_key_exists('GPSLongitudeRef',$exif) &&
+					floatval($exif['GPSLongitude']) == $exif['GPSLongitude'] && 
+					floatval($exif['GPSLatitude']) == $exif['GPSLatitude'] 
+				) {
 
-									if ( $matches[2] == 'S' ) {
-										$matches[1] = $matches[1] * -1;
-									}
+					if ( $exif['GPSLatitudeRef'] == 'South' ) {
+						$exif['GPSLongitude'] = $exif['GPSLongitude'] * -1;
+					}
 
-									if ( $matches[4] == 'W' ) {
-										$matches[3] = $matches[3] * -1;
-									}
+					if ( $exif['GPSLongitudeRef'] == 'West' ) {
+						$exif['GPSLongitude'] = $exif['GPSLongitude'] * -1;
+					}
 
-									$xyz[0] = $matches[1];
-									$xyz[1] = $matches[3];
-								}
-							}
-						}
+					$xyz[0] = $exif['GPSLongitude'];
+					$xyz[1] = $exif['GPSLatitude'];
+				}
 
-						if ( count($xyz) === 0 && array_key_exists('GPSCoordinates',$exif_tags) ) {
-							// eg "38.741200 N, 90.642800 W"
-							if ( preg_match('/([0-9.]+) (N|S), ([0-9.]+) (E|W)/',$exif_tags['GPSCoordinates'],$matches) ) {
-
-								if ( count($matches) == 5) {
-
-									if ( $matches[2] == 'S' ) {
-										$matches[1] = $matches[1] * -1;
-									}
-
-									if ( $matches[4] == 'W' ) {
-										$matches[3] = $matches[3] * -1;
-									}
-
-									$xyz[0] = $matches[3];
-									$xyz[1] = $matches[1];
-								}
-							}
-						}
-
-						if ( count($xyz) === 0 && 
-							array_key_exists('GPSLatitudeRef',$exif_tags) && 
-							array_key_exists('GPSLatitude',$exif_tags) && 
-							array_key_exists('GPSLongitude',$exif_tags) && 
-							array_key_exists('GPSLongitudeRef',$exif_tags) &&
-							floatval($exif_tags['GPSLongitude']) == $exif_tags['GPSLongitude'] && 
-							floatval($exif_tags['GPSLatitude']) == $exif_tags['GPSLatitude'] 
-						) {
-
-							if ( $exif_tags['GPSLatitudeRef'] == 'South' ) {
-								$exif_tags['GPSLongitude'] = $exif_tags['GPSLongitude'] * -1;
-							}
-
-							if ( $exif_tags['GPSLongitudeRef'] == 'West' ) {
-								$exif_tags['GPSLongitude'] = $exif_tags['GPSLongitude'] * -1;
-							}
-
-							$xyz[0] = $exif_tags['GPSLongitude'];
-							$xyz[1] = $exif_tags['GPSLatitude'];
-						}
-
-						if ( count($xyz) === 2 && array_key_exists('GPSAltitude',$exif_tags) && floatval($exif_tags['GPSAltitude']) == $exif_tags['GPSAltitude']) {
-							if ( preg_match('/([0-9.]+) m/',$exif_tags['GPSAltitude'],$matches ) ) {
-								if ( array_key_exists('GPSAltitudeRef',$exif_tags) && $exif_tags['GPSAltitudeRef'] == 'Below Sea Level' ) {
-									$xyz[2] = $matches[1] * -1;
-								} else {
-									$xyz[2] = $matches[1];
-								}
-							} else if ( $exif_tags['GPSAltitude'] == 'undef') {
-								$xyz[2] = 0;
-							} else {
-								error_log(
-									"New type of altitude value found: {$exif_tags['GPSAltitude']}"
-								);
-								print($file . "\n");
-								var_dump($exif_tags);
-								$xyz[2] = 0;
-							}
+				if ( count($xyz) === 2 && array_key_exists('GPSAltitude',$exif) && floatval($exif['GPSAltitude']) == $exif['GPSAltitude']) {
+					if ( preg_match('/([0-9.]+) m/',$exif['GPSAltitude'],$matches ) ) {
+						if ( array_key_exists('GPSAltitudeRef',$exif) && $exif['GPSAltitudeRef'] == 'Below Sea Level' ) {
+							$xyz[2] = $matches[1] * -1;
 						} else {
-							$xyz[2] = 0;
+							$xyz[2] = $matches[1];
 						}
-					}
-
-					if ( count($xyz) === 3 ) {
-						$updated_geoms[$file] = "MakePointZ($xyz[0],$xyz[1],$xyz[2], 4326)";
+					} else if ( $exif['GPSAltitude'] == 'undef') {
+						$xyz[2] = 0;
 					} else {
-						$no_geoms[] = $file;
+						$this->log("New type of altitude value found: {$exif['GPSAltitude']} in $file");
+						$xyz[2] = 0;
 					}
+				} else {
+					$xyz[2] = 0;
+				}
+
+				if ( count($xyz) === 3 ) {
+					$updated_geoms[$file] = "MakePointZ($xyz[0],$xyz[1],$xyz[2], 4326)";
+				} else {
+					$no_geoms[] = $file;
+				}
 			}
 
 			if ( count($updated_geoms) > 0 ) {
-				$this->sql_connect();
-				$update_q = "UPDATE fastback SET _util=NULL, geom=CASE \n";
-				foreach($updated_geoms as $file => $geom){
-					$update_q .= " WHEN file='" . SQLite3::escapeString($file) . "' THEN " . $geom. "\n";
-				}
-				$update_q .= " ELSE geom END
-					WHERE _util='RESERVED-" . getmypid() . "'";
-
-				$this->sql->query($update_q);
-				$this->sql_disconnect();
+				$this->update_case_when("UPDATE fastback SET _util=NULL, geom=CASE",$updated_geoms,"ELSE geom END WHERE _util='RESERVED-" . getmypid() . "'");
 			}
 
 			if ( count($no_geoms) > 0 ) {
-				$this->sql_connect();
-				$update_q = "UPDATE fastback SET _util=NULL, nullgeom=1 WHERE file in (";
-
-				$escaped = array();
-				foreach($no_geoms as $file){
-					$escaped[] = '"' . SQLite3::escapeString($file) . '"';
-				}
-
-				$update_q .= implode(",",$escaped);
-
-				$update_q .= ")";
-
-				$this->sql->query($update_q);
-				$this->sql_disconnect();
+				$this->update_files_in("UPDATE fastback SET _util=NULL, nullgeom=1 WHERE file in (",$no_geoms);
 			}
 
 		} while (count($updated_geoms) > 0 || count($no_geoms) > 0);
-
-		$this->sql_disconnect();
 	}
 
-	public function print_cli_usage() {
-		print "index.php [command]
+	public function parse_gps_line($line) {
+		$xyz = array();
+		// eg "38.741200 N, 90.642800 W"
+		if ( preg_match('/([0-9.]+) (N|S), ([0-9.]+) (E|W)/',$line,$matches) ) {
+			if ( count($matches) == 5) {
 
-	Commands:
-		* default- Brings the database from whatever state it is in, up to date. This is the command you usually want to run.
-			- loadcache
-			- makethumbs
-			- gettime
-			- geogeo
-			- makejson
-			- makegeojson
-		* dbtest - Just tests if the database exists or can be created, and if it can be written to.
-		* resetcache – Truncate the database. It will need to be repopulated. Does not touch files.
-		* loadcache – Finds all new files in the library and make cache entries for them. Does not generate new thumbnails.
-		* makethumbs – Generates thumbnails for all entries found in the cache.
-		* gettime – Checks all files for timestamps, updates the database with the found times. Uses the exif data in the following order:
-			- DateTimeOriginal
-			- CreateDate
-			- CreationDate
-			- DateCreated
-			- TrackCreateDate
-			- MediaCreateDate
-			- GPSDateTime
-			- ModifyDate
-			- MediaModifyDate
-			- TrackModifyDate
-			- FileModifyDate
-		* getgeo – Checks the files for geolocation info, updates the database with the found locations. Uses the exif data in the following order:
-			- GPSPosition
-			- GPSCoordinates
-			- These four values together
-				+ GPSLatitudeRef
-				+ GPSLatitude
-				+ GPSLongitudeRef
-				+ GPSLongitude
+				if ( $matches[2] == 'S' ) {
+					$matches[1] = $matches[1] * -1;
+				}
 
-			  Additionally, if the altitude tag is present, the altitude is recorded. Otherwise it is set to 0
-				+ GPSAltitude
-		* makejson - Regenerates the cached .json file based on the cache database. Doesn't touch or look at files.
-		* makegeojson - Regenerates the cached .geojson file based on the cache database. Doesn't touch or look at files.
-		* fullreset - Runs `resetcache` first and then runs handlenew
-		* fakethumbs – Tells the cache that all thumbs have been generated. Does not check if files exist, does not create them.
+				if ( $matches[4] == 'W' ) {
+					$matches[3] = $matches[3] * -1;
+				}
+
+				$xyz[0] = $matches[1];
+				$xyz[1] = $matches[3];
+			}
+		}
+		return $xyz;
+	}
+
+	public function help() {
+		print "\n";
+		print "index.php [command] [debug]
+
+Commands:
+	* handle_new (default) - Brings the database from whatever state it is in, up to date. This is the command you usually want to run. It will run the following steps, in order:
+		- load_cache
+		- make_thumbs
+		- get_exif
+		- get_time
+		- geo_geo
+		- make_json
+		- make_geojson
+	* db_test - Just tests if the database exists or can be created, and if it can be written to.
+	* reset_cache – Truncate the database. It will need to be repopulated. Does not touch files.
+	* load_cache – Finds all new files in the library and make cache entries for them. Does not generate new thumbnails.
+	* make_thumbs – Generates thumbnails for all entries found in the cache.
+	* get_exif – Read needed exif info into the database. Must happen before gettime or getgeo
+	* get_time – Uses exif data or file creation or modified time to find the files's sort time
+	* get_geo – Uses exif data to find the media geolocation info so it can be shown on a map
+	* make_json - Regenerates the cached .json file based on the cache database. Doesn't touch or look at files.
+	* make_geojson - Regenerates the cached .geojson file based on the cache database. Doesn't touch or look at files.
+	* full_reset - Runs reset_cache first and then runs handle_new
+
+	All commands can have the word debug after them, which will disable the pretty print, and be more verbose.
 ";
 	}
 
 	public function print_status_line($msg,$skip_spinner = false) {
 		$spinners = array('\\','|','/','-');
 
-		print("\e[1B"); // Go down a line
-		print("\e[1000D"); // Go to start of line
+		$this->print_if_no_debug("\e[1B"); // Go down a line
+		$this->print_if_no_debug("\e[1000D"); // Go to start of line
 		
 
-		if ( !$skip_spinner ) {
+		if ( !$skip_spinner && !$this->debug) {
 			print($spinners[$this->spindex]); 
 			$this->spindex++;
 			if ($this->spindex == count($spinners)){
@@ -1361,12 +1254,76 @@ cacheurl: "' . $this->cacheurl . '",
 		}
 
 		print(" " . str_pad($msg,100));
-		print("\e[1A"); // Go up a line
-		print("\e[1000D"); // Go to start of line
+		if ($this->debug ) { print("\n"); }
+
+		$this->print_if_no_debug("\e[1A"); // Go up a line
+		$this->print_if_no_debug("\e[1000D"); // Go to start of line
 	}
 
-	// Calculate md5 of just the picture part
-	// exiftool FILE -all= -o - | md5
+	public function print_if_no_debug($msg) {
+		if ( !$this->debug ) {
+			print($msg);
+		}
+	}
+
+	public function log($msg) {
+		if ( $this->debug ) {
+			error_log($msg);
+		}
+	}
+
+	private function get_queue($where) {
+			$this->sql_connect();
+			$this->sql->query('UPDATE fastback SET _util="RESERVED-' . getmypid() . '" WHERE ' . $where . ' ORDER BY file DESC LIMIT ' . $this->process_limit);
+			$res = $this->sql->query('SELECT * FROM fastback WHERE _util="RESERVED-' . getmypid() . '"');
+
+			$queue = array();
+
+			while($row = $res->fetchArray(SQLITE3_ASSOC)){
+				$queue[$row['file']] = $row;
+			}
+			$this->sql_disconnect();
+
+			if ( count($queue) === 0 ) {
+				exit();
+			}
+
+			return $queue;
+	}
+
+	private function update_case_when($update_q,$ar,$else,$escape_val = False) {
+		$this->sql_connect();
+		foreach($ar as $file => $val){
+			if ( $escape_val ) {
+				$update_q .= " WHEN file='" . SQLite3::escapeString($file) . "' THEN '" . SQLite3::escapeString($val) . "'\n";
+			} else {
+				$update_q .= " WHEN file='" . SQLite3::escapeString($file) . "' THEN " . $val . "\n";
+			}
+		}
+		$update_q .= " " . $else;
+
+		$this->log($update_q);
+		$this->sql->query($update_q);
+		$this->sql_disconnect();
+	}
+
+	private function update_files_in($update_q,$files) {
+		$this->sql_connect();
+		$update_q = "UPDATE fastback SET _util=NULL, nullgeom=1 WHERE file in (";
+
+		$escaped = array();
+		foreach($files as $file){
+			$escaped[] = "'" . SQLite3::escapeString($file) . "'";
+		}
+
+		$update_q .= implode(",",$escaped);
+
+		$update_q .= ")";
+
+		$this->log($update_q);
+		$this->sql->query($update_q);
+		$this->sql_disconnect();
+	}
 }
 
 new fastback();
