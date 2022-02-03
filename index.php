@@ -84,7 +84,7 @@ class fastback {
 	 */
 	function __construct(){
 
-		$this->nproc = shell_exec('nproc');
+		$this->nproc = trim(shell_exec('nproc'));
 
 		$this->filecache = __DIR__ . '/cache/';
 		$this->cacheurl = dirname($_SERVER['SCRIPT_NAME']) . '/cache/';
@@ -145,16 +145,37 @@ class fastback {
 			case 'makejson':
 				$tasks = array('makejson');
 				break;
+			case 'makegeojson':
+				$tasks = array('makegeojson');
+				break;
 			case 'fullreset':
 				$tasks = array('reset_db_cache','load_db_cache','make_thumbnails','get_times','get_geo','makejson','makegeojson');
 				break;
 			case 'help':
 				$tasks = array('print_cli_usage');
 				break;
-			default:
+			case 'default':
 				$tasks = array('load_db_cache','make_thumbnails','get_times','get_geo','makejson','makegeojson');
+				break;
+			default:
+				$tasks = array('print_cli_usage');
 			}
 
+			pcntl_signal(SIGINT, function(){
+				// Show the cursor
+				print("\e[?25h");
+				exit();
+			});
+
+
+			// Hide the cursor
+			print("\e[?25l");
+
+			print("You're using fastback photo gallery\n");
+			print("For help,run \"php ./index.php help\" on the command line");
+
+			print("\n");
+			print("\n");
 			print("\n");
 			print("\e[1A");
 			print("\e[1000D");
@@ -163,9 +184,11 @@ class fastback {
 				print("\e[1000D");
 				$this->{$tasks[$i]}();
 				print("*" . str_pad("Completed task " . ($i + 1) . " of " . count($tasks) . " ({$tasks[$i]})",100) . "\n\n");
-				$this->print_status_line("");
+				$this->print_status_line("",true);
 				print("\e[1000D");
 			}
+
+			print("\e[?25l");
 
 		} else {
 			$this->makeoutput();
@@ -237,10 +260,13 @@ class fastback {
 		$filetypes = implode('\|',array_merge($this->supported_photo_types, $this->supported_video_types));
 		$cmd = 'find . -type f -regextype sed -iregex  "./[0-9]\{4\}/[0-9]\{2\}/[0-9]\{2\}/.*\(' . $filetypes . '\)$" -newerat ' . $lastmod;
 		$modified_files_str = `$cmd`;
+
+		if (  is_null($modified_files_str) || strlen(trim($modified_files_str)) === 0) {
+			return;
+		}
+
 		$modified_files = explode("\n",$modified_files_str);
 		$modified_files = array_filter($modified_files);
-
-		flush();
 
 		$today = date('Ymd');
 		$multi_insert = "INSERT INTO fastback (file,mtime,sorttime,isvideo) VALUES ";
@@ -348,6 +374,7 @@ class fastback {
 
 		$this->sql_connect();
 		$total = $this->sql->querySingle("SELECT COUNT(*) FROM fastback WHERE thumbnail IS NULL AND flagged IS NOT TRUE",);
+		$start = time();
 		$this->sql_disconnect();
 
 		// Reap the children
@@ -368,8 +395,23 @@ class fastback {
 			} else {
 				$percent = intval(100*($total - $togo) / $total);
 			}
+			
+			$processed = ($total - $togo);
 
-			$this->print_status_line("$percent% : Generated " . ($total - $togo) . " of $total thumbnails");
+			if ( $processed === 0 ) {
+				$finish_string = "";
+			} else {
+				$seconds_left = intval((time() - $start)/$processed * $togo);
+				$minutes_left = intval($seconds_left / 60);
+				$seconds_left = $seconds_left % 60;
+				$hours_left = intval($minutes_left / 60);
+				$minutes_left = $minutes_left % 60;
+
+
+				$finish_string = " ETA " . str_pad($hours_left,2,'0',STR_PAD_LEFT) . ':' . str_pad($minutes_left,2,'0',STR_PAD_LEFT) . ':' . str_pad($seconds_left,2,'0',STR_PAD_LEFT);
+			}
+
+			$this->print_status_line("$percent% : Generated $processed of $total thumbnails.$finish_string");
 			sleep(1);
 		}
 	}
@@ -392,6 +434,7 @@ class fastback {
 			}
 
 			$made_thumbs = array();
+			$flag_these = array();
 			while($file = array_pop($queue)){
 
 				$thumbnailfile = $this->filecache . '/' . ltrim($file,'./') . '.jpg';
@@ -449,7 +492,7 @@ class fastback {
 				if ( file_exists($thumbnailfile) ) {
 					$made_thumbs[$file] = $thumbnailfile;
 				} else {
-					// error_log("I failed to make $thumbnailfile for $file");
+					$flag_these[] = $file;
 				}
 			}
 
@@ -461,6 +504,23 @@ class fastback {
 				}
 				$update_q .= " ELSE thumbnail END
 					WHERE thumbnail='RESERVED-" . getmypid() . "'";
+				$this->sql->query($update_q);
+				$this->sql_disconnect();
+			}
+
+			if ( count($flag_these) > 0) {
+				$this->sql_connect();
+				$update_q = "UPDATE fastback SET flagged=1 WHERE file IN (";
+
+				$escaped = array();
+				foreach($flag_these as $file){
+					$escaped[] = '"' . SQLite3::escapeString($file) . '"';
+				}
+
+				$update_q .= implode(",",$escaped);
+
+				$update_q .= ")";
+
 				$this->sql->query($update_q);
 				$this->sql_disconnect();
 			}
@@ -509,6 +569,8 @@ class fastback {
 	public function makeoutput() {
 		if (!empty($_GET['get']) && $_GET['get'] == 'photojson'){
 			$this->sendjson();
+		} else if (!empty($_GET['get']) && $_GET['get'] == 'geojson'){
+			$this->sendgeojson();
 		} else if (!empty($_GET['get']) && $_GET['get'] == 'js') {
 			$this->makejs();
 		} else if (!empty($_GET['flag'])) {
@@ -563,7 +625,7 @@ class fastback {
 			exit();
 		}
 
-		$total = $this->sql->query("SELECT 
+		$total = $this->sql->querySingle("SELECT 
 			count(file)
 			FROM fastback 
 			WHERE 
@@ -656,8 +718,132 @@ class fastback {
 		print($str);
 	}
 
-	public function sendgejson() {
-		print("Not yet implemented");
+	public function sendgeojson() {
+		$geojson = array(
+			'type' => 'FeatureCollection',
+			'bbox' => Array(null,null,null,null,null,null),
+			'features' => array()
+		);
+
+		$this->sql_connect();
+		$cf = $this->filecache . '/fastback.geojson.gz';
+
+		@header("Cache-Control: \"max-age=1209600, public");
+		@header("Content-Type: application/geojson");
+		@header("Content-Encoding: gzip");
+		if (file_exists($cf)) {
+			header('Content-Length: ' . filesize($cf));
+			readfile($cf);
+			exit();
+		}
+
+		$total = $this->sql->querySingle("SELECT 
+			count(file)
+			FROM fastback 
+			WHERE 
+			thumbnail IS NOT NULL 
+			AND thumbnail NOT LIKE 'RESERVE%' 
+			AND flagged IS NOT TRUE 
+			AND sorttime NOT LIKE '% 00:00:01' 
+			AND sorttime IS NOT NULL 
+			ORDER BY sorttime " . $this->sortorder . ",file");
+
+		$res = $this->sql->query("SELECT 
+			file,
+			DATETIME(sorttime) AS sorttime,
+			X(geom) AS x,
+			Y(geom) AS y,
+			Z(geom) AS z
+			FROM fastback 
+			WHERE 
+			thumbnail IS NOT NULL 
+			AND thumbnail NOT LIKE 'RESERVE%' 
+			AND flagged IS NOT TRUE 
+			AND sorttime NOT LIKE '% 00:00:01' 
+			AND sorttime IS NOT NULL 
+			ORDER BY sorttime " . $this->sortorder . ",file");
+
+		$idx = 0;
+		while($row = $res->fetchArray(SQLITE3_ASSOC)){
+			if (is_null($row['sorttime'])) {
+				continue;
+			}
+
+			preg_match('|((....)-(..)-(..)) ..:..:..|',$row['sorttime'],$curdates);
+
+			if ( count($curdates) < 2 ) {
+				continue;
+			}
+
+			$idx++;
+
+			if ( is_null($row['x']) ) {
+				continue;
+			}
+
+			$feature = array(
+				'type' => 'Feature',
+				'geometry' => array(
+					'type' => 'Point',
+					'coordinates' => null
+				),
+				'properties' => array(
+					'file' => $row['file']
+				)
+			);
+
+			if ( !is_null($row['x']) ) {
+				$feature['geometry']['coordinates'] = array(
+						$row['x'],
+						$row['y'],
+						$row['z']
+				);
+
+
+				// long
+				if ( is_null($geojson['bbox'][0]) || $row['x'] < $geojson['bbox'][0] ) {
+					$geojson['bbox'][0] = $row['x'];
+				}
+
+				if ( is_null($geojson['bbox'][3]) || $row['x'] > $geojson['bbox'][3] ) {
+					$geojson['bbox'][3] = $row['x'];
+				}
+
+				// lat
+				if ( is_null($geojson['bbox'][1]) || $row['y'] < $geojson['bbox'][1] ) {
+					$geojson['bbox'][1] = $row['y'];
+				}
+
+				if ( is_null($geojson['bbox'][4]) || $row['y'] > $geojson['bbox'][4] ) {
+					$geojson['bbox'][4] = $row['y'];
+				}
+
+				// elevation
+				if ( is_null($geojson['bbox'][2]) || $row['z'] < $geojson['bbox'][2] ) {
+					$geojson['bbox'][2] = $row['z'];
+				}
+
+				if ( is_null($geojson['bbox'][5]) || $row['z'] > $geojson['bbox'][5] ) {
+					$geojson['bbox'][5] = $row['z'];
+				}
+			}
+
+			$geojson['features'][$idx] = $feature;
+
+
+			if ( $total - $idx == 0) {
+				$percent = 100;
+			} else {
+				$percent = intval(100*($idx / $total));
+			}
+
+			$this->print_status_line("$percent% : Adding record $idx of $total to the geojson cache");
+		}
+
+		$this->sql_disconnect();
+		$str = json_encode($geojson,JSON_PRETTY_PRINT);
+		@file_put_contents('compress.zlib://' . $cf,$str);
+		print($str);
 	}
 
 	/**
@@ -804,6 +990,7 @@ cacheurl: "' . $this->cacheurl . '",
 
 		$this->sql_connect();
 		$total = $this->sql->querySingle($statussql);
+		$start = time();
 		$this->sql_disconnect();
 
 		// Reap the children
@@ -824,7 +1011,21 @@ cacheurl: "' . $this->cacheurl . '",
 				$percent = intval(100*($total - $togo) / $total);
 			}
 
-			$this->print_status_line("$percent% : Processed " . ($total - $togo) . " of $total records");
+			$processed = ($total - $togo);
+
+			if ( $processed === 0 ) {
+				$finish_string = "";
+			} else {
+				$seconds_left = intval((time() - $start)/$processed * $togo);
+				$minutes_left = intval($seconds_left / 60);
+				$seconds_left = $seconds_left % 60;
+				$hours_left = intval($minutes_left / 60);
+				$minutes_left = $minutes_left % 60;
+
+				$finish_string = " ETA " . str_pad($hours_left,2,'0',STR_PAD_LEFT) . ':' . str_pad($minutes_left,2,'0',STR_PAD_LEFT) . ':' . str_pad($seconds_left,2,'0',STR_PAD_LEFT);
+			}
+
+			$this->print_status_line("$percent% : Processed $processed of $total records.$finish_string");
 
 			sleep(1);
 		}
@@ -933,6 +1134,7 @@ cacheurl: "' . $this->cacheurl . '",
 			"-GPSLongitude",
 
 			"-GPSAltitude",
+			"-GPSAltitudeRef",
 			"-FileName",
 		);
 
@@ -961,12 +1163,12 @@ cacheurl: "' . $this->cacheurl . '",
 				$found = false;
 					// Run with -lang en since it translates some values based on locale :-/
 					$cmd = "exiftool -lang en -s -c '%.6f' $tags -extractEmbedded " . escapeshellarg($this->photobase . $file) . " 2>/dev/null";
-					$fullres = trim(`$cmd`);
+					$fullres = `$cmd`;
 
 					$xyz = array();
 
 					if ( !empty($fullres) ) {
-						$fullres = explode("\n",$fullres);
+						$fullres = explode("\n",trim($fullres));
 						$exif_tags = array();
 						foreach($fullres as $line){
 							$vals = preg_split('/ .*: /',$line,2);
@@ -1017,7 +1219,9 @@ cacheurl: "' . $this->cacheurl . '",
 							array_key_exists('GPSLatitudeRef',$exif_tags) && 
 							array_key_exists('GPSLatitude',$exif_tags) && 
 							array_key_exists('GPSLongitude',$exif_tags) && 
-							array_key_exists('GPSLongitudeRef',$exif_tags) 
+							array_key_exists('GPSLongitudeRef',$exif_tags) &&
+							floatval($exif_tags['GPSLongitude']) == $exif_tags['GPSLongitude'] && 
+							floatval($exif_tags['GPSLatitude']) == $exif_tags['GPSLatitude'] 
 						) {
 
 							if ( $exif_tags['GPSLatitudeRef'] == 'South' ) {
@@ -1032,18 +1236,21 @@ cacheurl: "' . $this->cacheurl . '",
 							$xyz[1] = $exif_tags['GPSLatitude'];
 						}
 
-						if ( count($xyz) === 2 && array_key_exists('GPSAltitude',$exif_tags) ) {
-							if ( preg_match('/([0-9.]+) m (Above|Below) Sea Level/',$exif_tags['GPSAltitude'],$matches ) ) {
-								if ($matches[2] == 'Below') {
-									$matches[1] = $matches[1] * -1;
+						if ( count($xyz) === 2 && array_key_exists('GPSAltitude',$exif_tags) && floatval($exif_tags['GPSAltitude']) == $exif_tags['GPSAltitude']) {
+							if ( preg_match('/([0-9.]+) m/',$exif_tags['GPSAltitude'],$matches ) ) {
+								if ( array_key_exists('GPSAltitudeRef',$exif_tags) && $exif_tags['GPSAltitudeRef'] == 'Below Sea Level' ) {
+									$xyz[2] = $matches[1] * -1;
+								} else {
+									$xyz[2] = $matches[1];
 								}
-								$xyz[2] = $matches[1];
-							} else if ( preg_match('/([0-9.]+) m/',$exif_tags['GPSAltitude'],$matches ) ) {
-								$xyz[2] = $matches[1];
+							} else if ( $exif_tags['GPSAltitude'] == 'undef') {
+								$xyz[2] = 0;
 							} else {
 								error_log(
 									"New type of altitude value found: {$exif_tags['GPSAltitude']}"
 								);
+								print($file . "\n");
+								var_dump($exif_tags);
 								$xyz[2] = 0;
 							}
 						} else {
@@ -1136,7 +1343,7 @@ cacheurl: "' . $this->cacheurl . '",
 ";
 	}
 
-	public function print_status_line($msg) {
+	public function print_status_line($msg,$skip_spinner = false) {
 		print("\e[1B");
 		print("\e[1000D");
 		print(" " . str_pad($msg,100));
@@ -1144,15 +1351,17 @@ cacheurl: "' . $this->cacheurl . '",
 		print("\e[1000D");
 
 
-		$spinners = array('\\','|','/','-');
-		print("\e[1B");
-		print("\e[1000D");
-		print($spinners[$this->spindex]);
-		print("\e[1A");
-		print("\e[1000D");
-		$this->spindex++;
-		if ($this->spindex == count($spinners)){
-			$this->spindex = 0;
+		if ( !$skip_spinner ) {
+			$spinners = array('\\','|','/','-');
+			print("\e[1B");
+			print("\e[1000D");
+			print($spinners[$this->spindex]);
+			print("\e[1A");
+			print("\e[1000D");
+			$this->spindex++;
+			if ($this->spindex == count($spinners)){
+				$this->spindex = 0;
+			}
 		}
 	}
 
