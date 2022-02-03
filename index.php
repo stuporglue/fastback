@@ -162,14 +162,12 @@ class fastback {
 			}
 
 			pcntl_signal(SIGINT, function(){
-				// Show the cursor
-				print("\e[?25h");
+				print("\e[?25h"); // Show the cursor
 				exit();
 			});
 
 
-			// Hide the cursor
-			print("\e[?25l");
+			print("\e[?25l"); // Hide the cursor
 
 			print("You're using fastback photo gallery\n");
 			print("For help,run \"php ./index.php help\" on the command line");
@@ -177,18 +175,19 @@ class fastback {
 			print("\n");
 			print("\n");
 			print("\n");
-			print("\e[1A");
-			print("\e[1000D");
+			print("\e[1A"); // Go up a line
+			print("\e[1000D"); // Go to start of line
 			for($i = 0; $i < count($tasks); $i++){
 				print(" " . str_pad("Working on task " . ($i + 1) . " of " . count($tasks) . " ({$tasks[$i]})",100));
-				print("\e[1000D");
-				$this->{$tasks[$i]}();
-				print("*" . str_pad("Completed task " . ($i + 1) . " of " . count($tasks) . " ({$tasks[$i]})",100) . "\n\n");
-				$this->print_status_line("",true);
-				print("\e[1000D");
+				print("\e[1000D"); // Go to start of line
+				$this->{$tasks[$i]}(); // Every task should leave the cursor where it found it
+				print("*" . str_pad("Completed task " . ($i + 1) . " of " . count($tasks) . " ({$tasks[$i]})",100));
+				$this->print_status_line("",true); // Wipe the intermediate progress line
+				print("\n");
+				print("\e[1000D"); // Go to start of line
 			}
 
-			print("\e[?25l");
+			print("\e[?25l"); // Show cursor
 
 		} else {
 			$this->makeoutput();
@@ -788,14 +787,15 @@ class fastback {
 					'coordinates' => null
 				),
 				'properties' => array(
+					'idx' => $idx - 1,
 					'file' => $row['file']
 				)
 			);
 
 			if ( !is_null($row['x']) ) {
 				$feature['geometry']['coordinates'] = array(
-						$row['x'],
 						$row['y'],
+						$row['x'],
 						$row['z']
 				);
 
@@ -828,7 +828,7 @@ class fastback {
 				}
 			}
 
-			$geojson['features'][$idx] = $feature;
+			$geojson['features'][] = $feature;
 
 
 			if ( $total - $idx == 0) {
@@ -1310,6 +1310,7 @@ cacheurl: "' . $this->cacheurl . '",
 			- gettime
 			- geogeo
 			- makejson
+			- makegeojson
 		* dbtest - Just tests if the database exists or can be created, and if it can be written to.
 		* resetcache – Truncate the database. It will need to be repopulated. Does not touch files.
 		* loadcache – Finds all new files in the library and make cache entries for them. Does not generate new thumbnails.
@@ -1338,31 +1339,30 @@ cacheurl: "' . $this->cacheurl . '",
 			  Additionally, if the altitude tag is present, the altitude is recorded. Otherwise it is set to 0
 				+ GPSAltitude
 		* makejson - Regenerates the cached .json file based on the cache database. Doesn't touch or look at files.
+		* makegeojson - Regenerates the cached .geojson file based on the cache database. Doesn't touch or look at files.
 		* fullreset - Runs `resetcache` first and then runs handlenew
 		* fakethumbs – Tells the cache that all thumbs have been generated. Does not check if files exist, does not create them.
 ";
 	}
 
 	public function print_status_line($msg,$skip_spinner = false) {
-		print("\e[1B");
-		print("\e[1000D");
-		print(" " . str_pad($msg,100));
-		print("\e[1A");
-		print("\e[1000D");
+		$spinners = array('\\','|','/','-');
 
+		print("\e[1B"); // Go down a line
+		print("\e[1000D"); // Go to start of line
+		
 
 		if ( !$skip_spinner ) {
-			$spinners = array('\\','|','/','-');
-			print("\e[1B");
-			print("\e[1000D");
-			print($spinners[$this->spindex]);
-			print("\e[1A");
-			print("\e[1000D");
+			print($spinners[$this->spindex]); 
 			$this->spindex++;
 			if ($this->spindex == count($spinners)){
 				$this->spindex = 0;
 			}
 		}
+
+		print(" " . str_pad($msg,100));
+		print("\e[1A"); // Go up a line
+		print("\e[1000D"); // Go to start of line
 	}
 
 	// Calculate md5 of just the picture part
