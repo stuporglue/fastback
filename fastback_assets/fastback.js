@@ -1,5 +1,8 @@
 class Fastback {
 
+	/**
+	 * Our default properties.
+	 */
 	setProps() {
 		this.cacheurl = "./";
 		this.photourl = "./";
@@ -9,6 +12,9 @@ class Fastback {
 		this.cols = 5;
 	}
 
+	/**
+	 * Load the data and set up event handlers
+	 */
 	constructor(args) {
 		this.setProps();
 		var self = this;
@@ -24,13 +30,16 @@ class Fastback {
 				};
 			});
 		}).then(function(){
+			self.orig_photos = self.photos;
 			self.hyperlist_init();
 			self.load_nav();
 			jQuery('#zoom').on('change',self.zoom_change.bind(self));
 		});
 	}
 
-	// https://github.com/tbranyen/hyperlist
+	/**
+	 * Initiate the hyperlist
+	 */
 	hyperlist_init() {
 		var self = this;
 		this.hyperlist_container = jQuery('#photos');
@@ -49,7 +58,7 @@ class Fastback {
 
 		this.hyperlist_config = {
 			height: window.innerHeight,
-			itemHeight: (this.hyperlist_container.width() / this.cols) - 3,
+			itemHeight: (this.hyperlist_container.width() / this.cols),
 			total: Math.ceil(this.photos.length / this.cols),
 			scrollerTagName: 'div',
 			fastback: this,
@@ -61,8 +70,16 @@ class Fastback {
 		window.onresize = this.refresh_layout.bind(this);
 
 		this.hyperlist_container.addClass("container");
+
+		this.refresh_layout();
 	}
 
+	/**
+	 * Load the nav items
+	 *
+	 * * Calendar / datepicker
+	 * * Rewind / onthisday
+	 */
 	load_nav() {
 		var self = this;
 		// first date (in tags list) -- The default is Descending view, so this should be the greatest date
@@ -82,6 +99,11 @@ class Fastback {
 			yearRange: 'c-100:c+100',
 			dateFormat: 'yy-mm-dd',
 			onSelect: function(date){
+
+				if ( jQuery('#rewindicon').hasClass('active') ) {
+					jQuery('#rewindicon').trigger('click');
+				}
+
 				jQuery('#rewindicon').removeClass('active');
 
 				var targetdate = new Date(date + ' 00:00:00');
@@ -101,30 +123,69 @@ class Fastback {
 				self.hyperlist_container.prop('scrollTop',(rownum * self.hyperlist_config.itemHeight));
 			}
 		});
+
+		jQuery('#rewindicon').on('click',function(){
+			var icon = jQuery('#rewindicon');
+
+			if ( icon.hasClass('active') ) {
+				icon.removeClass('active');
+				self.photos = self.orig_photos;
+			} else {
+				jQuery('#rewindicon').addClass('active');
+				var d = new Date();
+				var datepart = ((d.getMonth() + 1) + "").padStart(2,"0") + '-' + (d.getDate() + "").padStart(2,"0")
+				var re = new RegExp('^....-' + datepart + ' ');
+				self.photos = fastback.photos.filter(function(p){return p.do.match(re);});
+			}
+
+			self.refresh_layout();
+			self.hyperlist_container.prop('scrollTop',0);
+		});
 	}
 
+	/*
+	 * Handle the slider changes.
+	 */
 	zoom_change(e) {
+		this.cols = Math.max(this.maxzoom, parseInt(e.target.value));
 
-		var newcols = parseInt(e.target.value);
-
-		(this.hyperlist_container.width() / this.cols) * this.photos.length > this.hyperlist._maxElementHeight
-		var maxrows = Math.floor(this.hyperlist._maxElementHeight / this.hyperlist_container.width());
-		var maxrows = Math.ceil(this.photos.length / this.hyperlist._maxElementHeight / this.hyperlist_container.width())
-
-
-		this.cols = newcols;
 		jQuery('#photos').removeClass('up1 up2 up3 up4 up5 up6 up7 up8 up9 up10'.replace('up' + this.cols,' '));
 		jQuery('#photos').addClass('up' + this.cols);
 		this.refresh_layout();
 	}
 
+	/*
+	 * Refresh the page layout, including accounting for changed row nums or page resize.
+	 *
+	 * Called manually and by hyperlist
+	 */
 	refresh_layout() {
+		// Browsers can only support an object so big, so we can only use so many rows.
+		// Calculate the new max zoom
+		this.maxzoom = Math.ceil(Math.sqrt(fastback.hyperlist_container.width() * fastback.photos.length / fastback.hyperlist._maxElementHeight))
+
+		// Make sure our new cols doesn't go over the max zoom
+		this.cols = Math.max(this.maxzoom, this.cols);
+
+		// Set the slider size
+		jQuery('#resizer input').prop('min',this.maxzoom);
+
+		// Update hyperlist config
 		this.hyperlist_config.height = this.hyperlist_container.parent().height();
-		this.hyperlist_config.itemHeight = (this.hyperlist_container.width() / this.cols) - 3;
+		this.hyperlist_config.itemHeight = (this.hyperlist_container.width() / this.cols);
 		this.hyperlist_config.total = Math.ceil(this.photos.length / this.cols);
+
+		// propagate changes
 		this.hyperlist.refresh(this.hyperlist_container[0], this.hyperlist_config);
 	}
 
+	/**
+	 * Make a single row with however many photos we need.
+	 *
+	 * Called by Hyperlist
+	 *
+	 * @row - Which row to use. 
+	 */
 	generate_row(row) {
 		var self = this;
 		var slice_from = (row * this.fastback.cols);

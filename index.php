@@ -9,6 +9,7 @@ class FastbackOutput {
 		$this->photobase = __DIR__ . '/';
 		$this->photourl = dirname($_SERVER['SCRIPT_NAME']) . '/';
 		$this->staticurl = dirname($_SERVER['SCRIPT_NAME']) . '/';
+		$this->sitetitle = "Fastback Photo Gallery";
 
 		if ( file_exists(__DIR__ . '/fastback.ini') ) {
 			$settings = parse_ini_file(__DIR__ . '/fastback.ini');
@@ -43,7 +44,7 @@ class FastbackOutput {
 <head>
 <meta charset="utf-8">
 <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
-<title>Hyper List Demo</title>
+<title>' . htmlspecialchars($this->sitetitle) . '</title>
 <link rel="shortcut icon" href="fastback_assets/favicon.png"> 
 <link rel="stylesheet" href="fastback_assets/jquery-ui-1.12.1/jquery-ui.min.css">
 <link rel="stylesheet" href="fastback_assets/fastback.css">
@@ -54,6 +55,7 @@ class FastbackOutput {
 		$html .= '<div id="hyperlist_wrap">';
 		$html .= '<div id="photos"></div>';
 		$html .= '<div id="resizer">';
+		$html .= '<div id="rewindicon"></div>';
 		$html .= '<input type="range" min="1" max="10" value="5" class="slider" id="zoom">';
 		$html .= '</div>';
 		$html .= '</div>';
