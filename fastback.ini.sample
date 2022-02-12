@@ -30,3 +30,5 @@
 ; Optional, defaults to month
 ; Valid values: year, month, day
 ; datelabels = month
+
+sitetitle="My Custom Site Title"

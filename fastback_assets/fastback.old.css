@@ -1,0 +1,370 @@
+﻿html,body {
+	margin: 0;
+	padding: 0;
+	height: 100%;
+	width: 100%;
+	overflow: hidden;
+}
+
+#photos .tn, 
+.body {
+	background-image: url('loading.png');
+}
+
+body {
+	background-repeat: no-repeat;
+	background-position: center center;
+	background-size: 100px;
+	overflow-anchor: auto;  /* Not supported by Safari on ios :-( */
+}
+
+#photos {
+	position: absolute;
+	left: 0;
+	vertical-align: top;
+	box-sizing: border-box;
+	width: calc(100% + 17px);
+	height: 100%;
+	overflow-y: auto;
+	overflow-x: hidden;
+	opacity: 1;
+	-webkit-transition: opacity 0.1s ease-in-out;
+	-moz-transition: opacity 0.1s ease-in-out;
+	-ms-transition: opacity 0.1s ease-in-out;
+	-o-transition: opacity 0.1s ease-in-out;
+}
+
+#photos.up1  .tn { width: calc(100vw/1); height: calc(100vw/1); }
+#photos.up2  .tn { width: calc(100vw/2); height: calc(100vw/2); }
+#photos.up3  .tn { width: calc(100vw/3); height: calc(100vw/3); }
+#photos.up4  .tn { width: calc(100vw/4); height: calc(100vw/4); }
+#photos.up5  .tn, #photos .tn { width: calc(100vw/5); height: calc(100vw/5); }
+#photos.up6  .tn { width: calc(100vw/6); height: calc(100vw/6); }
+#photos.up7  .tn { width: calc(100vw/7); height: calc(100vw/7); }
+#photos.up8  .tn { width: calc(100vw/8); height: calc(100vw/8); }
+#photos.up9  .tn { width: calc(100vw/9); height: calc(100vw/9); }
+#photos.up10 .tn { width: calc(100vw/10); height: calc(100vw/10); }
+
+#photos .tn{
+	margin: 0;
+	padding: 0;
+	border: 0;
+	display: inline-block;
+	float: left;
+	box-sizing: border-box;
+	/* scroll-snap-align: start; */
+	border-right: 1px solid #ccc;
+	border-bottom: 1px solid #ccc;
+	background-size: 20px;
+	background-repeat: no-repeat;
+	background-position: center center;
+	background-color: white;
+	position: relative;
+}
+
+.tn.dlabel:after {
+	content: attr(data-dlabel);
+	max-height: 50%;
+	max-width: 75%;
+	position: absolute;
+	bottom: 0;
+	left: 0;
+	padding: 1px 6px;
+	display: inline-block;
+	box-sizing: border-box;
+	background-color: rgba(255,255,255,.8);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	word-wrap: break-letter;
+}
+
+
+#photos .tn img {
+	width: 100%;
+	height: 100%;
+}
+
+#photospacer {
+	height: 0;
+	-webkit-transition: height 0.1s ease-in-out;
+	-moz-transition:	height 0.1s ease-in-out;
+	-ms-transition:		height 0.1s ease-in-out;
+	-o-transition:		height 0.1s ease-in-out;
+}
+
+#zoom {
+	-webkit-appearance: none;  /* Override default CSS styles */
+	appearance: none;
+	width: 100%; /* Full-width */
+	height: 25px; /* Specified height */
+	background: #d3d3d3; /* Grey background */
+	outline: none; /* Remove outline */
+	opacity: 0.3; /* Set transparency (for mouse-over effects on hover) */
+	-webkit-transition: .2s; /* 0.2 seconds transition on hover */
+	transition: opacity .2s;
+
+
+	box-sizing: border-box;
+	margin: 0;
+	padding: 0;
+}
+
+/* Mouse-over effects */
+#zoom:hover {
+	opacity: 1; /* Fully shown on mouse-over */
+}
+
+/* The slider handle (use -webkit- (Chrome, Opera, Safari, Edge) and -moz- (Firefox) to override default look) */
+#zoom::-webkit-slider-thumb {
+	-webkit-appearance: none; /* Override default look */
+	appearance: none;
+	width: 25px; /* Set a specific slider handle width */
+	height: 25px; /* Slider handle height */
+	background: #04AA6D; /* Green background */
+	cursor: pointer; /* Cursor on hover */
+}
+
+#zoom::-moz-range-thumb {
+	width: 25px; /* Set a specific slider handle width */
+	height: 25px; /* Slider handle height */
+	background: #04AA6D; /* Green background */
+	cursor: pointer; /* Cursor on hover */
+}
+
+#thumb {
+	position: absolute;
+	box-sizing: border-box;
+	top: 0;
+	left: 0;
+	height: calc(100% - 20px);
+	width: calc(100% - 20px);
+	margin: 10px;
+	background-color: rgba(255,255,255,.8);
+	border-radius: 4px;
+	-webkit-transition: opacity 5s ease-in-out;
+	-moz-transition: opacity 5s ease-in-out;
+	-ms-transition: opacity 5s ease-in-out;
+	-o-transition: opacity 5s ease-in-out;
+	padding: 10px;
+	display: none;
+	z-index: 10;
+}
+
+#thumbcontrols {
+	background-color: rgba(100,100,255,.8);
+	height: 100px;
+	position: absolute;
+	bottom: 0;
+	left: 0;
+	width: 100%;
+}
+
+#thumbclose {
+	position: absolute;
+	bottom: 70px;
+	right: 10px;
+	cursor: pointer;
+}
+
+#thumb h2 {
+	font-size: 16px;
+	color: #333;
+	margin:0;
+	padding:0;
+}
+
+.thumbctrl {
+	width: 150px;
+	max-width: 30%;
+	height: calc(100% - 150px);
+	position: absolute;
+	top: 0;
+	opacity: 0;
+	background-color: rgba(255,255,255,0.8);
+	z-index: 100000;
+}
+
+.thumbctrl:hover {
+	opacity: 1;
+}
+
+#thumbleft {
+	left: 0;
+}
+#thumbright {
+	right: 0;
+}
+
+
+#thumbcontent {
+	overflow: hidden;
+	height: calc(100% - 100px);
+	width: 100%;
+}
+
+#thumbcontent img,
+#thumbcontent video {
+	height: 100%;
+	width: 100%;
+	object-fit: contain;
+}
+
+#notification {
+	display: none;
+	position: absolute;
+	bottom: 40px;
+	left: 10px;
+	width: 300px;
+	background-color: rgba(255,255,255,.8);
+	height: 100px;
+	border-radius: 4px;
+	opacity:0;
+	-webkit-transition: opacity 5s ease-in-out;
+	-moz-transition: opacity 5s ease-in-out;
+	-ms-transition: opacity 5s ease-in-out;
+	-o-transition: opacity 5s ease-in-out;
+	padding: 10px;
+	z-index: 2;
+}
+
+
+#notification h2 {
+	font-size: 16px;
+	color: #333;
+	margin:0;
+	padding:0;
+}
+
+#notification.new {
+	opacity: 1;
+	-webkit-transition: opacity 0.5s ease-in-out;
+	-moz-transition: opacity 0.5s ease-in-out;
+	-ms-transition: opacity 0.5s ease-in-out;
+	-o-transition: opacity 0.5s ease-in-out;
+}
+
+#thumb a.download:before,
+#notification a.download:before {
+	display: inline-block;
+	width: 20px;
+	height: 20px;
+	content:"⏬";
+	font-size: 15px;
+	margin-right:5px;
+}
+
+#thumb a.flag:before,
+#notification a.flag:before {
+	display: inline-block;
+	width: 20px;
+	height: 20px;
+	content:"🚩";
+	font-size: 15px;
+	margin-right:5px;
+}
+
+
+.tn img {
+	position: absolute;
+	top: 0;
+	left: 0;
+}
+
+.tn img {
+	position: absolute;
+	top: 0;
+	left: 0;
+}
+
+.tn.vid:before {
+	display: block;
+	position: relative;
+	z-index: 1;
+	width: 100%;
+	height: 100%;
+	content: " ";
+	background-image: url('playbutton.png');
+	background-size: 50% 50%;
+	background-repeat: no-repeat;
+	background-position: center; 
+	font-size: 10em;
+	opacity: 0.4;
+}
+
+#resizer {
+	position: fixed;
+	bottom: 0;
+	width: calc(100% - 60px);
+	direction: rtl;
+	z-index: 1000;
+}
+
+#calendaricon {
+	position: fixed;
+	bottom: 0;
+	right: 0;
+	z-index: 1000;
+	background-color: rgba(255,255,255,0.8);
+	width: 30px;
+	height: 30px;
+	background-image: url('calendar.png');
+	background-size: cover;
+}
+
+#datepicker {
+	display: block;
+	height: 100%;
+	width: 100%;
+	opacity: 0;
+}
+
+#rewindicon {
+	position: fixed;
+	bottom: 0;
+	right: 30px;
+	z-index: 1000;
+	background-color: rgba(255,255,255,0.8);
+	width: 30px;
+	height: 30px;
+	background-image: url('rewind.png');
+	background-size: cover;
+}
+
+#rewindicon.active {
+	background-color: yellow;
+	border: 2px inset black;
+	box-sizing: border-box;
+}
+
+/* smartphones, touchscreens */
+@media (hover: none) and (pointer: coarse) {
+	/*
+	#resizer {
+	display: none;
+	}
+	 */
+
+	.thumbctrl {
+		display: none;
+	}
+
+	#photos .tn.dlabel:after {
+		display: none;
+	}
+
+	#photos.up1 .tn.dlabel:after,
+	#photos.up2 .tn.dlabel:after,
+	#photos.up3 .tn.dlabel:after,
+	#photos.up4 .tn.dlabel:after {
+		display: inline-block;
+	}
+
+}
+
+/******* Map Specific *******/
+#map {
+	height: 100%;
+	width: 100%;
+	margin: 0;
+	padding: 0;
+}
