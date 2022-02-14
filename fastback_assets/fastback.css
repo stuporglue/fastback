@@ -87,62 +87,31 @@ body #photos .photorow {
 	filter: invert(100%);
 }
 
-body       .tn {width: calc(100vw/5); height: calc(100vw/5);}
-body .up1  .tn {width: calc(100vw/1); height: calc(100vw/1);}
-body .up2  .tn {width: calc(100vw/2); height: calc(100vw/2);}
-body .up3  .tn {width: calc(100vw/3); height: calc(100vw/3);}
-body .up4  .tn {width: calc(100vw/4); height: calc(100vw/4);}
-body .up5  .tn {width: calc(100vw/5); height: calc(100vw/5);}
-body .up6  .tn {width: calc(100vw/6); height: calc(100vw/6);}
-body .up7  .tn {width: calc(100vw/7); height: calc(100vw/7);}
-body .up8  .tn {width: calc(100vw/8); height: calc(100vw/8);}
-body .up9  .tn {width: calc(100vw/9); height: calc(100vw/9);}
-body .up10 .tn {width: calc(100vw/10); height: calc(100vw/10);}
-
-
-
-/*
-body       .tn.nolink {font-size: 4vw; }
-body .up1  .tn.nolink {font-size: 22vw; }
-body .up2  .tn.nolink {font-size: 10vw; }
-body .up3  .tn.nolink {font-size: 7vw; }
-body .up4  .tn.nolink {font-size: 5vw; }
-body .up5  .tn.nolink {font-size: 4vw; }
-body .up6  .tn.nolink {font-size: 3.5vw; }
-body .up7  .tn.nolink {font-size: 3vw; }
-body .up8  .tn.nolink {font-size: 2.5vw; }
-body .up9  .tn.nolink {font-size: 2.2vw; }
-body .up10 .tn.nolink {font-size: 2vw; }
-*/
+body       .tn {width: calc(100vw/5);  height: calc(100vw/5);  font-size: 4vw;   }
+body .up1  .tn {width: calc(100vw/1);  height: calc(100vw/1);  font-size: 22vw;  }
+body .up2  .tn {width: calc(100vw/2);  height: calc(100vw/2);  font-size: 10vw;  }
+body .up3  .tn {width: calc(100vw/3);  height: calc(100vw/3);  font-size: 7vw;   }
+body .up4  .tn {width: calc(100vw/4);  height: calc(100vw/4);  font-size: 5vw;   }
+body .up5  .tn {width: calc(100vw/5);  height: calc(100vw/5);  font-size: 4vw;   }
+body .up6  .tn {width: calc(100vw/6);  height: calc(100vw/6);  font-size: 3.5vw; }
+body .up7  .tn {width: calc(100vw/7);  height: calc(100vw/7);  font-size: 3vw;   }
+body .up8  .tn {width: calc(100vw/8);  height: calc(100vw/8);  font-size: 2.5vw; }
+body .up9  .tn {width: calc(100vw/9);  height: calc(100vw/9);  font-size: 2.2vw; }
+body .up10 .tn {width: calc(100vw/10); height: calc(100vw/10); font-size: 2vw;   }
 
 /* When the map is open AND we're landscape, everything is half as wide */
 @media(orientation: landscape) {
-	body.map	   .tn {width: calc(50vw/5); height: calc(50vw/5);}
-	body.map .up1  .tn {width: calc(50vw/1); height: calc(50vw/1);}
-	body.map .up2  .tn {width: calc(50vw/2); height: calc(50vw/2);}
-	body.map .up3  .tn {width: calc(50vw/3); height: calc(50vw/3);}
-	body.map .up4  .tn {width: calc(50vw/4); height: calc(50vw/4);}
-	body.map .up5  .tn {width: calc(50vw/5); height: calc(50vw/5);}
-	body.map .up6  .tn {width: calc(50vw/6); height: calc(50vw/6);}
-	body.map .up7  .tn {width: calc(50vw/7); height: calc(50vw/7);}
-	body.map .up8  .tn {width: calc(50vw/8); height: calc(50vw/8);}
-	body.map .up9  .tn {width: calc(50vw/9); height: calc(50vw/9);}
-	body.map .up10 .tn {width: calc(50vw/10); height: calc(50vw/10);}
-
-
-	/*
-	body.map       .tn.nolink {font-size: 4px; }
-	body.map .up1  .tn.nolink {font-size: 22vw; }
-	body.map .up2  .tn.nolink {font-size: 10vw; }
-	body.map .up3  .tn.nolink {font-size: 7vw; }
-	body.map .up4  .tn.nolink {font-size: 5vw; }
-	body.map .up5  .tn.nolink {font-size: 4vw; }
-	body.map .up6  .tn.nolink {font-size: 3.5vw; }
-	body.map .up7  .tn.nolink {font-size: 3vw; }
-	body.map .up8  .tn.nolink {font-size: 2.5vw; }
-	body.map .up9  .tn.nolink {font-size: 2.2vw; }
-	body.map .up10 .tn.nolink {font-size: 2vw; }
-	*/
+	body.map	   .tn {width: calc(50vw/5);  height: calc(50vw/5);  font-size: 2px;   }
+	body.map .up1  .tn {width: calc(50vw/1);  height: calc(50vw/1);  font-size: 11vw;  }
+	body.map .up2  .tn {width: calc(50vw/2);  height: calc(50vw/2);  font-size: 5vw;  }
+	body.map .up3  .tn {width: calc(50vw/3);  height: calc(50vw/3);  font-size: 3.5vw;   }
+	body.map .up4  .tn {width: calc(50vw/4);  height: calc(50vw/4);  font-size: 2.5vw;   }
+	body.map .up5  .tn {width: calc(50vw/5);  height: calc(50vw/5);  font-size: 2vw;   }
+	body.map .up6  .tn {width: calc(50vw/6);  height: calc(50vw/6);  font-size: 1.75vw; }
+	body.map .up7  .tn {width: calc(50vw/7);  height: calc(50vw/7);  font-size: 1.5vw;   }
+	body.map .up8  .tn {width: calc(50vw/8);  height: calc(50vw/8);  font-size: 1.25vw; }
+	body.map .up9  .tn {width: calc(50vw/9);  height: calc(50vw/9);  font-size: 1.1vw; }
+	body.map .up10 .tn {width: calc(50vw/10); height: calc(50vw/10); font-size: 1vw;   }
 }
 
 /* If we're in portrait mode we just swap into over under and widths remain the same */
@@ -267,7 +236,7 @@ body .up10 .tn.nolink {font-size: 2vw; }
 }
 
 .thumbctrl:hover {
-	opacity: 1;
+	opacity: 0;
 }
 
 #thumbleft {

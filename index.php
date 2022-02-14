@@ -68,6 +68,8 @@ class FastbackOutput {
 		$html .= '<script src="fastback_assets/jquery.min.js"></script>';
 		$html .= '<script src="fastback_assets/jquery-ui-1.12.1/jquery-ui.min.js"></script>';
 		$html .= '<script src="fastback_assets/hyperlist.js"></script>';
+		$html .= '<script src="fastback_assets/hammer.js"></script>';
+		$html .= '<script src="fastback_assets/jquery.hammer.js"></script>';
 		$html .= '<script src="fastback_assets/fastback.js"></script>';
 		$html .= '<script>
 			var FastbackBase = "' . $_SERVER['SCRIPT_NAME'] . '";

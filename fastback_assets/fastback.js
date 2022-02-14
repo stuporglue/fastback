@@ -1,40 +1,11 @@
 class Fastback {
 
 	/**
-	 * Our default properties.
-	 */
-	setProps() {
-		this.cacheurl = "./";
-		this.photourl = "./";
-		this.staticurl = "./";
-		this.fastbackurl = "./";
-		this.photos = [];
-		this.cols = 5;
-		this.palette = [ '#eedfd1', '#52a162', '#23403b', '#f3a14b', '#ec6c3e', '#d0464e', '#3a2028' ];
-
-
-		// Browser type
-		this.isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
-
-		// Browser supported file types - will be shown directly. 
-		// Anything not in this list will be proxied into a jpg
-		this.browser_supported_file_types = [
-			// videos
-			'mp4','m4v', 'ogg', 'mov',
-			// images
-		'jpg','jpeg','gif','png' ];
-
-		if ( this.isSafari ) {
-			this.browser_supported_file_types.push('mov');
-			this.browser_supported_file_types.push('mpg');
-		}
-	}
-
-	/**
 	 * Load the data and set up event handlers
 	 */
 	constructor(args) {
 		this.setProps();
+
 		var self = this;
 		jQuery.extend(this,args);
 		$.get(this.cacheurl + 'fastback.csv', function(data) {
@@ -51,17 +22,65 @@ class Fastback {
 
 
 			self.photos = self.add_date_blocks(self.photos);
+
+			// self.photos = self.photos.slice(0,100);
+
+			// Browsers can only support an object so big, so we can only use so many rows.
+			// Calculate the new max zoom
+			self.maxzoom = Math.ceil(Math.sqrt(fastback.hyperlist_container.width() * fastback.photos.length / HyperList.getMaxBrowserHeight()));
+
+			// Make sure our new cols doesn't go over the max zoom
+			self.cols = Math.max(self.maxzoom, self.cols);
+
+			self.hyperlist_container.addClass('up' + self.cols);
 		}).then(function(){
 			self.orig_photos = self.photos;
 			self.hyperlist_init();
 			self.load_nav();
 			jQuery('#zoom').on('change',self.zoom_change.bind(self));
 			jQuery('#photos').on('click','.tn',self.handle_thumb_click.bind(self));
+
+			/* Nav action handlers stuff */
 			jQuery('#thumbright').on('click',self.handle_thumb_next.bind(self));
 			jQuery('#thumbleft').on('click',self.handle_thumb_prev.bind(self));
 			jQuery('#thumbclose').on('click',self.hide_thumb.bind(self));
 			jQuery(document).on('keydown',self.keydown_handler.bind(self));
+			// Touch stuff
+			jQuery('#thumb').hammer({recognizers: [ 
+				[Hammer.Swipe,{ direction: Hammer.DIRECTION_ALL }],
+			]}).on('swiperight swipeup swipeleft', self.handle_thumb_swipe.bind(self));
 		});
+	}
+
+	/**
+	 * Our default properties.
+	 */
+	setProps() {
+		this.cacheurl = "./";
+		this.photourl = "./";
+		this.staticurl = "./";
+		this.fastbackurl = "./";
+		this.photos = [];
+		this.cols = 5;
+		this.palette = [ '#eedfd1', '#52a162', '#23403b', '#f3a14b', '#ec6c3e', '#d0464e', '#963755' ];
+		this.hyperlist_container = jQuery('#photos');
+
+		// Browser type
+		this.isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+
+		// Browser supported file types - will be shown directly. 
+		// Anything not in this list will be proxied into a jpg
+		this.browser_supported_file_types = [
+			// videos
+			'mp4','m4v', 'ogg', 'mov',
+			// images
+			'jpg','jpeg','gif','png' ];
+
+		if ( this.isSafari ) {
+			this.browser_supported_file_types.push('heic');
+			this.browser_supported_file_types.push('mov');
+			this.browser_supported_file_types.push('mpg');
+		}
 	}
 
 	/**
@@ -69,7 +88,6 @@ class Fastback {
 	 */
 	hyperlist_init() {
 		var self = this;
-		this.hyperlist_container = jQuery('#photos');
 
 		// Find our stylesheet
 		var stylesheet;
@@ -188,8 +206,8 @@ class Fastback {
 	zoom_change(e) {
 		this.cols = Math.max(this.maxzoom, parseInt(e.target.value));
 
-		jQuery('#photos').removeClass('up1 up2 up3 up4 up5 up6 up7 up8 up9 up10'.replace('up' + this.cols,' '));
-		jQuery('#photos').addClass('up' + this.cols);
+		this.hyperlist_container.removeClass('up1 up2 up3 up4 up5 up6 up7 up8 up9 up10'.replace('up' + this.cols,' '));
+		this.hyperlist_container.addClass('up' + this.cols);
 		this.refresh_layout();
 	}
 
@@ -201,7 +219,7 @@ class Fastback {
 	refresh_layout() {
 		// Browsers can only support an object so big, so we can only use so many rows.
 		// Calculate the new max zoom
-		this.maxzoom = Math.ceil(Math.sqrt(fastback.hyperlist_container.width() * fastback.photos.length / fastback.hyperlist._maxElementHeight))
+		this.maxzoom = Math.ceil(Math.sqrt(this.hyperlist_container.width() * this.photos.length / this.hyperlist._maxElementHeight));
 
 		// Make sure our new cols doesn't go over the max zoom
 		this.cols = Math.max(this.maxzoom, this.cols);
@@ -382,5 +400,15 @@ class Fastback {
 		}
 
 		return photos;
+	}
+
+	handle_thumb_swipe(e) {
+		if ( e.type == 'swiperight' ) {
+			this.handle_thumb_next();
+		} else if ( e.type == 'swipeleft' ) {
+			this.handle_thumb_prev();
+		} else if ( e.type == 'swipeup' ) {
+			this.hide_thumb();
+		}
 	}
 }
