@@ -41,7 +41,7 @@
 
 		// Browser supported file types - will be shown directly. 
 		// Anything not in this list will be proxied into a jpg
-		this.browser_supported_file_types = [ 
+		this.browser_supported_file_types = [
 			// videos
 			'mp4','m4v', 'ogg', 'mov',
 			// images

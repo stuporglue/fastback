@@ -46,6 +46,8 @@ class FastbackOutput {
 <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
 <title>' . htmlspecialchars($this->sitetitle) . '</title>
 <link rel="shortcut icon" href="fastback_assets/favicon.png"> 
+<link rel="apple-touch-icon" href="fastback_assets/favicon.png">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
 <link rel="stylesheet" href="fastback_assets/jquery-ui-1.12.1/jquery-ui.min.css">
 <link rel="stylesheet" href="fastback_assets/fastback.css">
 </head>';
@@ -56,8 +58,11 @@ class FastbackOutput {
 		$html .= '<div id="photos"></div>';
 		$html .= '<div id="resizer">';
 		$html .= '<div id="rewindicon"></div>';
+		$html .= '<div id="globeicon"></div>';
 		$html .= '<input type="range" min="1" max="10" value="5" class="slider" id="zoom">';
 		$html .= '</div>';
+		$html .= '<div id="notification"></div>';
+		$html .= '<div id="thumb" data-ythreshold=150><div id="thumbcontent"></div><div id="thumbcontrols"></div><div id="thumbclose">🆇</div><div id="thumbleft" class="thumbctrl">LEFT</div><div id="thumbright" class="thumbctrl">RIGHT</div></div>';
 		$html .= '</div>';
 		$html .= '<div id="calendaricon"><input readonly id="datepicker" type="text"></div>';
 		$html .= '<script src="fastback_assets/jquery.min.js"></script>';

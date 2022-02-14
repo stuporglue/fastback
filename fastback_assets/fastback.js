@@ -10,6 +10,24 @@ class Fastback {
 		this.fastbackurl = "./";
 		this.photos = [];
 		this.cols = 5;
+		this.palette = [ '#eedfd1', '#52a162', '#23403b', '#f3a14b', '#ec6c3e', '#d0464e', '#3a2028' ];
+
+
+		// Browser type
+		this.isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+
+		// Browser supported file types - will be shown directly. 
+		// Anything not in this list will be proxied into a jpg
+		this.browser_supported_file_types = [
+			// videos
+			'mp4','m4v', 'ogg', 'mov',
+			// images
+		'jpg','jpeg','gif','png' ];
+
+		if ( this.isSafari ) {
+			this.browser_supported_file_types.push('mov');
+			this.browser_supported_file_types.push('mpg');
+		}
 	}
 
 	/**
@@ -24,16 +42,33 @@ class Fastback {
 				var r = r.split("|");
 				return {
 					0: r[0],
-					1: Boolean(r[1]),
+					1: Boolean(parseInt(r[1])),
 					2: new Date(r[2]),
+					'type': 'media',
 					'do': r[2] 
 				};
 			});
+
+			var prev_date = null;
+			var cur_date;
+			for(var i = 0; i<self.photos.length; i++){
+				cur_date = self.photos[i]['do'].replace(/(....-..).*/,"$1");
+
+				if ( cur_date != prev_date ) {
+					self.photos.splice(i,0,{
+						'type': 'dateblock',
+						'date': cur_date
+					});
+				}
+
+				prev_date = cur_date;
+			}
 		}).then(function(){
 			self.orig_photos = self.photos;
 			self.hyperlist_init();
 			self.load_nav();
 			jQuery('#zoom').on('change',self.zoom_change.bind(self));
+			jQuery('#photos').on('click','.tn',self.handle_thumb_click.bind(self));
 		});
 	}
 
@@ -141,6 +176,17 @@ class Fastback {
 			self.refresh_layout();
 			self.hyperlist_container.prop('scrollTop',0);
 		});
+
+		jQuery('#globeicon').on('click',function(){
+			if ( jQuery('body').hasClass('map') ) {
+				jQuery('body').removeClass('map');
+			} else {
+				jQuery('body').addClass('map');
+				// TODO: Add map
+				// self.refresh_map();
+			}
+			self.refresh_layout();
+		});
 	}
 
 	/*
@@ -190,15 +236,65 @@ class Fastback {
 		var self = this;
 		var slice_from = (row * this.fastback.cols);
 		var slice_to = (row * this.fastback.cols) + this.fastback.cols;
-		var html = this.
-					fastback.
-					photos.
-					slice(slice_from,slice_to).
-					map(function(p){
-						return '<div class="tn"><img src="' + encodeURI(self.fastback.cacheurl + p[0]) + '.jpg"/></div>';
-					}).
-					join("");
+		var vidclass = '';
+		var date;
+		var html = this
+					.fastback
+					.photos
+					.slice(slice_from,slice_to)
+					.map(function(p){
+
+						if ( p['type'] == 'media' ) {
+							if ( p[1] ) {
+								vidclass = ' vid';
+							} else {
+								vidclass = '';
+							}
+							return '<div class="tn' + vidclass + '"><img src="' + encodeURI(self.fastback.cacheurl + p[0]) + '.jpg"/></div>';
+						} else if ( p['type'] == 'dateblock' ) {
+							date = new Date(p['date'] + '-01');
+							// I feel like this is kind of clever. I take the Year-Month, eg. 2021-12, parse it to an int like 202112 and then take the mod of the palette length to get a fixed random color for each date.
+							var cellhtml = '<div class="tn nolink" style="background-color: ' + self.fastback.palette[parseInt(p['date'].replace('-','')) % self.fastback.palette.length] + ';">';
+							cellhtml += '<div class="faketable">';
+							cellhtml += '<div class="faketablecell">' + date.toLocaleDateString(navigator.languages[0],{month:'long'}) + '</div>';
+							cellhtml += '<div class="faketablecell">' + date.getFullYear()  + '</div>';
+							cellhtml += '</div>';
+							cellhtml += '</div>';
+							return cellhtml;
+						}
+					})
+					.join("");
 		var e = jQuery.parseHTML('<div class="photorow">' + html + '</div>');
 		return e[0];
+	}
+
+	handle_thumb_click(e) {
+		var divwrap = jQuery(e.target).closest('div.tn');
+		var img = divwrap.find('img');
+
+		var imghtml;
+		var fullsize = this.photourl + img.attr('src').replace(/.jpg$/,'');
+
+		// File type not found, proxy a jpg instead
+		var supported_type = (this.browser_supported_file_types.indexOf(fullsize.replace(/.*\./,'').toLowerCase()) != -1);
+		if ( !supported_type ) {
+			fullsize = this.fastbackurl + '?proxy=' + encodeURIComponent(fullsize);	
+		}
+
+		if (divwrap.hasClass('vid') && supported_type){
+			imghtml = '<video controls poster="' + img.attr('src') + '"><source src="' + fullsize + '#t=0.0001">Your browser does not support this video format.</video>';
+		} else {
+			imghtml = '<img src="' + fullsize +'"/>';
+		}
+
+		var ctrlhtml = '<h2>' + (divwrap.data('d') + '') + '</h2>';
+		ctrlhtml += '<p><a class="download" href="' + this.photourl + img.attr('src').replace(/.jpg$/,'') + '" download>' + img.attr('alt') + '</a>';
+		ctrlhtml += '<br>';
+		ctrlhtml += '<a class="flag" onclick="return fastback.sendbyajax(this)" href=\"' + this.fastbackurl + '?flag=' + encodeURIComponent('./' + img.attr('src').replace(/.jpg$/,'')) + '\">Flag Image</a>';
+		ctrlhtml += '</p>';
+		jQuery('#thumbcontent').html(imghtml);
+		jQuery('#thumbcontrols').html(ctrlhtml);
+		jQuery('#thumb').data('curphoto',divwrap);
+		jQuery('#thumb').show();
 	}
 }
