@@ -10,7 +10,8 @@ class Fastback {
 		jQuery.extend(this,args);
 		$.get(this.cacheurl + 'fastback.csv', function(data) {
 			self.photos = data.trim().split("\n").map(function(r){
-				var r = r.split("|");
+				var r = r.split(",");
+				r = r.map(function(e){ return e.replace(/^"/,'').replace(/"$/,"");});
 				return {
 					'file': r[0],
 					'isvideo': Boolean(parseInt(r[1])),
@@ -410,5 +411,13 @@ class Fastback {
 		} else if ( e.type == 'swipeup' ) {
 			this.hide_thumb();
 		}
+	}
+
+	sendbyajax(link) {
+		var thelink = link;
+		jQuery.get(thelink.href).then(function(){
+			jQuery(thelink).hide();
+		});
+		return false;
 	}
 }
