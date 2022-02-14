@@ -101,6 +101,7 @@ body .up10 .tn {width: calc(100vw/10); height: calc(100vw/10);}
 
 
 
+/*
 body       .tn.nolink {font-size: 4vw; }
 body .up1  .tn.nolink {font-size: 22vw; }
 body .up2  .tn.nolink {font-size: 10vw; }
@@ -112,6 +113,7 @@ body .up7  .tn.nolink {font-size: 3vw; }
 body .up8  .tn.nolink {font-size: 2.5vw; }
 body .up9  .tn.nolink {font-size: 2.2vw; }
 body .up10 .tn.nolink {font-size: 2vw; }
+*/
 
 /* When the map is open AND we're landscape, everything is half as wide */
 @media(orientation: landscape) {
@@ -208,6 +210,86 @@ body .up10 .tn.nolink {font-size: 2vw; }
 		border: 2px inset black;
 		box-sizing: border-box;
 	}
+
+
+	/** Thumbnail controls **/
+#thumb {
+	position: absolute;
+	box-sizing: border-box;
+	top: 0;
+	left: 0;
+	height: calc(100% - 20px);
+	width: calc(100% - 20px);
+	margin: 10px;
+	background-color: rgba(255,255,255,.8);
+	border-radius: 4px;
+	-webkit-transition: opacity 5s ease-in-out;
+	-moz-transition: opacity 5s ease-in-out;
+	-ms-transition: opacity 5s ease-in-out;
+	-o-transition: opacity 5s ease-in-out;
+	padding: 10px;
+	display: none;
+	z-index: 10;
+}
+
+#thumbcontrols {
+	background-color: rgba(100,100,255,.8);
+	height: 100px;
+	position: absolute;
+	bottom: 0;
+	left: 0;
+	width: 100%;
+}
+
+#thumbclose {
+	position: absolute;
+	bottom: 70px;
+	right: 10px;
+	cursor: pointer;
+}
+
+#thumb h2 {
+	font-size: 16px;
+	color: #333;
+	margin:0;
+	padding:0;
+}
+
+.thumbctrl {
+	width: 150px;
+	max-width: 30%;
+	height: calc(100% - 150px);
+	position: absolute;
+	top: 0;
+	opacity: 0;
+	background-color: rgba(255,255,255,0.8);
+	z-index: 100000;
+}
+
+.thumbctrl:hover {
+	opacity: 1;
+}
+
+#thumbleft {
+	left: 0;
+}
+#thumbright {
+	right: 0;
+}
+
+
+#thumbcontent {
+	overflow: hidden;
+	height: calc(100% - 100px);
+	width: 100%;
+}
+
+#thumbcontent img,
+#thumbcontent video {
+	height: 100%;
+	width: 100%;
+	object-fit: contain;
+}
 
 
 

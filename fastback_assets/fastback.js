@@ -41,34 +41,26 @@ class Fastback {
 			self.photos = data.trim().split("\n").map(function(r){
 				var r = r.split("|");
 				return {
-					0: r[0],
-					1: Boolean(parseInt(r[1])),
-					2: new Date(r[2]),
+					'file': r[0],
+					'isvideo': Boolean(parseInt(r[1])),
+					'date': new Date(r[2]),
 					'type': 'media',
-					'do': r[2] 
+					'dateorig': r[2] 
 				};
 			});
 
-			var prev_date = null;
-			var cur_date;
-			for(var i = 0; i<self.photos.length; i++){
-				cur_date = self.photos[i]['do'].replace(/(....-..).*/,"$1");
 
-				if ( cur_date != prev_date ) {
-					self.photos.splice(i,0,{
-						'type': 'dateblock',
-						'date': cur_date
-					});
-				}
-
-				prev_date = cur_date;
-			}
+			self.photos = self.add_date_blocks(self.photos);
 		}).then(function(){
 			self.orig_photos = self.photos;
 			self.hyperlist_init();
 			self.load_nav();
 			jQuery('#zoom').on('change',self.zoom_change.bind(self));
 			jQuery('#photos').on('click','.tn',self.handle_thumb_click.bind(self));
+			jQuery('#thumbright').on('click',self.handle_thumb_next.bind(self));
+			jQuery('#thumbleft').on('click',self.handle_thumb_prev.bind(self));
+			jQuery('#thumbclose').on('click',self.hide_thumb.bind(self));
+			jQuery(document).on('keydown',self.keydown_handler.bind(self));
 		});
 	}
 
@@ -118,8 +110,8 @@ class Fastback {
 	load_nav() {
 		var self = this;
 		// first date (in tags list) -- The default is Descending view, so this should be the greatest date
-		var fd = this.photos[0][2];
-		var ld = this.photos[this.photos.length - 1][2];
+		var fd = this.photos[0]['date'];
+		var ld = this.photos[this.photos.length - 1]['date'];
 
 		// If fd is not the greatest date, swap 'em
 		if ( fd > ld ) {
@@ -144,11 +136,11 @@ class Fastback {
 				var targetdate = new Date(date + ' 00:00:00');
 
 				// Find the first photo that is younger than our target photo
-				var first = self.photos.findIndex(o => o[2] <= targetdate);
+				var first = self.photos.findIndex(o => o['date'] <= targetdate);
 
-				// If we don't find one, just start at photo 0
-				if ( first === undefined ) {
-					first = 0;
+				// If we don't find one, go all the way to the end
+				if ( first === undefined || first === -1 ) {
+					first = self.photos.length - 1;
 				}
 
 				// Get the row number now
@@ -170,7 +162,8 @@ class Fastback {
 				var d = new Date();
 				var datepart = ((d.getMonth() + 1) + "").padStart(2,"0") + '-' + (d.getDate() + "").padStart(2,"0")
 				var re = new RegExp('^....-' + datepart + ' ');
-				self.photos = fastback.photos.filter(function(p){return p.do.match(re);});
+				self.photos = fastback.photos.filter( function(p){ return p.type === 'media' && p.dateorig.match(re);} );
+				self.photos = self.add_date_blocks(self.photos);
 			}
 
 			self.refresh_layout();
@@ -245,16 +238,16 @@ class Fastback {
 					.map(function(p){
 
 						if ( p['type'] == 'media' ) {
-							if ( p[1] ) {
+							if ( p['isvideo'] ) {
 								vidclass = ' vid';
 							} else {
 								vidclass = '';
 							}
-							return '<div class="tn' + vidclass + '"><img src="' + encodeURI(self.fastback.cacheurl + p[0]) + '.jpg"/></div>';
+							return '<div class="tn' + vidclass + '"><img data-photoid="' + p['id'] + '" src="' + encodeURI(self.fastback.cacheurl + p['file']) + '.jpg"/></div>';
 						} else if ( p['type'] == 'dateblock' ) {
-							date = new Date(p['date'] + '-01');
+							date = new Date(p['printdate'] + '-01');
 							// I feel like this is kind of clever. I take the Year-Month, eg. 2021-12, parse it to an int like 202112 and then take the mod of the palette length to get a fixed random color for each date.
-							var cellhtml = '<div class="tn nolink" style="background-color: ' + self.fastback.palette[parseInt(p['date'].replace('-','')) % self.fastback.palette.length] + ';">';
+							var cellhtml = '<div class="tn nolink" style="background-color: ' + self.fastback.palette[parseInt(p['printdate'].replace('-','')) % self.fastback.palette.length] + ';">';
 							cellhtml += '<div class="faketable">';
 							cellhtml += '<div class="faketablecell">' + date.toLocaleDateString(navigator.languages[0],{month:'long'}) + '</div>';
 							cellhtml += '<div class="faketablecell">' + date.getFullYear()  + '</div>';
@@ -273,7 +266,11 @@ class Fastback {
 		var img = divwrap.find('img');
 
 		var imghtml;
-		var fullsize = this.photourl + img.attr('src').replace(/.jpg$/,'');
+
+		var photoid = img.data('photoid');
+		var imgsrc = this.photos[photoid]['file'];
+		var basename = imgsrc.replace(/.*\//,'');
+		var fullsize = this.photourl + imgsrc;
 
 		// File type not found, proxy a jpg instead
 		var supported_type = (this.browser_supported_file_types.indexOf(fullsize.replace(/.*\./,'').toLowerCase()) != -1);
@@ -287,14 +284,103 @@ class Fastback {
 			imghtml = '<img src="' + fullsize +'"/>';
 		}
 
-		var ctrlhtml = '<h2>' + (divwrap.data('d') + '') + '</h2>';
-		ctrlhtml += '<p><a class="download" href="' + this.photourl + img.attr('src').replace(/.jpg$/,'') + '" download>' + img.attr('alt') + '</a>';
+		var ctrlhtml = '<h2>' + basename + '</h2>';
+		ctrlhtml += '<p><a class="download" href="' + fullsize + '" download>' + basename + '</a>';
 		ctrlhtml += '<br>';
-		ctrlhtml += '<a class="flag" onclick="return fastback.sendbyajax(this)" href=\"' + this.fastbackurl + '?flag=' + encodeURIComponent('./' + img.attr('src').replace(/.jpg$/,'')) + '\">Flag Image</a>';
+		ctrlhtml += '<a class="flag" onclick="return fastback.sendbyajax(this)" href=\"' + this.fastbackurl + '?flag=' + encodeURIComponent(imgsrc) + '\">Flag Image</a>';
 		ctrlhtml += '</p>';
 		jQuery('#thumbcontent').html(imghtml);
 		jQuery('#thumbcontrols').html(ctrlhtml);
-		jQuery('#thumb').data('curphoto',divwrap);
+		jQuery('#thumb').data('curphoto',photoid);
 		jQuery('#thumb').show();
+	}
+
+	handle_thumb_next(e) {
+
+		var photoid = jQuery('#thumb').data('curphoto');
+
+		while(true) {
+			photoid++;
+
+			if ( photoid === this.photos.length ) {
+				return false;
+			}
+
+			if ( this.photos[photoid].type === 'media' ) {
+				var nextm = jQuery('div.tn img[data-photoid="' + photoid + '"]');
+
+				if (nextm.length > 0) {
+					nextm.trigger('click'); 
+					return true;
+				} else {
+					return false;
+				}
+			}
+		}
+	}
+
+	handle_thumb_prev(e) {
+		var photoid = jQuery('#thumb').data('curphoto');
+
+		while(true) {
+			photoid--;
+
+			if ( photoid < 0 ) {
+				return false;
+			}
+
+			if ( this.photos[photoid].type === 'media' ) {
+				var prevm = jQuery('div.tn img[data-photoid="' + photoid + '"]');
+
+				if (prevm.length > 0) {
+					prevm.trigger('click'); 
+					return true;
+				} else {
+					return false;
+				}
+			}
+		}
+	}
+
+	hide_thumb() {
+		jQuery('#thumb').hide();
+		jQuery('#thumbcontent').html("");
+		jQuery('#thumbcontrols').html("");
+	}
+
+	keydown_handler(e) {
+		switch(e.key){
+			case 'Escape':
+				this.hide_thumb();
+				break;
+			case 'ArrowRight':
+				this.handle_thumb_next();
+				break;
+			case 'ArrowLeft':
+				this.handle_thumb_prev();
+				break;
+		}
+	}
+
+	add_date_blocks(photos) {
+		var prev_date = null;
+		var cur_date;
+		for(var i = 0; i<photos.length; i++){
+			cur_date = photos[i]['dateorig'].replace(/(....-..).*/,"$1");
+
+			if ( cur_date != prev_date ) {
+				photos.splice(i,0,{
+					'type': 'dateblock',
+					'printdate': cur_date,
+					'date': photos[i]['date']
+				});
+			}
+
+			photos[i].id = i;
+
+			prev_date = cur_date;
+		}
+
+		return photos;
 	}
 }
