@@ -9,15 +9,16 @@ class Fastback {
 		var self = this;
 		jQuery.extend(this,args);
 		$.get(this.cacheurl + 'fastback.csv', function(data) {
-			self.photos = data.trim().split("\n").map(function(r){
-				var r = r.split(",");
-				r = r.map(function(e){ return e.replace(/^"/,'').replace(/"$/,"");});
+			var res = Papa.parse(data.trim());
+			self.photos = res.data.map(function(r){
 				return {
 					'file': r[0],
 					'isvideo': Boolean(parseInt(r[1])),
 					'date': new Date(r[2]),
 					'type': 'media',
-					'dateorig': r[2] 
+					// Our csv is in x,y,z (lon,lat,elevation), but leaflet wants (lat,lon,elevation) so we swap lat/lon here.
+					'coordinates': (isNaN(parseFloat(r[3])) ? null : [parseFloat(r[4]),parseFloat(r[3]),parseFloat(r[5])]),
+					'dateorig': r[2]
 				};
 			});
 
@@ -37,6 +38,7 @@ class Fastback {
 		}).then(function(){
 			self.orig_photos = self.photos;
 			self.hyperlist_init();
+			self.map_init();
 			self.load_nav();
 			jQuery('#zoom').on('change',self.zoom_change.bind(self));
 			jQuery('#photos').on('click','.tn',self.handle_thumb_click.bind(self));
@@ -176,6 +178,7 @@ class Fastback {
 			if ( icon.hasClass('active') ) {
 				icon.removeClass('active');
 				self.photos = self.orig_photos;
+				self.map_update_geojson();
 			} else {
 				jQuery('#rewindicon').addClass('active');
 				var d = new Date();
@@ -183,6 +186,7 @@ class Fastback {
 				var re = new RegExp('^....-' + datepart + ' ');
 				self.photos = fastback.photos.filter( function(p){ return p.type === 'media' && p.dateorig.match(re);} );
 				self.photos = self.add_date_blocks(self.photos);
+				self.map_update_geojson();
 			}
 
 			self.refresh_layout();
@@ -194,8 +198,7 @@ class Fastback {
 				jQuery('body').removeClass('map');
 			} else {
 				jQuery('body').addClass('map');
-				// TODO: Add map
-				// self.refresh_map();
+				self.fmap.lmap.invalidateSize();
 			}
 			self.refresh_layout();
 		});
@@ -385,7 +388,16 @@ class Fastback {
 		var prev_date = null;
 		var cur_date;
 		for(var i = 0; i<photos.length; i++){
-			cur_date = photos[i]['dateorig'].replace(/(....-..).*/,"$1");
+
+			if ( photos[i].type !== 'media' ) {
+				continue;
+			}
+
+			if ( photos[i].dateorig === undefined ) {
+				continue;
+			}
+
+			cur_date = photos[i].dateorig.replace(/(....-..).*/,"$1");
 
 			if ( cur_date != prev_date ) {
 				photos.splice(i,0,{
@@ -420,4 +432,79 @@ class Fastback {
 		});
 		return false;
 	}
+
+	map_init() {
+		this.fmap = {
+			'lmap':  L.map('map').setView([0,0], 2),
+			'base_map':  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+					maxZoom: 19,
+					attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+				}),
+			'clusterlayer': L.markerClusterGroup({
+				spiderfyOnMaxZoom: false
+			})
+		}
+
+		this.fmap.base_map.addTo(this.fmap.lmap);
+		this.fmap.clusterlayer.addTo(this.fmap.lmap);
+
+		this.map_update_geojson();
+	}
+
+	map_update_geojson() {
+		var bbox = [0,0,0,0,0,0];
+		var geojson = {
+			'type': 'FeatureCollection',
+			'features': []
+		};
+
+		var feature = {};
+		for(var i = 0;i<this.photos.length;i++){
+			if (this.photos[i].coordinates !== undefined && this.photos[i].coordinates !== null && this.photos[i].type === 'media') {
+
+				if ( this.photos[i].coordinates[0] == 0 && this.photos[i].coordinates[1] == 0 ) {
+					continue;
+				}
+
+				feature = {
+					'type': 'Feature',
+					'geometry': {
+						'type': 'Point',
+						'coordinates' : this.photos[i].coordinates,
+					},
+					'properties': {
+						'id': i,
+						'file': this.photos[i].file,
+						'date': this.photos[i].date,
+						'isvideo': this.photos[i].isvideo
+					}
+				};
+				geojson.features.push(feature);
+
+				// Lon
+				bbox[0] = Math.min(bbox[0],this.photos[i].coordinates[0]);
+				bbox[3] = Math.max(bbox[3],this.photos[i].coordinates[0]);
+
+				// Lat
+				bbox[1] = Math.min(bbox[1],this.photos[i].coordinates[1]);
+				bbox[4] = Math.max(bbox[4],this.photos[i].coordinates[1]);
+
+				// Elev
+				bbox[2] = Math.min(bbox[2],this.photos[i].coordinates[2]);
+				bbox[5] = Math.max(bbox[5],this.photos[i].coordinates[2]);
+			}
+		}
+
+		geojson.bbox = bbox;
+
+		var gj = L.geoJson(geojson);
+
+		this.fmap.clusterlayer.clearLayers()
+		this.fmap.clusterlayer.addLayer(gj);
+
+		this.fmap.lmap.fitBounds(this.fmap.clusterlayer.getBounds(),{
+			'chunkedLoading': true
+		});
+	}
 }
+// window.onscreen = jQuery('.photorow:visible').toArray().filter(function(r){return jQuery(r).position().top < window.innerHeight;})

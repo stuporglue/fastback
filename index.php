@@ -122,6 +122,9 @@ class FastbackOutput {
 			<link rel="apple-touch-icon" href="fastback_assets/favicon.png">
 			<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
 			<link rel="stylesheet" href="fastback_assets/jquery-ui-1.12.1/jquery-ui.min.css">
+			<link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" integrity="sha512-xodZBNTC5n17Xt2atTPuE1HxjVMSvLVW9ocqUKLsCC5CXdbqCmblAshOMAS6/keqq/sMZMZ19scR4PsZChSR7A==" crossorigin="" />
+			<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.0.3/dist/MarkerCluster.Default.css"/>
+			<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>
 			<link rel="stylesheet" href="fastback_assets/fastback.css">
 			</head>';
 
@@ -130,19 +133,22 @@ class FastbackOutput {
 		$html .= '<div id="hyperlist_wrap">';
 		$html .= '<div id="photos"></div>';
 		$html .= '<div id="resizer">';
-		$html .= '<div id="rewindicon"></div>';
-		$html .= '<div id="globeicon"></div>';
-		$html .= '<input type="range" min="1" max="10" value="5" class="slider" id="zoom">';
+			$html .= '<div id="rewindicon"></div>';
+			$html .= '<div id="globeicon"></div>';
+			$html .= '<input type="range" min="1" max="10" value="5" class="slider" id="zoom">';
 		$html .= '</div>';
 		$html .= '<div id="notification"></div>';
 		$html .= '<div id="thumb" data-ythreshold=150><div id="thumbcontent"></div><div id="thumbcontrols"></div><div id="thumbclose">🆇</div><div id="thumbleft" class="thumbctrl">LEFT</div><div id="thumbright" class="thumbctrl">RIGHT</div></div>';
 		$html .= '</div>';
 		$html .= '<div id="calendaricon"><input readonly id="datepicker" type="text"></div>';
 		$html .= '<script src="fastback_assets/jquery.min.js"></script>';
-		$html .= '<script src="fastback_assets/jquery-ui-1.12.1/jquery-ui.min.js"></script>';
+		$html .= '<script src="fastback_assets/jquery-ui.min.js"></script>';
 		$html .= '<script src="fastback_assets/hyperlist.js"></script>';
 		$html .= '<script src="fastback_assets/hammer.js"></script>';
+		$html .= '<script src="fastback_assets/papaparse.min.js"></script>';
 		$html .= '<script src="fastback_assets/jquery.hammer.js"></script>';
+		$html .= '<script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js" integrity="sha512-XQoYMqMTK8LvdxXYG3nZ448hOEQiglfqkJs1NOQV44cWnUrBc8PkAOcXy20w0vlaXaVUearIOBhiXZ5V3ynxwA==" crossorigin=""></script>';
+		$html .= '<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>';
 		$html .= '<script src="fastback_assets/fastback.js"></script>';
 		$html .= '<script>
 			var FastbackBase = "' . $_SERVER['SCRIPT_NAME'] . '";

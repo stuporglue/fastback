@@ -107,3 +107,16 @@ The following tags are used to find location info
  
  	Additionally, if the altitude tag is present, the altitude is recorded. Otherwise it is set to 0
  	+ GPSAltitude
+
+License
+-------
+This project is under the MIT License. 
+
+It uses code from many other projects under various Open Source licenses, including: 
+ * hyperlist 
+ * PapaParse 
+ * jQuery (jQuery, jQuery-ui, jquery-hammer)
+ * Leaflet (Leaflet.js, Leaflet MarkerCluster)
+ * hammer.js
+
+Many thanks to the maintainers and developers of these projects for making this possible.
