@@ -76,7 +76,6 @@ class FastbackOutput {
 		$this->cacheurl = dirname($_SERVER['SCRIPT_NAME']) . '/cache/';
 		$this->photobase = __DIR__ . '/';
 		$this->photourl = dirname($_SERVER['SCRIPT_NAME']) . '/';
-		$this->staticurl = dirname($_SERVER['SCRIPT_NAME']) . '/';
 		$this->sitetitle = "Fastback Photo Gallery";
 		$this->sortorder = ($this->sortorder == 'ASC' ? 'ASC' : 'DESC');
 
@@ -97,7 +96,6 @@ class FastbackOutput {
 		$this->cacheurl = rtrim($this->cacheurl,'/') . '/';
 		$this->photobase = rtrim($this->photobase,'/') . '/';
 		$this->photourl = rtrim($this->photourl,'/') . '/';
-		$this->staticurl = rtrim($this->staticurl,'/') . '/';
 
 		if (php_sapi_name() === 'cli') {
 			$this->handle_cli();
@@ -156,7 +154,6 @@ class FastbackOutput {
 		var fastback = new Fastback({
 		cacheurl:    "' . $this->cacheurl . '",
 			photourl:    "' . $this->photourl .'",
-			staticurl:   "' . $this->staticurl . '",
 			fastbackurl: "' . $_SERVER['SCRIPT_NAME'] . '"
 	});
 			</script>';
@@ -300,6 +297,7 @@ class FastbackOutput {
 			} 
 
 			$this->log("Using $this->nproc processes for forks");
+			$this->log("Using sqlite database " . $this->filecache . '/fastback.sqlite');
 
 			$tasks = array();
 			switch($argv[1]) {
@@ -416,7 +414,7 @@ class FastbackOutput {
 
 		chdir($this->photobase);
 		$filetypes = implode('\|',array_merge($this->supported_photo_types, $this->supported_video_types));
-		$cmd = 'find . -type f -regextype sed -iregex  "./[0-9]\{4\}/[0-9]\{2\}/[0-9]\{2\}/.*\(' . $filetypes . '\)$" -newerat ' . $lastmod;
+		$cmd = 'find . -type f -regextype sed -iregex  ".*\(' . $filetypes . '\)$" -newerat ' . $lastmod;
 		$modified_files_str = `$cmd`;
 
 		if (  is_null($modified_files_str) || strlen(trim($modified_files_str)) === 0) {
@@ -427,7 +425,7 @@ class FastbackOutput {
 		$modified_files = array_filter($modified_files);
 
 		$today = date('Ymd');
-		$multi_insert = "INSERT INTO fastback (file,mtime,sorttime,isvideo) VALUES ";
+		$multi_insert = "INSERT INTO fastback (file,mtime,isvideo) VALUES ";
 		$multi_insert_tail = " ON CONFLICT(file) DO UPDATE SET isvideo=";
 		$collect_photo = array();
 		$collect_video = array();
@@ -446,9 +444,15 @@ class FastbackOutput {
 			}
 
 			if ( in_array(strtolower($pathinfo['extension']),$this->supported_video_types) ) {
-				$collect_video[] = "('" . SQLite3::escapeString($one_file) . "','" . SQLite3::escapeString($mtime) . "','" . SQLite3::escapeString(preg_replace('|.*([0-9]{4})/([0-9]{2})/([0-9]{2})/.*|','\1-\2-\3',$one_file)) . "',1)";
+				$collect_video[] = "('" . 
+					SQLite3::escapeString($one_file) . "','" 
+					. SQLite3::escapeString($mtime) . "','" . 
+					"',1)";
 			} else if ( in_array(strtolower($pathinfo['extension']),$this->supported_photo_types) ) {
-				$collect_photo[] = "('" . SQLite3::escapeString($one_file) . "','" . SQLite3::escapeString($mtime) . "','" . SQLite3::escapeString(preg_replace('|.*([0-9]{4})/([0-9]{2})/([0-9]{2})/.*|','\1-\2-\3',$one_file)) . "',0)";
+				$collect_photo[] = "('" . 
+					SQLite3::escapeString($one_file) . "','" . 
+					SQLite3::escapeString($mtime) . "','" . 
+					"',0)";
 			} else {
 				error_log("Don't know what to do with " . print_r($pathinfo,true));
 			}
@@ -623,7 +627,7 @@ class FastbackOutput {
 	}
 
 	public function get_times() {
-		$this->_fork_em('_get_times', "SELECT COUNT(*) FROM fastback WHERE LENGTH(sorttime) = 10 AND flagged IS NOT TRUE AND exif IS NOT NULL");
+		$this->_fork_em('_get_times', "SELECT COUNT(*) FROM fastback WHERE sorttime IS NULL AND flagged IS NOT TRUE AND exif IS NOT NULL");
 	}
 
 	private function _fork_em($childfunc,$statussql) {
@@ -721,9 +725,18 @@ class FastbackOutput {
 			$updated_timestamps = array();
 			$flagged = array();
 
-			$queue = $this->get_queue("LENGTH(sorttime) = 10 AND _util IS NULL AND file != \"\" AND flagged IS NOT TRUE AND exif IS NOT NULL",10); 
+			$queue = $this->get_queue("sorttime IS NULL AND _util IS NULL AND file != \"\" AND flagged IS NOT TRUE AND exif IS NOT NULL",10); 
 
 			foreach($queue as $file => $row) {
+
+				// If the user has put the file in a date directory (YYYY/MM/DD) then use that as the date
+				// otherwise, fall back on meta data
+				if ( preg_match('|.*([0-9]{4})/([0-9]{2})/([0-9]{2})/[^\/]*|',$file)) {
+					$datepart = preg_replace('|.*([0-9]{4})/([0-9]{2})/([0-9]{2})/[^\/]*|','\1-\2-\3',$file);
+				} else {
+					$datepart = NULL;
+				}
+
 				$found = false;
 				$exif = json_decode($row['exif'],TRUE);
 
@@ -754,17 +767,11 @@ class FastbackOutput {
 						}
 					}
 
-					/* We trust the folder structure more than the exif info because we assume the user put media
-					 * in the right place. So, f we find an embedded timestamp, rebuild the path it's supposed to be at. 
-					 * If the date matches, update the time with the exif time. 
-					 * If it doesn't match, update the sorttime with midnight.
-					 */
-					$matchpath = "/$matches[1]/$matches[2]/$matches[3]/" . basename($file);
-
-					if ( strpos($file,$matchpath) !== FALSE ) {
-						$updated_timestamps[$file] = '"' . $matches[1] . '-' . $matches[2] . '-' . $matches[3] . ' ' . $matches[4] . ':' . $matches[5] . ':' . $matches[6] . '"';
+					// If the file was in a date folder, then use that date with the best datepart we have.
+					if ( !is_null($datepart) ) {
+						$updated_timestamps[$file] = $datepart . " " . $matches[4] . ':' . $matches[5] . ':' . $matches[6] . '"';
 					} else {
-						$updated_timestamps[$file] = 'sorttime || " 00:00:00"';
+						$updated_timestamps[$file] = '"' . $matches[1] . '-' . $matches[2] . '-' . $matches[3] . ' ' . $matches[4] . ':' . $matches[5] . ':' . $matches[6] . '"';
 					}
 
 					$found = true;
@@ -772,7 +779,8 @@ class FastbackOutput {
 				}
 
 				if ( !$found ){
-					$updated_timestamps[$file] = 'sorttime || " 00:00:01"';
+					// $updated_timestamps[$file] = 'sorttime || " 00:00:01"';
+					die("Every file should have a FileModifyDate since that's not actually exif. $file");
 				}
 			}
 
@@ -1158,8 +1166,6 @@ class FastbackOutput {
 		$this->sql->query($update_q);
 		$this->sql_disconnect();
 	}
-
-
 }
 
 $fb = new FastbackOutput();

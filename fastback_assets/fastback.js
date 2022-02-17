@@ -67,7 +67,6 @@ class Fastback {
 	setProps() {
 		this.cacheurl = "./";
 		this.photourl = "./";
-		this.staticurl = "./";
 		this.fastbackurl = "./";
 		this.photos = [];
 		this.cols = 5;
