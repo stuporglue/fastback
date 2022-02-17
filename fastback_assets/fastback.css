@@ -69,7 +69,27 @@ body #photos .photorow {
 {
 	width: 100%;
 	height: 100%;
+	box-sizing: border-box;	
 }
+
+.photorow > .tn.flash:after {
+	position: absolute;
+	z-index: 3;
+	display: block;
+	width: 100%;
+	height: 100%;
+	background-color: white;
+	top: 0;
+	left: 0;
+	content: " ";
+	opacity: 0.4;
+	-webkit-transition: opacity 0.05s ease-in-out;
+	-moz-transition: opacity 0.05s ease-in-out;
+	-ms-transition: opacity 0.05s ease-in-out;
+	-o-transition: opacity 0.05s ease-in-out;
+	transition: opacity 0.05s ease-in-out;
+}
+
 
 .tn.vid:before {
 	display: block;
