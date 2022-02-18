@@ -78,6 +78,7 @@ class FastbackOutput {
 		$this->photourl = dirname($_SERVER['SCRIPT_NAME']) . '/';
 		$this->sitetitle = "Fastback Photo Gallery";
 		$this->sortorder = ($this->sortorder == 'ASC' ? 'ASC' : 'DESC');
+		$this->filestructure = 'datebased'; // Or all
 
 		if ( file_exists(__DIR__ . '/fastback.ini') ) {
 			$settings = parse_ini_file(__DIR__ . '/fastback.ini');
@@ -446,7 +447,14 @@ class FastbackOutput {
 
 		chdir($this->photobase);
 		$filetypes = implode('\|',array_merge($this->supported_photo_types, $this->supported_video_types));
-		$cmd = 'find . -type f -regextype sed -iregex  ".*\(' . $filetypes . '\)$" -newerat ' . $lastmod;
+		if ( $this->filestructure === 'datebased' ) {
+			$cmd = 'find . -type f -regextype sed -iregex  "./[0-9]\{4\}/[0-9]\{2\}/[0-9]\{2\}/.*\(' . $filetypes . '\)$" -newerat ' . $lastmod;
+		} else if ( $this->filestructure === 'all' ) {
+			$cmd = 'find . -type f -regextype sed -iregex  ".*\(' . $filetypes . '\)$" -newerat ' . $lastmod;
+		} else {
+			die("I don't know what kind of file structure to look for");
+		}
+
 		$modified_files_str = `$cmd`;
 
 		if (  is_null($modified_files_str) || strlen(trim($modified_files_str)) === 0) {
