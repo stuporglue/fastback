@@ -82,9 +82,9 @@ class Fastback {
 		// Anything not in this list will be proxied into a jpg
 		this.browser_supported_file_types = [
 			// videos
-			'mp4','m4v', 'ogg', 'mov',
+			'mp4','m4v', 'ogg', 'mov', 'webm',
 			// images
-			'jpg','jpeg','gif','png' ];
+			'jpg','jpeg','gif','png','webp' ];
 
 		if ( this.isSafari ) {
 			this.browser_supported_file_types.push('heic');
@@ -245,7 +245,7 @@ class Fastback {
 					} else {
 						vidclass = '';
 					}
-					return '<div class="tn' + vidclass + '"><img data-dateorig="' + p['dateorig']+ '" data-photoid="' + p['id'] + '" src="' + encodeURI(self.cacheurl + p['file']) + '.jpg"/></div>';
+					return '<div class="tn' + vidclass + '"><img data-dateorig="' + p['dateorig']+ '" data-photoid="' + p['id'] + '" src="' + encodeURI(self.cacheurl + p['file']) + '.webp"/></div>';
 				} else if ( p['type'] == 'dateblock' ) {
 					date = p['date'];
 					// I feel like this is kind of clever. I take the Year-Month, eg. 2021-12, parse it to an int like 202112 and then take the mod of the palette length to get a fixed random color for each date.

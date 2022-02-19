@@ -1,5 +1,7 @@
 <?php
 
+declare(ticks = 1);
+
 class FastbackOutput {
 
 	var $sitetitle = "Fastback Photo Gallery";
@@ -46,6 +48,7 @@ class FastbackOutput {
 		'gif',
 		'tif',
 		'heic',
+		'webp',
 	);
 
 	var $supported_video_types = array(
@@ -59,7 +62,8 @@ class FastbackOutput {
 		'mpeg',
 		'mpg',
 		'ogg',
-		'vob'
+		'vob',
+		'webm',
 	);
 
 	var $meta =array();
@@ -79,6 +83,7 @@ class FastbackOutput {
 		$this->sitetitle = "Fastback Photo Gallery";
 		$this->sortorder = ($this->sortorder == 'ASC' ? 'ASC' : 'DESC');
 		$this->filestructure = 'datebased'; // Or all
+		$this->nproc = `nproc`;
 
 		if ( file_exists(__DIR__ . '/fastback.ini') ) {
 			$settings = parse_ini_file(__DIR__ . '/fastback.ini');
@@ -88,7 +93,7 @@ class FastbackOutput {
 		}
 
 		if ( !is_dir($this->filecache) ) {
-			error_log("Fastback cache directory {$this->filecache} doesn't exist");
+			$this->log("Fastback cache directory {$this->filecache} doesn't exist");
 			die("Fastback setup error. See error log.");
 		}
 
@@ -199,16 +204,16 @@ class FastbackOutput {
 		$file = $_GET['proxy'];
 
 		if ( strpos($file,'/../') !== 0 ) {
-			error_log("Someone tried to use /../ ($file) to get outside of the allowed directories");
+			$this->log("Someone tried to use /../ ($file) to get outside of the allowed directories");
 		}
 
 		if ( strpos($file,$this->photobase) !== 0 ) {
-			error_log("Someone tried to access $file, a photo outside of the photobase");
+			$this->log("Someone tried to access $file, a photo outside of the photobase");
 			die("");
 		}
 
 		if ( !file_exists($file) ) {
-			error_log("Someone tried to access $file, which doesn't exist");
+			$this->log("Someone tried to access $file, which doesn't exist");
 			die("");
 		}
 
@@ -312,9 +317,24 @@ class FastbackOutput {
 		}
 	}
 
+	private function signal_handler() {
+		$this->end_all_children = true;
+		if ( !empty($this->children) ) {
+			$this->log("Got an exit command. Telling children and then exiting");
+		} else {
+			$this->log("No children. Exiting directly.");
+			exit();
+		}
+	}
+
 
 	private function handle_cli(){
 			global $argv,$argc;
+
+			pcntl_signal(SIGINT, array(&$this,'signal_handler'));
+			pcntl_signal(SIGTERM, array(&$this,'signal_handler'));
+			$this->end_all_children = false;
+			$this->children = array();
 
 			if ( !isset($argv) || count($argv) == 1 ) {
 				$argv[1] = 'handle_new';
@@ -339,6 +359,9 @@ class FastbackOutput {
 			case 'reset_cache':
 				$tasks = array('reset_cache');
 				break;
+			case 'reset_db':
+				$tasks = array('reset_db');
+				break;
 			case 'load_cache':
 				$tasks = array('load_cache');
 				break;
@@ -358,7 +381,7 @@ class FastbackOutput {
 				$tasks = array('make_csv');
 				break;
 			case 'full_reset':
-				$tasks = array('reset_cache','load_cache','make_thumbs','get_exif','get_times','get_geo','make_csv');
+				$tasks = array('reset_db','reset_cache','load_cache','make_thumbs','get_exif','get_times','get_geo','make_csv');
 				break;
 			case 'help':
 				$tasks = array('help');
@@ -421,10 +444,17 @@ class FastbackOutput {
 	public function reset_cache() {
 		global $argv;
 		$this->sql_connect();
-
-		$this->sql->query("DELETE FROM fastback");
 		$this->sql->query('UPDATE fastbackmeta SET value="19000101" WHERE key="lastmod"');
+		$this->sql_disconnect();
+	}
 
+	/**
+	 * Reset database
+	 */
+	public function reset_db() {
+		global $argv;
+		$this->sql_connect();
+		$this->sql->query("DELETE FROM fastback");
 		$this->sql_disconnect();
 	}
 
@@ -477,7 +507,7 @@ class FastbackOutput {
 			$pathinfo = pathinfo($one_file);
 
 			if ( empty($pathinfo['extension']) ) {
-				error_log(print_r($pathinfo,TRUE));
+				$this->log(print_r($pathinfo,TRUE));
 				var_dump($one_file);
 				die("No file extension. Weird.");
 				continue;
@@ -488,7 +518,7 @@ class FastbackOutput {
 			} else if ( in_array(strtolower($pathinfo['extension']),$this->supported_photo_types) ) {
 				$collect_photo[] = "('" .  SQLite3::escapeString($one_file) . "','" .  SQLite3::escapeString($mtime) .  "',0)";
 			} else {
-				error_log("Don't know what to do with " . print_r($pathinfo,true));
+				$this->log("Don't know what to do with " . print_r($pathinfo,true));
 			}
 
 			if ( count($collect_photo) >= $this->upsert_limit) {
@@ -535,9 +565,12 @@ class FastbackOutput {
 
 			$made_thumbs = array();
 			$flag_these = array();
+
+			chdir($this->photobase);
+
 			foreach($queue as $file => $row) {
 
-				$thumbnailfile = $this->filecache . '/' . ltrim($file,'./') . '.jpg';
+				$thumbnailfile = $this->filecache . '/' . ltrim($file,'./') . '.webp';
 
 				// Make it if needed
 				if ( !file_exists($thumbnailfile) ) {
@@ -555,7 +588,7 @@ class FastbackOutput {
 						$res = `$cmd`;
 					} else if ( in_array(strtolower($pathinfo['extension']),$this->supported_video_types) ) {
 
-						$tmpthumb = $this->filecache . 'tmpthumb_' . getmypid() . '.jpg';
+						$tmpthumb = $this->filecache . 'tmpthumb_' . getmypid() . '.webp';
 						$tmpshellthumb = escapeshellarg($tmpthumb);
 
 						$cmd = "ffmpeg -y -ss 10 -i $shellfile -vframes 1 $tmpshellthumb 2>&1 > /tmp/fastback.ffmpeg.log.$childno";
@@ -571,15 +604,16 @@ class FastbackOutput {
 							$res = `$cmd`;
 						}
 
-						if ( file_exists($tmpthumb) ) {
+						clearstatcache();
+						if ( file_exists($tmpthumb) && filesize($tmpthumb) !== 0) {
 							$cmd = "vipsthumbnail --size=120x120 --output=$shellthumb --smartcrop=attention $tmpshellthumb";
 							$res = `$cmd`;
 							unlink($tmpthumb);
 						}
 
 					} else {
-						error_log("What do I do with ");
-						error_log(print_r($pathinfo,TRUE));
+						$this->log("What do I do with ");
+						$this->log(print_r($pathinfo,TRUE));
 					}
 
 					if ( file_exists( $thumbnailfile ) ) {
@@ -683,7 +717,7 @@ class FastbackOutput {
 		$this->log("Forking into $this->nproc processes for $childfunc");
 
 		// Make the children
-		$children = array();
+		$this->children = array();
 		for ($i = 0;$i < $this->nproc; $i++){
 			switch($pid = pcntl_fork()){
 			case -1:
@@ -695,19 +729,29 @@ class FastbackOutput {
 				exit();
 				break;
 			default:
-				$children[] = $pid;
+				$this->children[] = $pid;
 				// This is the parent
 			}
 		}
 
 		// Reap the children
-		while(count($children) > 0){
-			foreach($children as $key => $child){
+		while(count($this->children) > 0){
+			foreach($this->children as $key => $child){
+				if ($this->end_all_children){
+					posix_kill($child, SIGTERM);
+				}
+
 				$res = pcntl_waitpid($child, $status, WNOHANG);
 				if($res == -1 || $res > 0) {
-					unset($children[$key]);
+					unset($this->children[$key]);
 				}
 			}
+
+			if ( $this->end_all_children ) {
+				$this->log("It seems that all children have exited. Exiting.");
+				exit();
+			}
+
 			$this->sql_connect();
 			$togo = $this->sql->querySingle($statussql);
 			$this->sql_disconnect();
@@ -803,9 +847,9 @@ class FastbackOutput {
 
 					// If the file was in a date folder, then use that date with the best datepart we have.
 					if ( !is_null($datepart) ) {
-						$updated_timestamps[$file] = $datepart . " " . $matches[4] . ':' . $matches[5] . ':' . $matches[6] . '"';
+						$updated_timestamps[$file] = "'" . $datepart . " " . $matches[4] . ':' . $matches[5] . ':' . $matches[6] . "'";
 					} else {
-						$updated_timestamps[$file] = '"' . $matches[1] . '-' . $matches[2] . '-' . $matches[3] . ' ' . $matches[4] . ':' . $matches[5] . ':' . $matches[6] . '"';
+						$updated_timestamps[$file] = "'" . $matches[1] . '-' . $matches[2] . '-' . $matches[3] . ' ' . $matches[4] . ':' . $matches[5] . ':' . $matches[6] . "'";
 					}
 
 					$found = true;
@@ -896,7 +940,7 @@ class FastbackOutput {
 						if ( preg_match('/^======== (.*)/',$line, $matches ) ) {
 
 							if ($matches[1] != $file) {
-								error_log("Expected '$file', got '$matches[1]'");
+								$this->log("Expected '$file', got '$matches[1]'");
 								die("Somethings broken");
 							}
 
@@ -1083,17 +1127,16 @@ class FastbackOutput {
 			- get_time
 			- get_geo
 			- make_csv
-			- make_geojson
-			* db_test - Just tests if the database exists or can be created, and if it can be written to.
-			* reset_cache – Truncate the database. It will need to be repopulated. Does not touch files.
-			* load_cache – Finds all new files in the library and make cache entries for them. Does not generate new thumbnails.
-			* make_thumbs – Generates thumbnails for all entries found in the cache.
-			* get_exif – Read needed exif info into the database. Must happen before gettime or getgeo
-			* get_time – Uses exif data or file creation or modified time to find the files's sort time
-			* get_geo – Uses exif data to find the media geolocation info so it can be shown on a map
-			* make_csv - Regenerates the cached .json file based on the cache database. Doesn't touch or look at files.
-			* make_geojson - Regenerates the cached .geojson file based on the cache database. Doesn't touch or look at files.
-			* full_reset - Runs reset_cache first and then runs handle_new
+		* db_test - Just tests if the database exists or can be created, and if it can be written to.
+		* reset_cache – Clears the lastmod timestamp from the fastbackmeta database, causing all files to be reconsidered
+		* reset_db – Truncate the database. It will need to be repopulated. Does not touch files.
+		* load_cache – Finds all new files in the library and make cache entries for them. Does not generate new thumbnails.
+		* make_thumbs – Generates thumbnails for all entries found in the cache.
+		* get_exif – Read needed exif info into the database. Must happen before gettime or getgeo
+		* get_time – Uses exif data or file creation or modified time to find the files's sort time
+		* get_geo – Uses exif data to find the media geolocation info so it can be shown on a map
+		* make_csv - Regenerates the cached .json file based on the cache database. Doesn't touch or look at files.
+		* full_reset - Runs reset_cache and reset_db first and then runs handle_new
 
 			All commands can have the word debug after them, which will disable the pretty print, and be more verbose.
 ";
