@@ -136,6 +136,7 @@ class FastbackOutput {
 		$html .= '<div id="map"></div>';
 		$html .= '<div id="hyperlist_wrap">';
 		$html .= '<div id="photos"></div>';
+		$html .= '<input id="speedslide" type="range" orient="vertical" min="0" max="100" value="0"/>';
 		$html .= '<div id="resizer">';
 			$html .= '<div id="rewindicon"></div>';
 			$html .= '<div id="globeicon"></div>';
@@ -365,6 +366,9 @@ class FastbackOutput {
 			case 'load_cache':
 				$tasks = array('load_cache');
 				break;
+			case 'clear_thumbs_db':
+				$tasks = array('clear_thumbs_db');
+				break;
 			case 'make_thumbs':
 				$tasks = array('make_thumbs');
 				break;
@@ -445,6 +449,13 @@ class FastbackOutput {
 		global $argv;
 		$this->sql_connect();
 		$this->sql->query('UPDATE fastbackmeta SET value="19000101" WHERE key="lastmod"');
+		$this->sql_disconnect();
+	}
+
+	public function clear_thumbs_db() {
+		global $argv;
+		$this->sql_connect();
+		$this->sql->query('UPDATE fastback SET thumbnail=NULL, flagged=NULL');
 		$this->sql_disconnect();
 	}
 
@@ -1130,6 +1141,7 @@ class FastbackOutput {
 		* db_test - Just tests if the database exists or can be created, and if it can be written to.
 		* reset_cache – Clears the lastmod timestamp from the fastbackmeta database, causing all files to be reconsidered
 		* reset_db – Truncate the database. It will need to be repopulated. Does not touch files.
+		* clear_thumbs_db – Makes the database think there are no thumbnails generated. If files exist they will not be re-created. Useful if you delete some thumbnails and want to regenerate them.
 		* load_cache – Finds all new files in the library and make cache entries for them. Does not generate new thumbnails.
 		* make_thumbs – Generates thumbnails for all entries found in the cache.
 		* get_exif – Read needed exif info into the database. Must happen before gettime or getgeo

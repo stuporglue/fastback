@@ -43,6 +43,7 @@ class Fastback {
 				self.map_init();
 			}
 
+			jQuery('#speedslide').on('input',self.speed_slide.bind(self));
 			jQuery('#zoom').on('change',self.zoom_change.bind(self));
 			jQuery('#photos').on('click','.tn',self.handle_thumb_click.bind(self));
 
@@ -177,6 +178,14 @@ class Fastback {
 	}
 
 	/*
+	 * Handle the speed slide. The speed slide is an input with 100 increments so you can quickly get through a large photo set.
+	 */
+	speed_slide(e) {
+		var totalheight = jQuery('#photos > div').first().height();
+		jQuery('#photos').first()[0].scrollTop = totalheight * (e.target.value / 100);
+	}
+
+	/*
 	 * Handle the slider changes.
 	 */
 	zoom_change(e) {
@@ -293,6 +302,10 @@ class Fastback {
 	 * Called after a hyperlist chunk is rendered
 	 */
 	after_render() {
+		// Non-map render
+		var totalheight = Math.ceil(fastback.photos.length / fastback.cols) * fastback.hyperlist_config.itemHeight
+		jQuery('#speedslide').val(this.hyperlist_container[0].scrollTop / totalheight * 100);
+
 		if ( this.fmap === undefined ) {
 			// No map, no need.
 			return;
