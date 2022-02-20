@@ -10,6 +10,12 @@ class Fastback {
 		$.get(this.cacheurl + 'fastback.csv', function(data) {
 			var res = Papa.parse(data.trim());
 			self.photos = res.data.map(function(r){
+
+				if ( self.has_map || !isNaN(parseFloat(r[3]) ) ) {
+					self.has_map = true;
+					jQuery('#globeicon').addClass('enabled');
+				}
+
 				return {
 					'file': r[0],
 					'isvideo': Boolean(parseInt(r[1])),

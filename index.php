@@ -138,6 +138,7 @@ class FastbackOutput {
 		$html .= '<div id="photos"></div>';
 		$html .= '<input id="speedslide" type="range" orient="vertical" min="0" max="100" value="0"/>';
 		$html .= '<div id="resizer">';
+			$html .= '<div id="calendaricon"><input readonly id="datepicker" type="text"></div>';
 			$html .= '<div id="rewindicon"></div>';
 			$html .= '<div id="globeicon"></div>';
 			$html .= '<input type="range" min="1" max="10" value="5" class="slider" id="zoom">';
@@ -177,7 +178,6 @@ class FastbackOutput {
 						</div>
 					</div>';
 		$html .= '</div>';
-		$html .= '<div id="calendaricon"><input readonly id="datepicker" type="text"></div>';
 		$html .= '<script src="fastback_assets/jquery.min.js"></script>';
 		$html .= '<script src="fastback_assets/jquery-ui.min.js"></script>';
 		$html .= '<script src="fastback_assets/hyperlist.js"></script>';
