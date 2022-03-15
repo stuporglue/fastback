@@ -151,6 +151,7 @@ class FastbackOutput {
 						<div id="thumbclose">🆇</div>
 						<div id="thumbdownload"></div>
 						<div id="thumbflag"></div>
+						<div id="thumbinfo"></div>
 						<div id="socialbuttons">
 							<!-- Sharingbutton Facebook -->
 							<a id="share_fb" class="resp-sharing-button__link" href="about:blank" target="_blank" rel="noopener" aria-label="">

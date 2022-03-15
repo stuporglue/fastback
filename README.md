@@ -107,7 +107,7 @@ The following tags are used to find location info
 Map Modes
 ---------
 
- * Default mode – The maps shows the photos in the photo pane. The two states are all photos or rewind (all photos on this date across the years).
+ * Default mode – The maps shows the locations of the photos in the photo pane. The two states are all photos or rewind (all photos on this date across the years).
  - In this mode there are two map layers. The cluster layer, showing all photos in the scroll, and a geojson layer with dots showing where the currently visible photos are on the map. 
  * Map Filter mode – In this mode, the photo pane is filtered according to what is visible on the map.
  - In this mode there are two map layers. The cluster layer, showing all photos in the scroll, and a geojson layer with dots showing where the currently visible photos are on the map. 

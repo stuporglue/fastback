@@ -547,3 +547,17 @@ only screen and (min-device-pixel-ratio : 1.5) {
 }
 
 
+#mapfilter {
+  border: 2px outset #ddd;
+  background-color: white;
+  width: 30px;
+  height: 30px;
+  border-radius: 5px;
+  text-align: center;
+  line-height: 30px;
+  cursor: pointer;
+}
+
+#mapfilter:hover {
+	background-color: #f4f4f4;
+}
