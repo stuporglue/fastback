@@ -12,7 +12,6 @@ class Fastback {
 	constructor(args) {
 		this.setProps();
 
-		var self = this;
 		jQuery.extend(this,args);
 		$.get(this.cacheurl + 'fastback.csv', this._load_and_parse_data.bind(this)).then(this._setup_app.bind(this));
 	}
@@ -272,15 +271,14 @@ class Fastback {
 	 */
 	apply_filters() {
 		if ( this.dirty_filters ) {
-			var self = this;
 			this.photos = this.orig_photos.filter(function(item) { return item.type === 'media'; });
 
-			for(var filter in self.active_filters) {
-				self.active_filters[filter]();
+			for(var filter in this.active_filters) {
+				this.active_filters[filter]();
 			}
 
 			this.photos = this.add_date_blocks(this.photos);
-			jQuery('#photos').trigger('fastback_dirty_filters',self);
+			jQuery('#photos').trigger('fastback_dirty_filters',this);
 			this.dirty_filters = false;
 		}
 	}
@@ -535,7 +533,7 @@ Fastback.datejump = class {
 	handle_datepicker_change(date){
 		var targetdate = new Date(date.replaceAll('-','/') + ' 23:59:59'); // Use the very end of day so that our findIndex works later
 
-		jQuery('#photos').trigger('fastback_datepicker_change',this);
+		jQuery('#photos').trigger('fastback_datepicker_change',targetdate);
 
 		// Find the first photo that is younger than our target photo
 		var first = this.fastback.photos.findIndex(o => o['date'] <= targetdate);
@@ -552,6 +550,64 @@ Fastback.datejump = class {
 		this.fastback.hyperlist_container.prop('scrollTop',(rownum * this.fastback.hyperlist_config.itemHeight));
 
 		this.fastback.refresh_layout();
+	}
+}
+
+/**
+ * This class adds support for an "On this day" type experience
+ */ 
+Fastback.onthisday = class {
+
+	constructor(args) {
+		this.fastback = args;
+
+		jQuery('#widgets').append('<div id="rewindicon"></div>');
+
+		jQuery('#rewindicon').on('click',this.handle_rewind_click.bind(this));
+
+		if ( this.fastback.features.datejump ) {
+			jQuery('#photos').on('fastback_datepicker_change',this.handle_fastback_datepicker_change.bind(this));
+		}
+	}
+
+	handle_fastback_datepicker_change(e,targetdate) {
+		if ( jQuery('#rewindicon').hasClass('active') ) {
+			this.setup_new_rewind_date(targetdate);	
+		}
+	}
+
+	/**
+	 * For an optional date object, set up a new rewind view
+	 */
+	setup_new_rewind_date(date_to_use) {
+		var self = this;
+		var d = date_to_use || new Date();
+		var datepart = ((d.getMonth() + 1) + "").padStart(2,"0") + '-' + (d.getDate() + "").padStart(2,"0")
+		var re = new RegExp('^....-' + datepart + ' ');
+		this.fastback.active_filters.rewind = function() {
+			self.fastback.photos = self.fastback.photos.filter(function(p){ return p.dateorig.match(re);});
+		};
+		this.fastback.dirty_filters = true;
+	}
+
+	/**
+	 * Handle the rewind icon click
+	 */
+	handle_rewind_click() {
+		var icon = jQuery('#rewindicon');
+
+		if ( icon.hasClass('active') ) {
+			icon.removeClass('active');
+			delete this.fastback.active_filters.rewind;
+			this.fastback.dirty_filters = true;
+		} else {
+			jQuery('#rewindicon').addClass('active');
+			this.rewind_date = new Date();
+			this.setup_new_rewind_date();
+		}
+
+		this.fastback.refresh_layout();
+		this.fastback.hyperlist_container.prop('scrollTop',0);
 	}
 }
 
@@ -877,7 +933,7 @@ Fastback.map = class {
 		var is_filtered = (this.map_filter === undefined || this.map_filter === false );
 
 		if ( !is_filtered ) {
-			this.active_filters.map = function(p){
+			this.fastback.active_filters.map = function(p){
 				var mapbounds = self.fmap.lmap.getBounds()
 				self.photos = self.photos.filter(function(p){
 					// Reject any photos without geo
@@ -888,7 +944,7 @@ Fastback.map = class {
 				});
 			};
 		} else {
-			delete this.active_filters.map;
+			delete this.fastback.active_filters.map;
 		}
 
 		this.dirty_filters = true;
@@ -910,55 +966,3 @@ Fastback.map = class {
 
 }
 
-/**
- * This class adds support for an "On this day" type experience
- */ 
-Fastback.onthisday = class {
-
-	constructor(args) {
-		jQuery('#widgets').append('<div id="rewindicon"></div>');
-
-		jQuery('#rewindicon').on('click',this.handle_rewind_click.bind(this));
-
-		jQuery('#photos').on('fastback_datepicker_change',function(e){
-			if ( jQuery('#rewindicon').hasClass('active') ) {
-				this.setup_new_rewind_date(targetdate);	
-			}
-		});
-	}
-
-
-	/**
-	 * For an optional date object, set up a new rewind view
-	 */
-	setup_new_rewind_date(date_to_use) {
-		var self = this;
-		var d = date_to_use || new Date();
-		var datepart = ((d.getMonth() + 1) + "").padStart(2,"0") + '-' + (d.getDate() + "").padStart(2,"0")
-		var re = new RegExp('^....-' + datepart + ' ');
-		this.active_filters.rewind = function() {
-			self.photos = self.photos.filter(function(p){ return p.dateorig.match(re);});
-		};
-		this.dirty_filters = true;
-	}
-
-	/**
-	 * Handle the rewind icon click
-	 */
-	handle_rewind_click() {
-		var icon = jQuery('#rewindicon');
-
-		if ( icon.hasClass('active') ) {
-			icon.removeClass('active');
-			delete this.active_filters.rewind;
-			this.dirty_filters = true;
-		} else {
-			jQuery('#rewindicon').addClass('active');
-			this.rewind_date = new Date();
-			this.setup_new_rewind_date();
-		}
-
-		this.refresh_layout();
-		this.hyperlist_container.prop('scrollTop',0);
-	}
-}
