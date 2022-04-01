@@ -36,3 +36,8 @@ sitetitle="My Custom Site Title"
 ; Find all files, or just those in a YYYY/MM/DD/ folder? 
 ; possible values 'all' or 'datesbased'
 filestructure='all'
+
+show_map=true
+show_onthisday=true
+show_datejump=true
+show_tagging=true

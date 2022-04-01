@@ -1,3 +1,9 @@
+/**
+ * The fastback main class should only be responsible for loading the data from csv,
+ * displaying it and handling the hyperlist. This includes clicking thumbnails to view the fullsize
+ *
+ * In other words, the core Fastback experience.
+ */
 class Fastback {
 	/**
 	 * Load the data and set up event handlers
@@ -10,12 +16,6 @@ class Fastback {
 		$.get(this.cacheurl + 'fastback.csv', function(data) {
 			var res = Papa.parse(data.trim());
 			self.photos = res.data.map(function(r){
-
-				if ( self.has_map || !isNaN(parseFloat(r[3]) ) ) {
-					self.has_map = true;
-					jQuery('#globeicon').addClass('enabled');
-				}
-
 				return {
 					'file': r[0],
 					'isvideo': Boolean(parseInt(r[1])),
@@ -26,7 +26,6 @@ class Fastback {
 					'dateorig': r[2]
 				};
 			});
-
 
 			self.photos = self.add_date_blocks(self.photos);
 
@@ -39,13 +38,16 @@ class Fastback {
 
 			self.hyperlist_container.addClass('up' + self.cols);
 		}).then(function(){
+
+			if ( self.photos.length === 0 ) {
+				console.log("No photos loaded. Maybe it's a fresh install?");
+				jQuery('#photos').html("No photos found. Maybe this is a fresh install? If not, check file permissions and the database!");
+				return false;
+			}
+
 			self.orig_photos = self.photos;
 			self.hyperlist_init();
 			self.load_nav();
-
-			if ( jQuery('body').hasClass('map') ) {
-				self.map_init();
-			}
 
 			jQuery('#speedslide').on('input',self.speed_slide.bind(self));
 			jQuery('#zoom').on('change',self.zoom_change.bind(self));
@@ -64,6 +66,22 @@ class Fastback {
 			// Map interations
 			jQuery('#hyperlist_wrap').on('mouseenter','.tn',self.handle_tn_mouseover.bind(self));
 		});
+
+		if ( this.features.map ){
+			this.map = new Fastback.map(this);
+		}
+
+		if ( this.features.tagging ) {
+			this.tagging = new Fastback.tagging(this);
+		}
+
+		if ( this.features.datejump ) {
+			this.datejump = new Fastback.datejump(this);
+		}
+
+		if ( this.features.onthisday ) {
+			this.onthisday = new Fastback.onthisday(this);
+		}
 	}
 
 	/**
@@ -159,28 +177,7 @@ class Fastback {
 	 */
 	load_nav() {
 		var self = this;
-		// first date (in tags list) -- The default is Descending view, so this should be the greatest date
-		var fd = this.photos[0]['date'];
-		var ld = this.photos[this.photos.length - 1]['date'];
-
-		// If fd is not the greatest date, swap 'em
-		if ( fd > ld ) {
-			[fd,ld] = [ld,fd];
-		}
-
-		jQuery('#datepicker').datepicker({
-			minDate: fd,
-			maxDate: ld,
-			changeYear: true,
-			changeMonth: true, 
-			yearRange: 'c-100:c+100',
-			dateFormat: 'yy-mm-dd',
-			onSelect: this.handle_datepicker_change.bind(this) 
-		});
-
-		jQuery('#rewindicon').on('click',this.handle_rewind_click.bind(this));
-
-		jQuery('#globeicon').on('click',this.handle_globe_click.bind(this));
+		jQuery('#photos').trigger('fastback_load_nav');
 	}
 
 	/*
@@ -292,7 +289,7 @@ class Fastback {
 			}
 
 			this.photos = this.add_date_blocks(this.photos);
-			this.map_update_cluster();
+			jQuery('#photos').trigger('fastback_dirty_filters',self);
 			this.dirty_filters = false;
 		}
 	}
@@ -332,22 +329,7 @@ class Fastback {
 		// Non-map render
 		var totalheight = Math.ceil(fastback.photos.length / fastback.cols) * fastback.hyperlist_config.itemHeight
 		jQuery('#speedslide').val(this.hyperlist_container[0].scrollTop / totalheight * 100);
-
-		if ( this.fmap === undefined ) {
-			// No map, no need.
-			return;
-		}
-
-		var self = this;
-
-		// Refresh the map highlight layer
-		var rows = jQuery('.photorow:visible').toArray().filter(function(r){return jQuery(r).position().top < window.innerHeight;})
-		var tnsar =	rows.map(function(f){ return jQuery(f).find('.tn img').toArray(); });
-		var tns = jQuery.map(tnsar,function(f){return f;});
-		var photos = tns.map(function(f){return self.photos[jQuery(f).data('photoid')];})
-		var geojson = this.build_geojson(photos);
-		this.fmap.flashlayer.clearLayers();
-		this.fmap.flashlayer.addData(geojson);
+		jQuery('#photos').trigger('fastback_after_render',self);
 	}
 
 	handle_thumb_click(e) {
@@ -480,6 +462,129 @@ class Fastback {
 	}
 
 	/**
+	 * Go to photo id
+	 */
+	go_to_photo_id(id) {
+		this._go_to_photo('id',id);
+	}
+
+	/**
+	 * Find a photo based on a key name and value, and go to it
+	 */
+	_go_to_photo(key,val) {
+		// Find the first photo that is younger than our target photo
+		var first = this.photos.findIndex(o => o[key] == val);
+
+		// If we don't find one, go all the way to the end
+		if ( first === undefined || first === -1 ) {
+			first = this.photos.length - 1;
+		}
+
+		// Get the row number now
+		var rownum = parseInt(first / this.cols)
+
+		// Set the scrollTop
+		this.hyperlist_container.prop('scrollTop',(rownum * this.hyperlist_config.itemHeight));
+
+		this.refresh_layout();
+	}
+
+	/*
+	 * Interact with map on mouse over
+	 */
+	handle_tn_mouseover(e){
+		var tn = jQuery(e.target).closest('.tn');
+		jQuery('#photos').trigger('fastback_tn_mouseover',tn);
+	}
+
+	// https://stackoverflow.com/questions/11381673/detecting-a-mobile-browser
+	is_mobile_browser() {
+		let check = false;
+		(function(a){if(/(android|bb\d+|meego).+mobile|avantgo|bada\/|blackberry|blazer|compal|elaine|fennec|hiptop|iemobile|ip(hone|od)|iris|kindle|lge |maemo|midp|mmp|mobile.+firefox|netfront|opera m(ob|in)i|palm( os)?|phone|p(ixi|re)\/|plucker|pocket|psp|series(4|6)0|symbian|treo|up\.(browser|link)|vodafone|wap|windows ce|xda|xiino|android|ipad|playbook|silk/i.test(a)||/1207|6310|6590|3gso|4thp|50[1-6]i|770s|802s|a wa|abac|ac(er|oo|s\-)|ai(ko|rn)|al(av|ca|co)|amoi|an(ex|ny|yw)|aptu|ar(ch|go)|as(te|us)|attw|au(di|\-m|r |s )|avan|be(ck|ll|nq)|bi(lb|rd)|bl(ac|az)|br(e|v)w|bumb|bw\-(n|u)|c55\/|capi|ccwa|cdm\-|cell|chtm|cldc|cmd\-|co(mp|nd)|craw|da(it|ll|ng)|dbte|dc\-s|devi|dica|dmob|do(c|p)o|ds(12|\-d)|el(49|ai)|em(l2|ul)|er(ic|k0)|esl8|ez([4-7]0|os|wa|ze)|fetc|fly(\-|_)|g1 u|g560|gene|gf\-5|g\-mo|go(\.w|od)|gr(ad|un)|haie|hcit|hd\-(m|p|t)|hei\-|hi(pt|ta)|hp( i|ip)|hs\-c|ht(c(\-| |_|a|g|p|s|t)|tp)|hu(aw|tc)|i\-(20|go|ma)|i230|iac( |\-|\/)|ibro|idea|ig01|ikom|im1k|inno|ipaq|iris|ja(t|v)a|jbro|jemu|jigs|kddi|keji|kgt( |\/)|klon|kpt |kwc\-|kyo(c|k)|le(no|xi)|lg( g|\/(k|l|u)|50|54|\-[a-w])|libw|lynx|m1\-w|m3ga|m50\/|ma(te|ui|xo)|mc(01|21|ca)|m\-cr|me(rc|ri)|mi(o8|oa|ts)|mmef|mo(01|02|bi|de|do|t(\-| |o|v)|zz)|mt(50|p1|v )|mwbp|mywa|n10[0-2]|n20[2-3]|n30(0|2)|n50(0|2|5)|n7(0(0|1)|10)|ne((c|m)\-|on|tf|wf|wg|wt)|nok(6|i)|nzph|o2im|op(ti|wv)|oran|owg1|p800|pan(a|d|t)|pdxg|pg(13|\-([1-8]|c))|phil|pire|pl(ay|uc)|pn\-2|po(ck|rt|se)|prox|psio|pt\-g|qa\-a|qc(07|12|21|32|60|\-[2-7]|i\-)|qtek|r380|r600|raks|rim9|ro(ve|zo)|s55\/|sa(ge|ma|mm|ms|ny|va)|sc(01|h\-|oo|p\-)|sdk\/|se(c(\-|0|1)|47|mc|nd|ri)|sgh\-|shar|sie(\-|m)|sk\-0|sl(45|id)|sm(al|ar|b3|it|t5)|so(ft|ny)|sp(01|h\-|v\-|v )|sy(01|mb)|t2(18|50)|t6(00|10|18)|ta(gt|lk)|tcl\-|tdg\-|tel(i|m)|tim\-|t\-mo|to(pl|sh)|ts(70|m\-|m3|m5)|tx\-9|up(\.b|g1|si)|utst|v400|v750|veri|vi(rg|te)|vk(40|5[0-3]|\-v)|vm40|voda|vulc|vx(52|53|60|61|70|80|81|83|85|98)|w3c(\-| )|webc|whit|wi(g |nc|nw)|wmlb|wonu|x700|yas\-|your|zeto|zte\-/i.test(a.substr(0,4))) check = true;})(navigator.userAgent||navigator.vendor||window.opera);
+		this.is_mobile_browser = check;
+		return check;
+	}
+}
+
+/** 
+ * This class adds support for tagging, and for filtering by tags
+ */
+Fastback.tagging = class {
+
+	constructor(args) {
+		this.fastback = args[0];
+		this.selected = new Set();
+		this.shiftprevon = false;
+		this.shiftprevoff = false;
+
+		jQuery('#photos').on('fastback_after_render',this.after_render_callback.bind(this));
+	}
+
+	after_render_callback(fb){
+		var self = this;
+		jQuery('#photos').not('nolink').selectable({
+			filter: '.tn',
+			classes: {
+				'ui-selecting': 'tagging_selecting',
+				'ui-selected': 'tagging_selected'
+			},
+			selected: function(e, ui) {
+				var pid = jQuery(ui.selected).find('img').data('photoid');
+				self.selected.add(pid);
+			},
+			unselected: function(e, ui){
+				var pid = jQuery(ui.unselected).find('img').data('photoid');
+				self.selected.delete(pid);
+			}
+		});
+
+
+		self.after_render_catchup();
+	}
+
+	after_render_catchup() {
+		var self = this;
+		jQuery('.tn').each(function(i,tn){
+			var pid = jQuery(tn).find('img').data('photoid');
+			if ( self.selected.has(pid) ) {
+				jQuery(tn).addClass('tagging_selected ui-selected');
+			}
+		})
+	}
+}
+
+/**
+ * This class adds support for map interactions
+ */
+Fastback.map = class {
+
+	constructor(args) {
+		var self = this;
+		this.has_map = false;
+
+		this.fastback = args[0];
+
+		// Check if any photos have geotagging
+		jQuery(this.fastback.photos).each(function(p){
+			if ( self.has_map || p.coordinates !== null ) {
+				self.has_map = true;
+				jQuery('#globeicon').addClass('enabled');
+				return false;
+			}
+		});
+
+
+		jQuery('#photos').on('fastback_dirty_filters',function(e){
+			this.map_update_cluster();
+		});
+
+		jQuery('#photos').on('fastback_after_render',this.after_render.bind(this));
+
+
+		jQuery('#globeicon').on('click',this.handle_globe_click.bind(this));
+	}
+
+/**
 	 * Kick off the map. This may be slow, so it should only get called the first time the div is visible.
 	 */
 	map_init() {
@@ -544,8 +649,8 @@ class Fastback {
 
 		// Handle click on individual markers
 		this.fmap.clusterlayer.on('click',function(e){
-				var id = e.layer.feature.properties.id
-				self.go_to_photo_id(id);
+			var id = e.layer.feature.properties.id
+			self.go_to_photo_id(id);
 		});
 
 		// Scroll to first, if we're all the way zoomed in
@@ -639,94 +744,6 @@ class Fastback {
 		return geojson;
 	}
 
-	/**
-	 * Handle the datepicker change
-	 */
-	handle_datepicker_change(date){
-		var targetdate = new Date(date.replaceAll('-','/') + ' 23:59:59'); // Use the very end of day so that our findIndex works later
-
-		if ( jQuery('#rewindicon').hasClass('active') ) {
-			this.setup_new_rewind_date(targetdate);	
-		}
-
-		// Find the first photo that is younger than our target photo
-		var first = this.photos.findIndex(o => o['date'] <= targetdate);
-
-		// If we don't find one, go all the way to the end
-		if ( first === undefined || first === -1 ) {
-			first = this.photos.length - 1;
-		}
-
-		// Get the row number now
-		var rownum = parseInt(first / this.cols)
-
-		// Set the scrollTop
-		this.hyperlist_container.prop('scrollTop',(rownum * this.hyperlist_config.itemHeight));
-
-		this.refresh_layout();
-	}
-
-	/**
-	 * Go to photo id
-	 */
-	go_to_photo_id(id) {
-		this._go_to_photo('id',id);
-	}
-
-	/**
-	 * Find a photo based on a key name and value, and go to it
-	 */
-	_go_to_photo(key,val) {
-		// Find the first photo that is younger than our target photo
-		var first = this.photos.findIndex(o => o[key] == val);
-
-		// If we don't find one, go all the way to the end
-		if ( first === undefined || first === -1 ) {
-			first = this.photos.length - 1;
-		}
-
-		// Get the row number now
-		var rownum = parseInt(first / this.cols)
-
-		// Set the scrollTop
-		this.hyperlist_container.prop('scrollTop',(rownum * this.hyperlist_config.itemHeight));
-
-		this.refresh_layout();
-	}
-
-	/**
-	 * Handle the rewind icon click
-	 */
-	handle_rewind_click() {
-		var icon = jQuery('#rewindicon');
-
-		if ( icon.hasClass('active') ) {
-			icon.removeClass('active');
-			delete this.active_filters.rewind;
-			this.dirty_filters = true;
-		} else {
-			jQuery('#rewindicon').addClass('active');
-			this.rewind_date = new Date();
-			this.setup_new_rewind_date();
-		}
-
-		this.refresh_layout();
-		this.hyperlist_container.prop('scrollTop',0);
-	}
-
-	/**
-	 * For an optional date object, set up a new rewind view
-	 */
-	setup_new_rewind_date(date_to_use) {
-		var self = this;
-		var d = date_to_use || new Date();
-		var datepart = ((d.getMonth() + 1) + "").padStart(2,"0") + '-' + (d.getDate() + "").padStart(2,"0")
-		var re = new RegExp('^....-' + datepart + ' ');
-		this.active_filters.rewind = function() {
-			self.photos = self.photos.filter(function(p){ return p.dateorig.match(re);});
-		};
-		this.dirty_filters = true;
-	}
 
 	/**
 	 * Handle globe icon click
@@ -747,11 +764,9 @@ class Fastback {
 		this.refresh_layout();
 	}
 
-	/*
-	 * Interact with map on mouse over
-	 */
-	handle_tn_mouseover(e){
-		var photoid = jQuery(e.target).closest('.tn').find('img').first().data('photoid');
+
+	mouseover_handler(e) {
+		var photoid = jQuery(e.target).find('img').first().data('photoid');
 		this.flash_map_for_id(photoid);
 	}
 
@@ -785,14 +800,6 @@ class Fastback {
 		},500);
 	}
 
-	// https://stackoverflow.com/questions/11381673/detecting-a-mobile-browser
-	is_mobile_browser() {
-		let check = false;
-		(function(a){if(/(android|bb\d+|meego).+mobile|avantgo|bada\/|blackberry|blazer|compal|elaine|fennec|hiptop|iemobile|ip(hone|od)|iris|kindle|lge |maemo|midp|mmp|mobile.+firefox|netfront|opera m(ob|in)i|palm( os)?|phone|p(ixi|re)\/|plucker|pocket|psp|series(4|6)0|symbian|treo|up\.(browser|link)|vodafone|wap|windows ce|xda|xiino|android|ipad|playbook|silk/i.test(a)||/1207|6310|6590|3gso|4thp|50[1-6]i|770s|802s|a wa|abac|ac(er|oo|s\-)|ai(ko|rn)|al(av|ca|co)|amoi|an(ex|ny|yw)|aptu|ar(ch|go)|as(te|us)|attw|au(di|\-m|r |s )|avan|be(ck|ll|nq)|bi(lb|rd)|bl(ac|az)|br(e|v)w|bumb|bw\-(n|u)|c55\/|capi|ccwa|cdm\-|cell|chtm|cldc|cmd\-|co(mp|nd)|craw|da(it|ll|ng)|dbte|dc\-s|devi|dica|dmob|do(c|p)o|ds(12|\-d)|el(49|ai)|em(l2|ul)|er(ic|k0)|esl8|ez([4-7]0|os|wa|ze)|fetc|fly(\-|_)|g1 u|g560|gene|gf\-5|g\-mo|go(\.w|od)|gr(ad|un)|haie|hcit|hd\-(m|p|t)|hei\-|hi(pt|ta)|hp( i|ip)|hs\-c|ht(c(\-| |_|a|g|p|s|t)|tp)|hu(aw|tc)|i\-(20|go|ma)|i230|iac( |\-|\/)|ibro|idea|ig01|ikom|im1k|inno|ipaq|iris|ja(t|v)a|jbro|jemu|jigs|kddi|keji|kgt( |\/)|klon|kpt |kwc\-|kyo(c|k)|le(no|xi)|lg( g|\/(k|l|u)|50|54|\-[a-w])|libw|lynx|m1\-w|m3ga|m50\/|ma(te|ui|xo)|mc(01|21|ca)|m\-cr|me(rc|ri)|mi(o8|oa|ts)|mmef|mo(01|02|bi|de|do|t(\-| |o|v)|zz)|mt(50|p1|v )|mwbp|mywa|n10[0-2]|n20[2-3]|n30(0|2)|n50(0|2|5)|n7(0(0|1)|10)|ne((c|m)\-|on|tf|wf|wg|wt)|nok(6|i)|nzph|o2im|op(ti|wv)|oran|owg1|p800|pan(a|d|t)|pdxg|pg(13|\-([1-8]|c))|phil|pire|pl(ay|uc)|pn\-2|po(ck|rt|se)|prox|psio|pt\-g|qa\-a|qc(07|12|21|32|60|\-[2-7]|i\-)|qtek|r380|r600|raks|rim9|ro(ve|zo)|s55\/|sa(ge|ma|mm|ms|ny|va)|sc(01|h\-|oo|p\-)|sdk\/|se(c(\-|0|1)|47|mc|nd|ri)|sgh\-|shar|sie(\-|m)|sk\-0|sl(45|id)|sm(al|ar|b3|it|t5)|so(ft|ny)|sp(01|h\-|v\-|v )|sy(01|mb)|t2(18|50)|t6(00|10|18)|ta(gt|lk)|tcl\-|tdg\-|tel(i|m)|tim\-|t\-mo|to(pl|sh)|ts(70|m\-|m3|m5)|tx\-9|up(\.b|g1|si)|utst|v400|v750|veri|vi(rg|te)|vk(40|5[0-3]|\-v)|vm40|voda|vulc|vx(52|53|60|61|70|80|81|83|85|98)|w3c(\-| )|webc|whit|wi(g |nc|nw)|wmlb|wonu|x700|yas\-|your|zeto|zte\-/i.test(a.substr(0,4))) check = true;})(navigator.userAgent||navigator.vendor||window.opera);
-		this.is_mobile_browser = check;
-		return check;
-	}
-
 	toggle_map_filter() {
 		console.log("Map filter");
 
@@ -815,4 +822,129 @@ class Fastback {
 
 		this.dirty_filters = true;
 	}
+
+	after_render() {
+		var self = this;
+
+		// Refresh the map highlight layer
+		var rows = jQuery('.photorow:visible').toArray().filter(function(r){return jQuery(r).position().top < window.innerHeight;})
+		var tnsar =	rows.map(function(f){ return jQuery(f).find('.tn img').toArray(); });
+		var tns = jQuery.map(tnsar,function(f){return f;});
+		var photos = tns.map(function(f){return self.photos[jQuery(f).data('photoid')];})
+		var geojson = this.build_geojson(photos);
+		this.fmap.flashlayer.clearLayers();
+		this.fmap.flashlayer.addData(geojson);
+
+	}
+
+}
+
+/**
+ * This class adds support for an "On this day" type experience
+ */ 
+Fastback.onthisday = class {
+
+	constructor(args) {
+
+		jQuery('#rewindicon').on('click',this.handle_rewind_click.bind(this));
+
+		jQuery('#photos').on('fastback_datepicker_change',function(e){
+			if ( jQuery('#rewindicon').hasClass('active') ) {
+				this.setup_new_rewind_date(targetdate);	
+			}
+		});
+	}
+
+
+	/**
+	 * For an optional date object, set up a new rewind view
+	 */
+	setup_new_rewind_date(date_to_use) {
+		var self = this;
+		var d = date_to_use || new Date();
+		var datepart = ((d.getMonth() + 1) + "").padStart(2,"0") + '-' + (d.getDate() + "").padStart(2,"0")
+		var re = new RegExp('^....-' + datepart + ' ');
+		this.active_filters.rewind = function() {
+			self.photos = self.photos.filter(function(p){ return p.dateorig.match(re);});
+		};
+		this.dirty_filters = true;
+	}
+
+	/**
+	 * Handle the rewind icon click
+	 */
+	handle_rewind_click() {
+		var icon = jQuery('#rewindicon');
+
+		if ( icon.hasClass('active') ) {
+			icon.removeClass('active');
+			delete this.active_filters.rewind;
+			this.dirty_filters = true;
+		} else {
+			jQuery('#rewindicon').addClass('active');
+			this.rewind_date = new Date();
+			this.setup_new_rewind_date();
+		}
+
+		this.refresh_layout();
+		this.hyperlist_container.prop('scrollTop',0);
+	}
+
+
+
+}
+
+/**
+ * This class lets the user jump to any date in the photo collection
+ */
+Fastback.datejump = class {
+
+	constructor(args) {
+		// first date (in tags list) -- The default is Descending view, so this should be the greatest date
+		var fd = this.photos[0]['date'];
+		var ld = this.photos[this.photos.length - 1]['date'];
+
+		// If fd is not the greatest date, swap 'em
+		if ( fd > ld ) {
+			[fd,ld] = [ld,fd];
+		}
+
+		jQuery('#datepicker').datepicker({
+			minDate: fd,
+			maxDate: ld,
+			changeYear: true,
+			changeMonth: true, 
+			yearRange: 'c-100:c+100',
+			dateFormat: 'yy-mm-dd',
+			onSelect: this.handle_datepicker_change.bind(this) 
+		});
+	}
+
+
+	/**
+	 * Handle the datepicker change
+	 */
+	handle_datepicker_change(date){
+		var targetdate = new Date(date.replaceAll('-','/') + ' 23:59:59'); // Use the very end of day so that our findIndex works later
+		
+		jQuery('#photos').trigger('fastback_datepicker_change',this);
+
+		// Find the first photo that is younger than our target photo
+		var first = this.photos.findIndex(o => o['date'] <= targetdate);
+
+		// If we don't find one, go all the way to the end
+		if ( first === undefined || first === -1 ) {
+			first = this.photos.length - 1;
+		}
+
+		// Get the row number now
+		var rownum = parseInt(first / this.cols)
+
+		// Set the scrollTop
+		this.hyperlist_container.prop('scrollTop',(rownum * this.hyperlist_config.itemHeight));
+
+		this.refresh_layout();
+	}
+
+
 }

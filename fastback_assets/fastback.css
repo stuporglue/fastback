@@ -149,9 +149,6 @@ body .up10 .tn {width: calc(100vw/10); height: calc(100vw/10); font-size: 2vw;  
 /** Tools */
 
 #calendaricon {
-	position: fixed;
-	bottom: 0;
-	right: 0;
 	z-index: 1000;
 	background-color: rgba(255,255,255,0.8);
 	width: 30px;
@@ -188,10 +185,13 @@ body .up10 .tn {width: calc(100vw/10); height: calc(100vw/10); font-size: 2vw;  
 #resizer {
 	position: absolute;
 	bottom: 0;
-	right: 100px;
-	width: calc(100% - 60px);
-	direction: rtl;
+	right: 0;
+	height: 30px;
 	z-index: 1000;
+}
+
+#resizer > input {
+	direction: rtl;
 }
 
 #resizer > div {
@@ -201,6 +201,8 @@ body .up10 .tn {width: calc(100vw/10); height: calc(100vw/10); font-size: 2vw;  
 #resizer > input,
 #speedslide {
 	opacity: 0.7;
+	display: inline-block;
+	vertical-align: middle;
 }
 
 #resizer > div:hover,
@@ -209,10 +211,7 @@ body .up10 .tn {width: calc(100vw/10); height: calc(100vw/10); font-size: 2vw;  
 	opacity: 1;
 }
 
-#rewindicon, #globeicon {
-	position: fixed;
-	bottom: 0;
-	right: 30px;
+#rewindicon, #globeicon, #tagicon {
 	width: 30px;
 	height: 30px;
 	z-index: 1000;
@@ -226,6 +225,10 @@ body .up10 .tn {width: calc(100vw/10); height: calc(100vw/10); font-size: 2vw;  
 	right: 60px;
 	background-image: url('globe.png');
 	display: none;
+}
+
+#tagicon {
+	background-image: url('tagging.png');
 }
 
 #globeicon.enabled {
@@ -560,4 +563,14 @@ only screen and (min-device-pixel-ratio : 1.5) {
 
 #mapfilter:hover {
 	background-color: #f4f4f4;
+}
+
+/* tagging support */
+
+.tagging_selecting {
+	border: 3px solid yellow;
+}
+
+.tagging_selected {
+	border: 3px solid green;
 }
