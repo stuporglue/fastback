@@ -117,8 +117,11 @@ class FastbackOutput {
 		} else if (!empty($_GET['flag'])) {
 			$this->flag_photo();
 			exit();
+		} else if (!empty($_GET['tags']) || !empty($_POST['tags'])) {
+			$this->handle_tags();
+			exit();
 		} else {
-			// don't exit, and keep object so we can use it.
+			$this->gallery_html();
 		}
 	}
 
@@ -141,7 +144,6 @@ class FastbackOutput {
 			</head>';
 
 		$html .= '<body class="photos">';
-		$html .= '<div id="map"></div>';
 		$html .= '<div id="hyperlist_wrap">';
 		$html .= '<div id="photos"></div>';
 		$html .= '</div>';
@@ -265,7 +267,6 @@ class FastbackOutput {
 	}
 
 	private function sql_connect($try_no = 1){
-
 		if ( !file_exists($this->filecache . '/fastback.sqlite') ) {
 			$this->sql = new SQLite3($this->filecache . '/fastback.sqlite');
 			$this->setup_db();
@@ -292,7 +293,10 @@ class FastbackOutput {
 	 * Initialize the database
 	 */
 	public function setup_db() {
-		$q_create_meta = "Create TABLE IF NOT EXISTS fastbackmeta ( key VARCHAR(20) PRIMARY KEY, value VARCHAR(255))";
+		$q_create_meta = "CREATE TABLE IF NOT EXISTS fastbackmeta ( 
+			key VARCHAR(20) PRIMARY KEY, 
+			value VARCHAR(255)
+		)";
 		$res = $this->sql->query($q_create_meta);
 
 		$q_create_files = "CREATE TABLE IF NOT EXISTS fastback ( 
@@ -309,8 +313,18 @@ class FastbackOutput {
 			nullgeom BOOL,
 			_util TEXT
 		)";
-
 		$res = $this->sql->query($q_create_files);
+
+		$q_create_tags = "CREATE TABLE IF NOT EXISTS fastbacktags ( 
+			tag_id INTEGER PRIMARY KEY AUTOINCREMENT,
+			file INTEGER NOT NULL,
+			tag TEXT NOT NULL
+		)";
+		$res = $this->sql->query($q_create_tags);
+
+		// TODO: Add index on tags
+		$q_create_index = "CREATE UNIQUE INDEX tag_photo_combo ON fastbacktags(file,tag)";
+		$res = $this->sql->query($q_create_index);
 	}
 
 	private function sql_disconnect(){
@@ -375,6 +389,10 @@ class FastbackOutput {
 				break;
 			case 'reset_db':
 				$tasks = array('reset_db');
+				break;
+			case 'setup_db':
+				$this->sql_connect();
+				$tasks = array('setup_db');
 				break;
 			case 'load_cache':
 				$tasks = array('load_cache');
@@ -668,20 +686,21 @@ class FastbackOutput {
 	public function make_csv(){
 		$this->sql_connect();
 		$q = "SELECT 
-			file,
-			isvideo,
-			DATETIME(sorttime) AS sorttime,
-			lon,
-			lat,
-			elev
-			FROM fastback 
+			fb.file,
+			fb.isvideo,
+			DATETIME(fb.sorttime) AS sorttime,
+			fb.lon,
+			fb.lat,
+			fb.elev
+			FROM fastback fb
+			LEFT JOIN fastbacktags fbt ON (fb.file=fbt.file)
 			WHERE 
 			thumbnail IS NOT NULL 
 			AND thumbnail NOT LIKE 'RESERVE%' 
 			AND flagged IS NOT TRUE 
 			AND sorttime NOT LIKE '% 00:00:01' 
-			AND DATETIME(sorttime) IS NOT NULL 
-			ORDER BY sorttime " . $this->sortorder . ",file";
+			AND DATETIME(fb.sorttime) IS NOT NULL 
+			ORDER BY fb.sorttime " . $this->sortorder . ",fb.file";
 		$res = $this->sql->query($q);
 
 		$fh = fopen($this->filecache . '/fastback.csv','w');
@@ -1250,7 +1269,6 @@ class FastbackOutput {
 	}
 
 	private function update_files_in($update_q,$files) {
-
 		if ( count($files) === 0 ) {
 			return;
 		}
@@ -1269,5 +1287,40 @@ class FastbackOutput {
 		$this->sql->query($update_q);
 		$this->sql_disconnect();
 	}
-}
 
+	private function handle_tags() {
+		if ( !empty($_GET['get_tags']) ) {
+			$this->sql_connect();
+			$q = "SELECT DISTINCT file,tag FROM fastbacktags";
+			$res = $this->sql->query($q);
+			$tags = array();
+
+			if ( $res !== false ) {
+				while($row = $res->fetchArray(SQLITE3_ASSOC)){
+					$tags[$row['file']][] = $row['tag'];
+				}
+			}
+			$this->sql_disconnect();
+
+			header("Content-Type: application/json");
+			header("Cache-Control: no-cache");
+			print json_encode(array('data' => $tags));
+		} else if ( !empty($_REQUEST['new_tags']) ) {
+			$this->sql_connect();
+			$no_commas = str_replace(',','',$_POST['tags']);
+			$tags = explode(" ", $no_commas);
+			$tags = array_filter($tags);
+			$stmt = $this->sql->prepare("INSERT INTO fastbacktags (file,tag) VALUES (:file,:tag)");
+			foreach($_POST['photos'] as $photo) {
+				$stmt->bindValue(':file',$photo);
+				foreach($tags as $tag) {
+					$stmt->bindValue(':tag',$tag);
+					$stmt->execute();
+				}
+			}
+			$this->sql_disconnect();
+		} else{
+			die("Unknown tag action");
+		}
+	}
+}

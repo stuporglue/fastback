@@ -26,7 +26,8 @@ class Fastback {
 				'type': 'media',
 				// Our csv is in x,y,z (lon,lat,elevation), but leaflet wants (lat,lon,elevation) so we swap lat/lon here.
 				'coordinates': (isNaN(parseFloat(r[3])) ? null : [parseFloat(r[4]),parseFloat(r[3]),parseFloat(r[5])]),
-				'dateorig': r[2]
+				'dateorig': r[2],
+				'tags': r[6].split(' ').filter(function(t){return t !== '';})
 			};
 		});
 
@@ -67,7 +68,6 @@ class Fastback {
 			[Hammer.Swipe,{ direction: Hammer.DIRECTION_ALL }],
 		]}).on('swiperight swipeup swipeleft', this.handle_thumb_swipe.bind(this));
 
-		// Map interations
 		jQuery('#hyperlist_wrap').on('mouseenter','.tn',this.handle_tn_mouseover.bind(this));
 
 		if ( this.features.map ){
@@ -119,7 +119,6 @@ class Fastback {
 			this.browser_supported_file_types.push('mov');
 			this.browser_supported_file_types.push('mpg');
 		}
-
 	}
 
 	/**
@@ -129,6 +128,7 @@ class Fastback {
 		var self = this;
 
 		// Find our stylesheet
+		/*
 		var stylesheet;
 		for(var s = 0;s<document.styleSheets.length;s++){
 			if ( document.styleSheets[s].href.match(/.*\/fastback_assets\/fastback.css$/) !== null ) {
@@ -139,6 +139,7 @@ class Fastback {
 		if ( stylesheet === undefined ) {
 			throw new Error("Couldn't find fastback stylesheet.");
 		}
+		*/
 
 		this.hyperlist_config = {
 			height: window.innerHeight,
@@ -247,7 +248,7 @@ class Fastback {
 					} else {
 						vidclass = '';
 					}
-					return '<div class="tn' + vidclass + '"><img data-dateorig="' + p['dateorig']+ '" data-photoid="' + p['id'] + '" src="' + encodeURI(self.cacheurl + p['file']) + '.webp"/></div>';
+					return '<div class="tn' + vidclass + '" data-file="' + p['file'] + '" data-tags="' + p['tags'].join(' ') + '"><img data-dateorig="' + p['dateorig']+ '" data-photoid="' + p['id'] + '" src="' + encodeURI(self.cacheurl + p['file']) + '.webp"/></div>';
 				} else if ( p['type'] == 'dateblock' ) {
 					date = p['date'];
 					// I feel like this is kind of clever. I take the Year-Month, eg. 2021-12, parse it to an int like 202112 and then take the mod of the palette length to get a fixed random color for each date.
@@ -611,61 +612,16 @@ Fastback.onthisday = class {
 	}
 }
 
-/** 
- * This class adds support for tagging, and for filtering by tags
- */
-Fastback.tagging = class {
-
-	constructor(args) {
-		jQuery('#widgets').append('<div id="tagicon"></div>');
-
-		this.fastback = args[0];
-		this.selected = new Set();
-		this.shiftprevon = false;
-		this.shiftprevoff = false;
-
-		jQuery('#photos').on('fastback_after_render',this.after_render_callback.bind(this));
-	}
-
-	after_render_callback(fb){
-		var self = this;
-		jQuery('#photos').not('nolink').selectable({
-			filter: '.tn',
-			classes: {
-				'ui-selecting': 'tagging_selecting',
-				'ui-selected': 'tagging_selected'
-			},
-			selected: function(e, ui) {
-				var pid = jQuery(ui.selected).find('img').data('photoid');
-				self.selected.add(pid);
-			},
-			unselected: function(e, ui){
-				var pid = jQuery(ui.unselected).find('img').data('photoid');
-				self.selected.delete(pid);
-			}
-		});
-
-
-		self.after_render_catchup();
-	}
-
-	after_render_catchup() {
-		var self = this;
-		jQuery('.tn').each(function(i,tn){
-			var pid = jQuery(tn).find('img').data('photoid');
-			if ( self.selected.has(pid) ) {
-				jQuery(tn).addClass('tagging_selected ui-selected');
-			}
-		})
-	}
-}
-
 /**
  * This class adds support for map interactions
  */
 Fastback.map = class {
 
 	constructor(args) {
+
+		this.fastback = args;
+
+		jQuery('#hyperlist_wrap').before('<div id="map"></div>');
 
 		jQuery('#widgets').append('<div id="globeicon"></div>');
 
@@ -685,11 +641,6 @@ Fastback.map = class {
 			weight: 3,
 			opacity: 1
 		};
-
-
-
-
-		this.fastback = args[0];
 
 		// Check if any photos have geotagging
 		jQuery(this.fastback.photos).each(function(p){
@@ -821,7 +772,7 @@ Fastback.map = class {
 	 * Take a photos array and build geojson from it
 	 */
 	build_geojson(photos) {
-		photos = photos || this.photos;
+		photos = photos || this.fastback.photos;
 
 		var bbox = [0,0,0,0,0,0];
 		var geojson = {
@@ -875,11 +826,22 @@ Fastback.map = class {
 	/**
 	 * Handle globe icon click
 	 */
-	handle_globe_click() {
-		if ( jQuery('body').hasClass('map') ) {
+	handle_globe_click(action) {
+		if ( jQuery('#globeicon').hasClass('active') || action == 'disable') {
+
+			jQuery('body').removeClass('split');
 			jQuery('body').removeClass('map');
-		} else {
+			jQuery('#globeicon').removeClass('active');
+
+		} else if ( !jQuery('#globeicon').hasClass('active') || action == 'enable') {
+
+			if ( this.fastback.tagging !== undefined ) {
+				this.fastback.tagging.toggle_tagging('disable');
+			}
+
+			jQuery('body').addClass('split');
 			jQuery('body').addClass('map');
+			jQuery('#globeicon').addClass('active');
 
 			if ( this.fmap === undefined ) {
 				this.map_init();
@@ -888,9 +850,8 @@ Fastback.map = class {
 				this.fmap.lmap.fitBounds(this.fmap.clusterlayer.getBounds());
 			}
 		}
-		this.refresh_layout();
+		this.fastback.refresh_layout();
 	}
-
 
 	mouseover_handler(e) {
 		var photoid = jQuery(e.target).find('img').first().data('photoid');
@@ -951,18 +912,151 @@ Fastback.map = class {
 	}
 
 	after_render() {
+		if ( this.fmap === undefined ) {
+			return;
+		}
+
 		var self = this;
 
 		// Refresh the map highlight layer
 		var rows = jQuery('.photorow:visible').toArray().filter(function(r){return jQuery(r).position().top < window.innerHeight;})
 		var tnsar =	rows.map(function(f){ return jQuery(f).find('.tn img').toArray(); });
 		var tns = jQuery.map(tnsar,function(f){return f;});
-		var photos = tns.map(function(f){return self.photos[jQuery(f).data('photoid')];})
+		var photos = tns.map(function(f){return self.fastback.photos[jQuery(f).data('photoid')];})
 		var geojson = this.build_geojson(photos);
 		this.fmap.flashlayer.clearLayers();
 		this.fmap.flashlayer.addData(geojson);
-
 	}
-
 }
 
+/** 
+ * This class adds support for tagging, and for filtering by tags
+ */
+Fastback.tagging = class {
+
+	constructor(args) {
+		jQuery('#hyperlist_wrap').before(
+			'<div id="tags">'
+			+ '<h1>Add tags</h1>'
+			+ '<p>Add as many tags as you want, separated by commas or spaces. Or click existing tags to add them to the list.</p>'
+			+ '<form id="tagform">'
+			+ '<input type="text" id="new_tags"/> '
+			+ '<input type="submit" value="Add Tags"/>'
+			+ '</form>'
+			+ '<hr>'
+			+ '<div id="taglist"></div>'
+			+ '</div>'
+		);
+
+		jQuery('#widgets').append('<div id="tagicon"></div>');
+
+		jQuery('#tagform').on('submit',this.handle_add_tags.bind(this));
+
+		this.fastback = args;
+		this.selected = new Set();
+		this.shiftprevon = false;
+		this.shiftprevoff = false;
+
+		jQuery('#tagicon').on('click',this.toggle_tagging.bind(this));
+	}
+
+	toggle_tagging(action) {
+		if ( jQuery('#tagicon').hasClass('active') || action == 'disable' ) {
+
+			jQuery('body').removeClass('tags');
+			jQuery('body').removeClass('split');
+
+			// disable
+			jQuery('#tagicon').removeClass('active');
+			jQuery('#photos').off('fastback_after_render',this.after_render_callback.bind(this));
+			try {
+				jQuery('#photos').selectable('destroy');
+			} catch (e) {
+				// do nothing;
+			}
+			this.selectable = new Set();
+		} else if ( !jQuery('#tagicon').hasClass('active') || action == 'enable' ) {
+			if ( this.fastback.map !== undefined ) {
+				this.fastback.map.handle_globe_click('disable');
+			}
+
+			jQuery('#tagicon').addClass('active');
+			jQuery('body').addClass('tags');
+			jQuery('body').addClass('split');
+
+			jQuery('#photos').on('fastback_after_render',this.after_render_callback.bind(this));
+			this.setup_selectable();
+			this.setup_tags_pane();
+		}
+		this.fastback.refresh_layout();
+	}
+
+	setup_tags_pane() {
+		var self = this;
+		$.get(this.fastback.fastbackurl + '?tags=1&get_tags=1',function(data){
+			var html = '';
+			for(var i=0;i<data.tags.length;i++) {
+				html += '<div class="tags">' + data.tags[i] + '</div>';
+			}
+			jQuery('#taglist').html(html);
+		});
+	}
+
+	setup_selectable() {
+		var self = this;
+
+		jQuery('#photos').selectable({
+			filter: '.tn',
+			classes: {
+				'ui-selecting': 'tagging_selecting',
+				'ui-selected': 'tagging_selected'
+			},
+			selected: function(e, ui) {
+				var pid = jQuery(ui.selected).find('img').data('photoid');
+				self.selected.add(pid);
+			},
+			unselected: function(e, ui){
+				var pid = jQuery(ui.unselected).find('img').data('photoid');
+				self.selected.delete(pid);
+			}
+		});
+	}
+
+	after_render_callback(fb){
+		this.setup_selectable();
+		this.after_render_catchup();
+	}
+
+	after_render_catchup() {
+		var self = this;
+		jQuery('.tn').each(function(i,tn){
+			var pid = jQuery(tn).find('img').data('photoid');
+			if ( self.selected.has(pid) ) {
+				jQuery(tn).addClass('tagging_selected ui-selected');
+			}
+		})
+	}
+
+	/**
+	 * Form handling. Return false so we don't actually submit.
+	 */
+	handle_add_tags() {
+		var self = this;
+
+		if ( this.selected.length === 0 ) {
+			return false;
+		}
+
+		var photos = [];
+		this.selected.forEach(function(i){
+			photos.push(self.fastback.photos[i].file);
+		});
+
+		$.post(this.fastback.fastbackurl + '?tags=1&new_tags=1',{
+			'photos': photos,
+			'tags': jQuery('#new_tags').val()
+		}).then(function(results){
+			console.log(results);
+		});
+	}
+}
