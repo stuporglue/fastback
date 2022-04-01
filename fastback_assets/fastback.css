@@ -182,7 +182,7 @@ body .up10 .tn {width: calc(100vw/10); height: calc(100vw/10); font-size: 2vw;  
 	transform: rotateX(180deg);
 }
 
-#resizer {
+#widgets {
 	position: absolute;
 	bottom: 0;
 	right: 0;
@@ -190,23 +190,23 @@ body .up10 .tn {width: calc(100vw/10); height: calc(100vw/10); font-size: 2vw;  
 	z-index: 1000;
 }
 
-#resizer > input {
+#widgets > input {
 	direction: rtl;
 }
 
-#resizer > div {
+#widgets > div {
 	cursor: pointer;
 }
-#resizer > div,
-#resizer > input,
+#widgets > div,
+#widgets > input,
 #speedslide {
 	opacity: 0.7;
 	display: inline-block;
 	vertical-align: middle;
 }
 
-#resizer > div:hover,
-#resizer > input:hover,
+#widgets > div:hover,
+#widgets > input:hover,
 #speedslide:hover {
 	opacity: 1;
 }

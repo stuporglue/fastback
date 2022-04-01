@@ -5,6 +5,7 @@
  * In other words, the core Fastback experience.
  */
 class Fastback {
+
 	/**
 	 * Load the data and set up event handlers
 	 */
@@ -13,59 +14,62 @@ class Fastback {
 
 		var self = this;
 		jQuery.extend(this,args);
-		$.get(this.cacheurl + 'fastback.csv', function(data) {
-			var res = Papa.parse(data.trim());
-			self.photos = res.data.map(function(r){
-				return {
-					'file': r[0],
-					'isvideo': Boolean(parseInt(r[1])),
-					'date': new Date(r[2].replaceAll('-','/')),
-					'type': 'media',
-					// Our csv is in x,y,z (lon,lat,elevation), but leaflet wants (lat,lon,elevation) so we swap lat/lon here.
-					'coordinates': (isNaN(parseFloat(r[3])) ? null : [parseFloat(r[4]),parseFloat(r[3]),parseFloat(r[5])]),
-					'dateorig': r[2]
-				};
-			});
+		$.get(this.cacheurl + 'fastback.csv', this._load_and_parse_data.bind(this)).then(this._setup_app.bind(this));
+	}
 
-			self.photos = self.add_date_blocks(self.photos);
-
-			// Browsers can only support an object so big, so we can only use so many rows.
-			// Calculate the new max zoom
-			self.maxzoom = Math.ceil(Math.sqrt(fastback.hyperlist_container.width() * fastback.photos.length / HyperList.getMaxBrowserHeight()));
-
-			// Make sure our new cols doesn't go over the max zoom
-			self.cols = Math.max(self.maxzoom, self.cols);
-
-			self.hyperlist_container.addClass('up' + self.cols);
-		}).then(function(){
-
-			if ( self.photos.length === 0 ) {
-				console.log("No photos loaded. Maybe it's a fresh install?");
-				jQuery('#photos').html("No photos found. Maybe this is a fresh install? If not, check file permissions and the database!");
-				return false;
-			}
-
-			self.orig_photos = self.photos;
-			self.hyperlist_init();
-			self.load_nav();
-
-			jQuery('#speedslide').on('input',self.speed_slide.bind(self));
-			jQuery('#zoom').on('change',self.zoom_change.bind(self));
-			jQuery('#photos').on('click','.tn',self.handle_thumb_click.bind(self));
-
-			/* Nav action handlers stuff */
-			jQuery('#thumbright').on('click',self.handle_thumb_next.bind(self));
-			jQuery('#thumbleft').on('click',self.handle_thumb_prev.bind(self));
-			jQuery('#thumbclose').on('click',self.hide_thumb.bind(self));
-			jQuery(document).on('keydown',self.keydown_handler.bind(self));
-			// Touch stuff
-			jQuery('#thumb').hammer({recognizers: [ 
-				[Hammer.Swipe,{ direction: Hammer.DIRECTION_ALL }],
-			]}).on('swiperight swipeup swipeleft', self.handle_thumb_swipe.bind(self));
-
-			// Map interations
-			jQuery('#hyperlist_wrap').on('mouseenter','.tn',self.handle_tn_mouseover.bind(self));
+	_load_and_parse_data(data) {
+		var res = Papa.parse(data.trim());
+		this.photos = res.data.map(function(r){
+			return {
+				'file': r[0],
+				'isvideo': Boolean(parseInt(r[1])),
+				'date': new Date(r[2].replaceAll('-','/')),
+				'type': 'media',
+				// Our csv is in x,y,z (lon,lat,elevation), but leaflet wants (lat,lon,elevation) so we swap lat/lon here.
+				'coordinates': (isNaN(parseFloat(r[3])) ? null : [parseFloat(r[4]),parseFloat(r[3]),parseFloat(r[5])]),
+				'dateorig': r[2]
+			};
 		});
+
+		this.photos = this.add_date_blocks(this.photos);
+
+		if ( this.photos.length === 0 ) {
+			console.log("No photos loaded. Maybe it's a fresh install?");
+			jQuery('#photos').html("No photos found. Maybe this is a fresh install? If not, check file permissions and the database!");
+			return false;
+		}
+
+		// Browsers can only support an object so big, so we can only use so many rows.
+		// Calculate the new max zoom
+		this.maxzoom = Math.ceil(Math.sqrt(fastback.hyperlist_container.width() * fastback.photos.length / HyperList.getMaxBrowserHeight()));
+
+		// Make sure our new cols doesn't go over the max zoom
+		this.cols = Math.max(this.maxzoom, this.cols);
+
+		this.hyperlist_container.addClass('up' + this.cols);
+	}
+
+	_setup_app() {
+		this.orig_photos = this.photos;
+		this.hyperlist_init();
+		this.load_nav();
+
+		jQuery('#speedslide').on('input',this.speed_slide.bind(this));
+		jQuery('#zoom').on('change',this.zoom_change.bind(this));
+		jQuery('#photos').on('click','.tn',this.handle_thumb_click.bind(this));
+
+		/* Nav action handlers stuff */
+		jQuery('#thumbright').on('click',this.handle_thumb_next.bind(this));
+		jQuery('#thumbleft').on('click',this.handle_thumb_prev.bind(this));
+		jQuery('#thumbclose').on('click',this.hide_thumb.bind(this));
+		jQuery(document).on('keydown',this.keydown_handler.bind(this));
+		// Touch stuff
+		jQuery('#thumb').hammer({recognizers: [ 
+			[Hammer.Swipe,{ direction: Hammer.DIRECTION_ALL }],
+		]}).on('swiperight swipeup swipeleft', this.handle_thumb_swipe.bind(this));
+
+		// Map interations
+		jQuery('#hyperlist_wrap').on('mouseenter','.tn',this.handle_tn_mouseover.bind(this));
 
 		if ( this.features.map ){
 			this.map = new Fastback.map(this);
@@ -117,19 +121,6 @@ class Fastback {
 			this.browser_supported_file_types.push('mpg');
 		}
 
-		this.flashstyle = {
-			radius: 15,
-			fillColor: "#ff7800",
-			color: "#000672",
-			weight: 1,
-			opacity: 0.7,
-			fillOpacity: 0
-		};
-
-		this.flashstyle_hover = {
-			weight: 3,
-			opacity: 1
-		};
 	}
 
 	/**
@@ -506,12 +497,72 @@ class Fastback {
 	}
 }
 
+/**
+ * This class lets the user jump to any date in the photo collection
+ */
+Fastback.datejump = class {
+
+	constructor(args) {
+		jQuery('#widgets').append('<div id="calendaricon"><input readonly id="datepicker" type="text"></div>');
+
+		var self = this;
+		this.fastback = args;
+
+		// first date (in tags list) -- The default is Descending view, so this should be the greatest date
+		var fd = this.fastback.photos[0]['date'];
+		var ld = this.fastback.photos[this.fastback.photos.length - 1]['date'];
+
+		// If fd is not the greatest date, swap 'em
+		if ( fd > ld ) {
+			[fd,ld] = [ld,fd];
+		}
+
+		jQuery('#datepicker').datepicker({
+			minDate: fd,
+			maxDate: ld,
+			changeYear: true,
+			changeMonth: true, 
+			yearRange: 'c-100:c+100',
+			dateFormat: 'yy-mm-dd',
+			onSelect: this.handle_datepicker_change.bind(this) 
+		});
+	}
+
+
+	/**
+	 * Handle the datepicker change
+	 */
+	handle_datepicker_change(date){
+		var targetdate = new Date(date.replaceAll('-','/') + ' 23:59:59'); // Use the very end of day so that our findIndex works later
+
+		jQuery('#photos').trigger('fastback_datepicker_change',this);
+
+		// Find the first photo that is younger than our target photo
+		var first = this.fastback.photos.findIndex(o => o['date'] <= targetdate);
+
+		// If we don't find one, go all the way to the end
+		if ( first === undefined || first === -1 ) {
+			first = this.fastback.photos.length - 1;
+		}
+
+		// Get the row number now
+		var rownum = parseInt(first / this.fastback.cols)
+
+		// Set the scrollTop
+		this.fastback.hyperlist_container.prop('scrollTop',(rownum * this.fastback.hyperlist_config.itemHeight));
+
+		this.fastback.refresh_layout();
+	}
+}
+
 /** 
  * This class adds support for tagging, and for filtering by tags
  */
 Fastback.tagging = class {
 
 	constructor(args) {
+		jQuery('#widgets').append('<div id="tagicon"></div>');
+
 		this.fastback = args[0];
 		this.selected = new Set();
 		this.shiftprevon = false;
@@ -559,8 +610,28 @@ Fastback.tagging = class {
 Fastback.map = class {
 
 	constructor(args) {
+
+		jQuery('#widgets').append('<div id="globeicon"></div>');
+
 		var self = this;
 		this.has_map = false;
+
+		this.flashstyle = {
+			radius: 15,
+			fillColor: "#ff7800",
+			color: "#000672",
+			weight: 1,
+			opacity: 0.7,
+			fillOpacity: 0
+		};
+
+		this.flashstyle_hover = {
+			weight: 3,
+			opacity: 1
+		};
+
+
+
 
 		this.fastback = args[0];
 
@@ -584,7 +655,7 @@ Fastback.map = class {
 		jQuery('#globeicon').on('click',this.handle_globe_click.bind(this));
 	}
 
-/**
+	/**
 	 * Kick off the map. This may be slow, so it should only get called the first time the div is visible.
 	 */
 	map_init() {
@@ -845,6 +916,7 @@ Fastback.map = class {
 Fastback.onthisday = class {
 
 	constructor(args) {
+		jQuery('#widgets').append('<div id="rewindicon"></div>');
 
 		jQuery('#rewindicon').on('click',this.handle_rewind_click.bind(this));
 
@@ -889,62 +961,4 @@ Fastback.onthisday = class {
 		this.refresh_layout();
 		this.hyperlist_container.prop('scrollTop',0);
 	}
-
-
-
-}
-
-/**
- * This class lets the user jump to any date in the photo collection
- */
-Fastback.datejump = class {
-
-	constructor(args) {
-		// first date (in tags list) -- The default is Descending view, so this should be the greatest date
-		var fd = this.photos[0]['date'];
-		var ld = this.photos[this.photos.length - 1]['date'];
-
-		// If fd is not the greatest date, swap 'em
-		if ( fd > ld ) {
-			[fd,ld] = [ld,fd];
-		}
-
-		jQuery('#datepicker').datepicker({
-			minDate: fd,
-			maxDate: ld,
-			changeYear: true,
-			changeMonth: true, 
-			yearRange: 'c-100:c+100',
-			dateFormat: 'yy-mm-dd',
-			onSelect: this.handle_datepicker_change.bind(this) 
-		});
-	}
-
-
-	/**
-	 * Handle the datepicker change
-	 */
-	handle_datepicker_change(date){
-		var targetdate = new Date(date.replaceAll('-','/') + ' 23:59:59'); // Use the very end of day so that our findIndex works later
-		
-		jQuery('#photos').trigger('fastback_datepicker_change',this);
-
-		// Find the first photo that is younger than our target photo
-		var first = this.photos.findIndex(o => o['date'] <= targetdate);
-
-		// If we don't find one, go all the way to the end
-		if ( first === undefined || first === -1 ) {
-			first = this.photos.length - 1;
-		}
-
-		// Get the row number now
-		var rownum = parseInt(first / this.cols)
-
-		// Set the scrollTop
-		this.hyperlist_container.prop('scrollTop',(rownum * this.hyperlist_config.itemHeight));
-
-		this.refresh_layout();
-	}
-
-
 }

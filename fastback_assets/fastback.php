@@ -146,24 +146,8 @@ class FastbackOutput {
 		$html .= '<div id="photos"></div>';
 		$html .= '</div>';
 		$html .= '<input id="speedslide" type="range" orient="vertical" min="0" max="100" value="0"/>';
-		$html .= '<div id="resizer">';
-			$html .= '<input type="range" min="1" max="10" value="5" class="slider" id="zoom">';
-			
-			if ( $this->show_map ) {
-				$html .= '<div id="globeicon"></div>';
-			}
-
-			if ( $this->show_onthisday ) {
-				$html .= '<div id="rewindicon"></div>';
-			}
-
-			if ( $this->show_datejump ) {
-				$html .= '<div id="calendaricon"><input readonly id="datepicker" type="text"></div>';
-			}
-
-			if ( $this->show_tagging ) {
-				$html .= '<div id="tagicon"></div>';
-			}
+		$html .= '<div id="widgets">';
+		$html .= '<input type="range" min="1" max="10" value="5" class="slider" id="zoom">';
 		$html .= '</div>';
 		$html .= '<div id="thumb">
 					<div id="thumbcontent"></div>
