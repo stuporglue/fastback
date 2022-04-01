@@ -130,8 +130,8 @@ class FastbackOutput {
 			<meta charset="utf-8">
 			<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
 			<title>' . htmlspecialchars($this->sitetitle) . '</title>
-			<link rel="shortcut icon" href="fastback_assets/favicon.png"> 
-			<link rel="apple-touch-icon" href="fastback_assets/favicon.png">
+			<link rel="shortcut icon" href="fastback_assets/img/favicon.png"> 
+			<link rel="apple-touch-icon" href="fastback_assets/img/favicon.png">
 			<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
 			<link rel="stylesheet" href="fastback_assets/jquery-ui.min.css">
 			<link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" integrity="sha512-xodZBNTC5n17Xt2atTPuE1HxjVMSvLVW9ocqUKLsCC5CXdbqCmblAshOMAS6/keqq/sMZMZ19scR4PsZChSR7A==" crossorigin="" />
@@ -201,14 +201,14 @@ class FastbackOutput {
 						</div>
 					</div>';
 		$html .= '</div>';
-		$html .= '<script src="fastback_assets/jquery.min.js"></script>';
-		$html .= '<script src="fastback_assets/jquery-ui.min.js"></script>';
-		$html .= '<script src="fastback_assets/hyperlist.js"></script>';
-		$html .= '<script src="fastback_assets/hammer.js"></script>';
-		$html .= '<script src="fastback_assets/papaparse.min.js"></script>';
-		$html .= '<script src="fastback_assets/jquery.hammer.js"></script>';
-		$html .= '<script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js" integrity="sha512-XQoYMqMTK8LvdxXYG3nZ448hOEQiglfqkJs1NOQV44cWnUrBc8PkAOcXy20w0vlaXaVUearIOBhiXZ5V3ynxwA==" crossorigin=""></script>';
-		$html .= '<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>';
+		$html .= '<script src="fastback_assets/js/jquery.min.js"></script>';
+		$html .= '<script src="fastback_assets/js/jquery-ui.min.js"></script>';
+		$html .= '<script src="fastback_assets/js/hyperlist.js"></script>';
+		$html .= '<script src="fastback_assets/js/hammer.js"></script>';
+		$html .= '<script src="fastback_assets/js/papaparse.min.js"></script>';
+		$html .= '<script src="fastback_assets/js/jquery.hammer.js"></script>';
+		$html .= '<script src="fastback_assets/js/leaflet.js"></script>';
+		$html .= '<script src="fastback_assets/js/leaflet.markercluster.js"></script>';
 		$html .= '<script src="fastback_assets/fastback.js"></script>';
 		$html .= '<script>
 			var FastbackBase = "' . $_SERVER['SCRIPT_NAME'] . '";

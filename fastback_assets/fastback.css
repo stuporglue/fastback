@@ -39,7 +39,7 @@ body #photos .photorow {
 }
 
 .photorow > .tn {
-	background-image: url('loading.png');
+	background-image: url('img/loading.png');
 	background-repeat: no-repeat;
 	background-size: 25px 25px;
 	background-position: center center;
@@ -98,7 +98,7 @@ body #photos .photorow {
 	width: 100%;
 	height: 100%;
 	content: " ";
-	background-image: url('playbutton.png');
+	background-image: url('img/playbutton.png');
 	background-size: 50% 50%;
 	background-repeat: no-repeat;
 	background-position: center; 
@@ -153,7 +153,7 @@ body .up10 .tn {width: calc(100vw/10); height: calc(100vw/10); font-size: 2vw;  
 	background-color: rgba(255,255,255,0.8);
 	width: 30px;
 	height: 30px;
-	background-image: url('calendar.png');
+	background-image: url('img/calendar.png');
 	background-size: cover;
 }
 
@@ -217,18 +217,18 @@ body .up10 .tn {width: calc(100vw/10); height: calc(100vw/10); font-size: 2vw;  
 	z-index: 1000;
 	box-sizing: border-box;
 	background-color: rgba(255,255,255,0.8);
-	background-image: url('rewind.png');
+	background-image: url('img/rewind.png');
 	background-size: cover;
 }
 
 #globeicon {
 	right: 60px;
-	background-image: url('globe.png');
+	background-image: url('img/globe.png');
 	display: none;
 }
 
 #tagicon {
-	background-image: url('tagging.png');
+	background-image: url('img/tagging.png');
 }
 
 #globeicon.enabled {
