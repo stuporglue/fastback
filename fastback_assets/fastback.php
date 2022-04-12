@@ -693,7 +693,6 @@ class FastbackOutput {
 			fb.lat,
 			fb.elev
 			FROM fastback fb
-			LEFT JOIN fastbacktags fbt ON (fb.file=fbt.file)
 			WHERE 
 			thumbnail IS NOT NULL 
 			AND thumbnail NOT LIKE 'RESERVE%' 
@@ -1291,20 +1290,20 @@ class FastbackOutput {
 	private function handle_tags() {
 		if ( !empty($_GET['get_tags']) ) {
 			$this->sql_connect();
-			$q = "SELECT DISTINCT file,tag FROM fastbacktags";
+			$q = "SELECT DISTINCT tag FROM fastbacktags ORDER BY tag WHERE tag != '' AND tag IS NOT NULL";
 			$res = $this->sql->query($q);
 			$tags = array();
 
 			if ( $res !== false ) {
 				while($row = $res->fetchArray(SQLITE3_ASSOC)){
-					$tags[$row['file']][] = $row['tag'];
+					$tags[] = $row['tag'];
 				}
 			}
 			$this->sql_disconnect();
 
 			header("Content-Type: application/json");
 			header("Cache-Control: no-cache");
-			print json_encode(array('data' => $tags));
+			print json_encode($tags);
 		} else if ( !empty($_REQUEST['new_tags']) ) {
 			$this->sql_connect();
 			$no_commas = str_replace(',','',$_POST['tags']);
@@ -1319,6 +1318,36 @@ class FastbackOutput {
 				}
 			}
 			$this->sql_disconnect();
+		} else if (!empty($_REQUEST['file_tags'])) {
+			$this->sql_connect();
+			$params = array();
+
+			for($i=0;$i<count($_REQUEST['file_tags']);$i++){
+				$params[] = ':' . chr(97 + $i);
+			}
+
+			$sql = "SELECT file,GROUP_CONCAT(tag) AS tags FROM fastbacktags WHERE file IN (" . implode(',',$params) . ") GROUP BY file ORDER BY tag";
+			$stmt = $this->sql->prepare($sql);
+
+			$key = 0;
+			foreach($_REQUEST['file_tags'] as $param => $file) {
+				$stmt->bindValue(":" . chr(97 + $key),$file);
+				$key++;
+			}
+
+			$res = $stmt->execute();
+
+			$data = array();
+			while($row = $res->fetchArray(SQLITE3_ASSOC)){
+				if ( $tn = array_search($row['file'],$_REQUEST['file_tags']) ) {
+					$data[$tn] = $row['tags'];
+				}
+			}
+
+			$this->sql_disconnect();
+			header("Content-Type: application/json");
+			header("Cache-Control: no-cache");
+			print json_encode($data);
 		} else{
 			die("Unknown tag action");
 		}

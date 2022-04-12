@@ -27,7 +27,7 @@ class Fastback {
 				// Our csv is in x,y,z (lon,lat,elevation), but leaflet wants (lat,lon,elevation) so we swap lat/lon here.
 				'coordinates': (isNaN(parseFloat(r[3])) ? null : [parseFloat(r[4]),parseFloat(r[3]),parseFloat(r[5])]),
 				'dateorig': r[2],
-				'tags': r[6].split(' ').filter(function(t){return t !== '';})
+				'tags': [],
 			};
 		});
 
@@ -237,12 +237,14 @@ class Fastback {
 		var slice_to = (row * this.cols) + this.cols;
 		var vidclass = '';
 		var date;
+		var files_in_row = {};
 		var html = this
 			.photos
 			.slice(slice_from,slice_to)
 			.map(function(p){
 
 				if ( p['type'] == 'media' ) {
+					files_in_row[p['id']] = p['file'];
 					if ( p['isvideo'] ) {
 						vidclass = ' vid';
 					} else {
@@ -263,7 +265,12 @@ class Fastback {
 				}
 			})
 			.join("");
+
 		var e = jQuery.parseHTML('<div class="photorow">' + html + '</div>');
+
+
+		jQuery('#photos').trigger('fastback_generate_row', files_in_row );
+
 		return e[0];
 	}
 
@@ -323,6 +330,12 @@ class Fastback {
 	}
 
 	handle_thumb_click(e) {
+
+		if ( e === undefined ) {
+			console.log("No click event. Skipping");
+			return;
+		}
+
 		var divwrap = jQuery(e.target).closest('div.tn');
 		var img = divwrap.find('img');
 
@@ -958,6 +971,8 @@ Fastback.tagging = class {
 		this.shiftprevoff = false;
 
 		jQuery('#tagicon').on('click',this.toggle_tagging.bind(this));
+
+		jQuery('#photos').on('fastback_generate_row',this.handle_generate_row.bind(this));
 	}
 
 	toggle_tagging(action) {
@@ -993,10 +1008,10 @@ Fastback.tagging = class {
 
 	setup_tags_pane() {
 		var self = this;
-		$.get(this.fastback.fastbackurl + '?tags=1&get_tags=1',function(data){
+		$.get(this.fastback.fastbackurl + '?tags=1&get_tags=1').then(function(tags){
 			var html = '';
-			for(var i=0;i<data.tags.length;i++) {
-				html += '<div class="tags">' + data.tags[i] + '</div>';
+			for(var i=0;i<tags.length;i++) {
+				html += '<div class="tags">' + tags[i] + '</div>';
 			}
 			jQuery('#taglist').html(html);
 		});
@@ -1057,6 +1072,20 @@ Fastback.tagging = class {
 			'tags': jQuery('#new_tags').val()
 		}).then(function(results){
 			console.log(results);
+		});
+	}
+
+	handle_generate_row(e,files_in_row){
+
+		if ( !jQuery('#tagicon').hasClass('active') ) {
+			return false;
+		}
+
+		$.get(this.fastback.fastbackurl,{
+			'tags' : 1,
+			'file_tags': files_in_row
+			}).then(function(res){
+				console.log(res);
 		});
 	}
 }
