@@ -7,6 +7,12 @@ body, html {
 	box-sizing: border-box;
 }
 
+#map {
+	box-sizing: border-box;
+	vertical-align: top;
+	display: none;
+}
+
 #hyperlist_wrap {
 	position: absolute;
 	bottom: 0;
@@ -18,7 +24,8 @@ body, html {
 	vertical-align: top;
 }
 
-body.split #hyperlist_wrap {
+body.map #map,
+body.map #hyperlist_wrap {
 	display: inline-block;
 	width: 50%;
 	height: 100%;
@@ -32,7 +39,7 @@ body #photos .photorow {
 }
 
 .photorow > .tn {
-	background-image: url('img/loading.png');
+	background-image: url('loading.png');
 	background-repeat: no-repeat;
 	background-size: 25px 25px;
 	background-position: center center;
@@ -83,6 +90,7 @@ body #photos .photorow {
 	transition: opacity 0.05s ease-in-out;
 }
 
+
 .tn.vid:before {
 	display: block;
 	position: absolute;
@@ -90,7 +98,7 @@ body #photos .photorow {
 	width: 100%;
 	height: 100%;
 	content: " ";
-	background-image: url('img/playbutton.png');
+	background-image: url('playbutton.png');
 	background-size: 50% 50%;
 	background-repeat: no-repeat;
 	background-position: center; 
@@ -116,23 +124,23 @@ body .up10 .tn {width: calc(100vw/10); height: calc(100vw/10); font-size: 2vw;  
 
 /* When the map is open AND we're landscape, everything is half as wide */
 @media(orientation: landscape) {
-	body.split	   .tn {width: calc(50vw/5);  height: calc(50vw/5);  font-size: 2px;   }
-	body.split .up1  .tn {width: calc(50vw/1);  height: calc(50vw/1);  font-size: 11vw;  }
-	body.split .up2  .tn {width: calc(50vw/2);  height: calc(50vw/2);  font-size: 5vw;  }
-	body.split .up3  .tn {width: calc(50vw/3);  height: calc(50vw/3);  font-size: 3.5vw;   }
-	body.split .up4  .tn {width: calc(50vw/4);  height: calc(50vw/4);  font-size: 2.5vw;   }
-	body.split .up5  .tn {width: calc(50vw/5);  height: calc(50vw/5);  font-size: 2vw;   }
-	body.split .up6  .tn {width: calc(50vw/6);  height: calc(50vw/6);  font-size: 1.75vw; }
-	body.split .up7  .tn {width: calc(50vw/7);  height: calc(50vw/7);  font-size: 1.5vw;   }
-	body.split .up8  .tn {width: calc(50vw/8);  height: calc(50vw/8);  font-size: 1.25vw; }
-	body.split .up9  .tn {width: calc(50vw/9);  height: calc(50vw/9);  font-size: 1.1vw; }
-	body.split .up10 .tn {width: calc(50vw/10); height: calc(50vw/10); font-size: 1vw;   }
+	body.map	   .tn {width: calc(50vw/5);  height: calc(50vw/5);  font-size: 2px;   }
+	body.map .up1  .tn {width: calc(50vw/1);  height: calc(50vw/1);  font-size: 11vw;  }
+	body.map .up2  .tn {width: calc(50vw/2);  height: calc(50vw/2);  font-size: 5vw;  }
+	body.map .up3  .tn {width: calc(50vw/3);  height: calc(50vw/3);  font-size: 3.5vw;   }
+	body.map .up4  .tn {width: calc(50vw/4);  height: calc(50vw/4);  font-size: 2.5vw;   }
+	body.map .up5  .tn {width: calc(50vw/5);  height: calc(50vw/5);  font-size: 2vw;   }
+	body.map .up6  .tn {width: calc(50vw/6);  height: calc(50vw/6);  font-size: 1.75vw; }
+	body.map .up7  .tn {width: calc(50vw/7);  height: calc(50vw/7);  font-size: 1.5vw;   }
+	body.map .up8  .tn {width: calc(50vw/8);  height: calc(50vw/8);  font-size: 1.25vw; }
+	body.map .up9  .tn {width: calc(50vw/9);  height: calc(50vw/9);  font-size: 1.1vw; }
+	body.map .up10 .tn {width: calc(50vw/10); height: calc(50vw/10); font-size: 1vw;   }
 }
 
 /* If we're in portrait mode we just swap into over under and widths remain the same */
 @media(orientation: portrait) {
-	body.split #tags, 
-	body.split #hyperlist_wrap {
+	body.map #map, 
+	body.map #hyperlist_wrap {
 		width: 100%;
 		height: 50%;
 	}
@@ -145,7 +153,7 @@ body .up10 .tn {width: calc(100vw/10); height: calc(100vw/10); font-size: 2vw;  
 	background-color: rgba(255,255,255,0.8);
 	width: 30px;
 	height: 30px;
-	background-image: url('img/calendar.png');
+	background-image: url('calendar.png');
 	background-size: cover;
 }
 
@@ -174,7 +182,7 @@ body .up10 .tn {width: calc(100vw/10); height: calc(100vw/10); font-size: 2vw;  
 	transform: rotateX(180deg);
 }
 
-#widgets {
+#resizer {
 	position: absolute;
 	bottom: 0;
 	right: 0;
@@ -182,7 +190,6 @@ body .up10 .tn {width: calc(100vw/10); height: calc(100vw/10); font-size: 2vw;  
 	z-index: 1000;
 }
 
-<<<<<<< HEAD
 #resizer > input {
 	direction: rtl;
 }
@@ -205,52 +212,30 @@ body .up10 .tn {width: calc(100vw/10); height: calc(100vw/10); font-size: 2vw;  
 }
 
 #rewindicon, #globeicon {
-=======
-#widgets > input {
-	direction: rtl;
-}
-
-#widgets > div {
-	cursor: pointer;
->>>>>>> 5b90f80d218f19a14954007ae8eb51425459ba73
 	width: 30px;
 	height: 30px;
 	z-index: 1000;
 	box-sizing: border-box;
 	background-color: rgba(255,255,255,0.8);
+	background-image: url('rewind.png');
 	background-size: cover;
 }
 
-#widgets > div.active {
+#globeicon {
+	right: 60px;
+	background-image: url('globe.png');
+	display: none;
+}
+
+#globeicon.enabled {
+	display: inline-block;
+}
+
+#rewindicon.active, #globeicon.active {
 	background-color: yellow;
 	border: 2px inset black;
 }
 
-#widgets > div,
-#widgets > input,
-#speedslide {
-	opacity: 0.7;
-	display: inline-block;
-	vertical-align: middle;
-}
-
-#widgets > div:hover,
-#widgets > input:hover,
-#speedslide:hover {
-	opacity: 1;
-}
-
-#rewindicon {
-	background-image: url('img/rewind.png');
-}
-
-#globeicon {
-	background-image: url('img/globe.png');
-}
-
-#tagicon {
-	background-image: url('img/tagging.png');
-}
 
 /** Thumbnail controls **/
 #thumb {
@@ -560,22 +545,6 @@ only screen and (min-device-pixel-ratio : 1.5) {
 	border-color: #1DA851;
 }
 
-/**
- * Map
- */
-
-#map {
-	box-sizing: border-box;
-	vertical-align: top;
-	display: none;
-}
-
-body.split.map #map {
-	display: inline-block;
-	width: 50%;
-	height: 100%;
-}
-
 
 #mapfilter {
   border: 2px outset #ddd;
@@ -590,58 +559,4 @@ body.split.map #map {
 
 #mapfilter:hover {
 	background-color: #f4f4f4;
-}
-
-@media(orientation: portrait) {
-	body.split #map {
-		width: 100%;
-		height: 50%;
-	}
-}
-
-/* tagging support */
-
-.tagging_selecting {
-	border: 3px solid yellow;
-}
-
-.tagging_selected {
-	border: 3px solid green;
-}
-
-#tags {
-	height: 100%;
-	box-sizing: border-box;
-	vertical-align: top;
-	padding: 0 10px 10px 10px;
-}
-
-body.split.tags #tags {
-	display: inline-block;
-	width: 50%;
-	height: 100%;
-}
-
-
-div.tags {
-	border: 1px outset #ccc;
-	display: inline-block;
-	padding: 0px 4px;
-	margin: 4px;
-	border-radius: 4px;
-}
-
-body.tags .tn:before {
-	display: block;
-	position: absolute;
-	bottom: 0;
-	left: 0;
-	content: attr(data-tags);
-	width: 100%;
-	font-size: 18px;
-	background-color: rgba(255,240,100,0.8);
-	padding-top: 2px;
-	border-top-left-radius: 5px;
-	border-top-right-radius: 5px;
-	border: black 1px outset;
 }

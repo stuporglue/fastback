@@ -1,6 +1,5 @@
 <?php
 
-<<<<<<< HEAD
 declare(ticks = 1);
 
 class FastbackOutput {
@@ -10,10 +9,6 @@ class FastbackOutput {
 	// Folder path to cache directory. sqlite and thumbnails will be stored here
 	// Optional, will create a cache folder in the currend directory as the default
 	var $filecache;
-
-	// Path to .sqlite file 
-	// Optional, will use $filecache/fastback.sqlite 
-	var $sqlitefile;
 
 	// URL path to cache directory. 
 	// Optional, will use current web path + cache as default
@@ -107,10 +102,6 @@ class FastbackOutput {
 		$this->cacheurl = rtrim($this->cacheurl,'/') . '/';
 		$this->photobase = rtrim($this->photobase,'/') . '/';
 		$this->photourl = rtrim($this->photourl,'/') . '/';
-
-		if ( !isset($this->sqlitefile) ){
-			$this->sqlitefile = $this->filecache . 'fastback.sqlite';
-		}
 
 		if (php_sapi_name() === 'cli') {
 			$this->handle_cli();
@@ -264,21 +255,21 @@ class FastbackOutput {
 
 	private function sql_connect($try_no = 1){
 
-		if ( !file_exists($this->sqlitefile) ) {
-			$this->sql = new SQLite3($this->sqlitefile);
+		if ( !file_exists($this->filecache . '/fastback.sqlite') ) {
+			$this->sql = new SQLite3($this->filecache . '/fastback.sqlite');
 			$this->setup_db();
 			$this->sql->close();
 		}
 
 		if (php_sapi_name() === 'cli') {
-			$this->db_lock = fopen($this->sqlitefile . '.lock','w');
+			$this->db_lock = fopen($this->filecache . '/fastback.lock','w');
 			if( flock($this->db_lock,LOCK_EX)){
-				$this->sql = new SQLite3($this->sqlitefile);
+				$this->sql = new SQLite3($this->filecache . '/fastback.sqlite');
 			} else {
 				throw new Exception("Couldn't lock db");
 			}
 		} else {
-			$this->sql = new SQLite3($this->sqlitefile);
+			$this->sql = new SQLite3($this->filecache .'/fastback.sqlite');
 		}
 
 		if (empty($this->meta)){
@@ -362,7 +353,7 @@ class FastbackOutput {
 			} 
 
 			$this->log("Using $this->nproc processes for forks");
-			$this->log("Using sqlite database " . $this->sqlitefile);
+			$this->log("Using sqlite database " . $this->filecache . '/fastback.sqlite');
 
 			$tasks = array();
 			switch($argv[1]) {
@@ -1269,7 +1260,4 @@ class FastbackOutput {
 	}
 }
 
-=======
-require_once('fastback_assets/fastback.php');
->>>>>>> 5b90f80d218f19a14954007ae8eb51425459ba73
 $fb = new FastbackOutput();
