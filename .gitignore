@@ -3,3 +3,4 @@
 .htaccess
 fastback.ini
 *.swp
+*.sqlite

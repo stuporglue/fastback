@@ -2,6 +2,10 @@
 ; Optional, will create a cache folder in the currend directory as the default
 ; filecache = "/shared/big/no_backup/web_cache/famvacation_2021/"
 
+; Specify where to store the sqlite file
+; Optional, defaults to filecache/fastback.sqlite
+sqlitefile = "/shared/big/no_backup/web_cache/allphotos.sqlite"
+
 ; URL path to cache directory. 
 ; Optional, will use current web path + cache as default
 ; cacheurl = "/shared/big/no_backup/web_cache/famvacation_2021/"

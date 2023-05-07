@@ -10,6 +10,10 @@ class FastbackOutput {
 	// Optional, will create a cache folder in the currend directory as the default
 	var $filecache;
 
+	// Path to .sqlite file 
+	// Optional, will use $filecache/fastback.sqlite 
+	var $sqlitefile;
+
 	// URL path to cache directory. 
 	// Optional, will use current web path + cache as default
 	var $cacheurl;
@@ -102,6 +106,10 @@ class FastbackOutput {
 		$this->cacheurl = rtrim($this->cacheurl,'/') . '/';
 		$this->photobase = rtrim($this->photobase,'/') . '/';
 		$this->photourl = rtrim($this->photourl,'/') . '/';
+
+		if ( !isset($this->sqlitefile) ){
+			$this->sqlitefile = $this->filecache . 'fastback.sqlite';
+		}
 
 		if (php_sapi_name() === 'cli') {
 			$this->handle_cli();
@@ -255,21 +263,21 @@ class FastbackOutput {
 
 	private function sql_connect($try_no = 1){
 
-		if ( !file_exists($this->filecache . '/fastback.sqlite') ) {
-			$this->sql = new SQLite3($this->filecache . '/fastback.sqlite');
+		if ( !file_exists($this->sqlitefile) ) {
+			$this->sql = new SQLite3($this->sqlitefile);
 			$this->setup_db();
 			$this->sql->close();
 		}
 
 		if (php_sapi_name() === 'cli') {
-			$this->db_lock = fopen($this->filecache . '/fastback.lock','w');
+			$this->db_lock = fopen($this->sqlitefile . '.lock','w');
 			if( flock($this->db_lock,LOCK_EX)){
-				$this->sql = new SQLite3($this->filecache . '/fastback.sqlite');
+				$this->sql = new SQLite3($this->sqlitefile);
 			} else {
 				throw new Exception("Couldn't lock db");
 			}
 		} else {
-			$this->sql = new SQLite3($this->filecache .'/fastback.sqlite');
+			$this->sql = new SQLite3($this->sqlitefile);
 		}
 
 		if (empty($this->meta)){
@@ -353,7 +361,7 @@ class FastbackOutput {
 			} 
 
 			$this->log("Using $this->nproc processes for forks");
-			$this->log("Using sqlite database " . $this->filecache . '/fastback.sqlite');
+			$this->log("Using sqlite database " . $this->sqlitefile);
 
 			$tasks = array();
 			switch($argv[1]) {
@@ -376,6 +384,9 @@ class FastbackOutput {
 				break;
 			case 'get_exif':
 				$tasks = array('get_exif');
+				break;
+			case 'clear_exif':
+				$tasks = array('clear_exif');
 				break;
 			case 'get_time':
 				$tasks = array('get_times');
@@ -694,6 +705,14 @@ class FastbackOutput {
 		$this->_fork_em('_get_exif', "SELECT COUNT(*) FROM fastback WHERE exif IS NULL");
 	}
 
+	public function clear_exif() {
+		$clear_partials = 'UPDATE fastback SET exif=NULL';
+
+		$this->sql_connect();
+		$this->sql->query($clear_partials);
+		$this->sql_disconnect();
+	}
+
 	public function get_geo() {
 		$clear_partials = 'UPDATE fastback SET lat=NULL,lon=NULL,elev=NULL WHERE (lat IS NULL OR lon IS NULL OR elev IS NULL) AND (lat IS NOT NULL OR lon IS NOT NULL OR elev IS NOT NULL) AND nullgeom IS NOT TRUE';
 
@@ -912,6 +931,7 @@ class FastbackOutput {
 
 		$cmd = "exiftool -stay_open True  -@ -";
 		$cmdargs = $tags_to_consider;
+		$cmdargs = [];
 		$cmdargs[] = "-lang";
 		$cmdargs[] = "en";
 		$cmdargs[] = "-s";
@@ -1147,6 +1167,7 @@ class FastbackOutput {
 		* clear_thumbs_db – Makes the database think there are no thumbnails generated. If files exist they will not be re-created. Useful if you delete some thumbnails and want to regenerate them.
 		* load_cache – Finds all new files in the library and make cache entries for them. Does not generate new thumbnails.
 		* make_thumbs – Generates thumbnails for all entries found in the cache.
+		* clear_exif – Sets exif field for all files to NULL
 		* get_exif – Read needed exif info into the database. Must happen before gettime or getgeo
 		* get_time – Uses exif data or file creation or modified time to find the files's sort time
 		* get_geo – Uses exif data to find the media geolocation info so it can be shown on a map
