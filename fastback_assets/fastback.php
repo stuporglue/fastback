@@ -1,6 +1,5 @@
 <?php
 
-<<<<<<< HEAD
 declare(ticks = 1);
 
 class FastbackOutput {
@@ -10,10 +9,6 @@ class FastbackOutput {
 	// Folder path to cache directory. sqlite and thumbnails will be stored here
 	// Optional, will create a cache folder in the currend directory as the default
 	var $filecache;
-
-	// Path to .sqlite file 
-	// Optional, will use $filecache/fastback.sqlite 
-	var $sqlitefile;
 
 	// URL path to cache directory. 
 	// Optional, will use current web path + cache as default
@@ -90,6 +85,11 @@ class FastbackOutput {
 		$this->filestructure = 'datebased'; // Or all
 		$this->nproc = `nproc`;
 
+		$this->show_map = true;
+		$this->show_onthisday = true;
+		$this->show_datejump = true;
+		$this->show_tagging = true;
+
 		if ( file_exists(__DIR__ . '/fastback.ini') ) {
 			$settings = parse_ini_file(__DIR__ . '/fastback.ini');
 			foreach($settings as $k => $v) {
@@ -108,22 +108,24 @@ class FastbackOutput {
 		$this->photobase = rtrim($this->photobase,'/') . '/';
 		$this->photourl = rtrim($this->photourl,'/') . '/';
 
-		if ( !isset($this->sqlitefile) ){
-			$this->sqlitefile = $this->filecache . 'fastback.sqlite';
-		}
-
 		if (php_sapi_name() === 'cli') {
 			$this->handle_cli();
+			exit();
 		} else if (!empty($_GET['proxy'])) {
 			$this->proxy();
+			exit();
 		} else if (!empty($_GET['flag'])) {
 			$this->flag_photo();
+			exit();
+		} else if (!empty($_GET['tags']) || !empty($_POST['tags'])) {
+			$this->handle_tags();
+			exit();
 		} else {
-			$this->make_html();
+			$this->gallery_html();
 		}
 	}
 
-	function make_html() {
+	function gallery_html() {
 
 		$html = '<!doctype html>
 			<html lang="en">
@@ -131,8 +133,8 @@ class FastbackOutput {
 			<meta charset="utf-8">
 			<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
 			<title>' . htmlspecialchars($this->sitetitle) . '</title>
-			<link rel="shortcut icon" href="fastback_assets/favicon.png"> 
-			<link rel="apple-touch-icon" href="fastback_assets/favicon.png">
+			<link rel="shortcut icon" href="fastback_assets/img/favicon.png"> 
+			<link rel="apple-touch-icon" href="fastback_assets/img/favicon.png">
 			<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
 			<link rel="stylesheet" href="fastback_assets/jquery-ui.min.css">
 			<link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" integrity="sha512-xodZBNTC5n17Xt2atTPuE1HxjVMSvLVW9ocqUKLsCC5CXdbqCmblAshOMAS6/keqq/sMZMZ19scR4PsZChSR7A==" crossorigin="" />
@@ -142,16 +144,12 @@ class FastbackOutput {
 			</head>';
 
 		$html .= '<body class="photos">';
-		$html .= '<div id="map"></div>';
 		$html .= '<div id="hyperlist_wrap">';
 		$html .= '<div id="photos"></div>';
 		$html .= '</div>';
 		$html .= '<input id="speedslide" type="range" orient="vertical" min="0" max="100" value="0"/>';
-		$html .= '<div id="resizer">';
-			$html .= '<input type="range" min="1" max="10" value="5" class="slider" id="zoom">';
-			$html .= '<div id="globeicon"></div>';
-			$html .= '<div id="rewindicon"></div>';
-			$html .= '<div id="calendaricon"><input readonly id="datepicker" type="text"></div>';
+		$html .= '<div id="widgets">';
+		$html .= '<input type="range" min="1" max="10" value="5" class="slider" id="zoom">';
 		$html .= '</div>';
 		$html .= '<div id="thumb">
 					<div id="thumbcontent"></div>
@@ -189,23 +187,29 @@ class FastbackOutput {
 						</div>
 					</div>';
 		$html .= '</div>';
-		$html .= '<script src="fastback_assets/jquery.min.js"></script>';
-		$html .= '<script src="fastback_assets/jquery-ui.min.js"></script>';
-		$html .= '<script src="fastback_assets/hyperlist.js"></script>';
-		$html .= '<script src="fastback_assets/hammer.js"></script>';
-		$html .= '<script src="fastback_assets/papaparse.min.js"></script>';
-		$html .= '<script src="fastback_assets/jquery.hammer.js"></script>';
-		$html .= '<script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js" integrity="sha512-XQoYMqMTK8LvdxXYG3nZ448hOEQiglfqkJs1NOQV44cWnUrBc8PkAOcXy20w0vlaXaVUearIOBhiXZ5V3ynxwA==" crossorigin=""></script>';
-		$html .= '<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>';
+		$html .= '<script src="fastback_assets/js/jquery.min.js"></script>';
+		$html .= '<script src="fastback_assets/js/jquery-ui.min.js"></script>';
+		$html .= '<script src="fastback_assets/js/hyperlist.js"></script>';
+		$html .= '<script src="fastback_assets/js/hammer.js"></script>';
+		$html .= '<script src="fastback_assets/js/papaparse.min.js"></script>';
+		$html .= '<script src="fastback_assets/js/jquery.hammer.js"></script>';
+		$html .= '<script src="fastback_assets/js/leaflet.js"></script>';
+		$html .= '<script src="fastback_assets/js/leaflet.markercluster.js"></script>';
 		$html .= '<script src="fastback_assets/fastback.js"></script>';
 		$html .= '<script>
 			var FastbackBase = "' . $_SERVER['SCRIPT_NAME'] . '";
-		var FastbackBase = "' . $_SERVER['SCRIPT_NAME'] . '";
-		var fastback = new Fastback({
-			cacheurl:    "' . $this->cacheurl . '",
-			photourl:    "' . $this->photourl .'",
-			fastbackurl: "' . $_SERVER['SCRIPT_NAME'] . '"
-	});
+		    var FastbackBase = "' . $_SERVER['SCRIPT_NAME'] . '";
+		    var fastback = new Fastback({
+					cacheurl:    "' . $this->cacheurl . '",
+					photourl:    "' . $this->photourl .'",
+					fastbackurl: "' . $_SERVER['SCRIPT_NAME'] . '",
+					features:  {
+						map: ' . ( $this->show_map ? 'true' : 'false' ) . ',
+						onthisday: ' . ( $this->show_onthisday ? 'true' : 'false' ) . ',
+						datejump: ' . ( $this->show_datejump ? 'true' : 'false' ) . ',
+						tagging: ' . ( $this->show_tagging ? 'true' : 'false' ) . '
+					}
+			});
 			</script>';
 		$html .= '</body></html>';
 
@@ -263,22 +267,21 @@ class FastbackOutput {
 	}
 
 	private function sql_connect($try_no = 1){
-
-		if ( !file_exists($this->sqlitefile) ) {
-			$this->sql = new SQLite3($this->sqlitefile);
+		if ( !file_exists($this->filecache . '/fastback.sqlite') ) {
+			$this->sql = new SQLite3($this->filecache . '/fastback.sqlite');
 			$this->setup_db();
 			$this->sql->close();
 		}
 
 		if (php_sapi_name() === 'cli') {
-			$this->db_lock = fopen($this->sqlitefile . '.lock','w');
+			$this->db_lock = fopen($this->filecache . '/fastback.lock','w');
 			if( flock($this->db_lock,LOCK_EX)){
-				$this->sql = new SQLite3($this->sqlitefile);
+				$this->sql = new SQLite3($this->filecache . '/fastback.sqlite');
 			} else {
 				throw new Exception("Couldn't lock db");
 			}
 		} else {
-			$this->sql = new SQLite3($this->sqlitefile);
+			$this->sql = new SQLite3($this->filecache .'/fastback.sqlite');
 		}
 
 		if (empty($this->meta)){
@@ -290,7 +293,10 @@ class FastbackOutput {
 	 * Initialize the database
 	 */
 	public function setup_db() {
-		$q_create_meta = "Create TABLE IF NOT EXISTS fastbackmeta ( key VARCHAR(20) PRIMARY KEY, value VARCHAR(255))";
+		$q_create_meta = "CREATE TABLE IF NOT EXISTS fastbackmeta ( 
+			key VARCHAR(20) PRIMARY KEY, 
+			value VARCHAR(255)
+		)";
 		$res = $this->sql->query($q_create_meta);
 
 		$q_create_files = "CREATE TABLE IF NOT EXISTS fastback ( 
@@ -307,8 +313,18 @@ class FastbackOutput {
 			nullgeom BOOL,
 			_util TEXT
 		)";
-
 		$res = $this->sql->query($q_create_files);
+
+		$q_create_tags = "CREATE TABLE IF NOT EXISTS fastbacktags ( 
+			tag_id INTEGER PRIMARY KEY AUTOINCREMENT,
+			file INTEGER NOT NULL,
+			tag TEXT NOT NULL
+		)";
+		$res = $this->sql->query($q_create_tags);
+
+		// TODO: Add index on tags
+		$q_create_index = "CREATE UNIQUE INDEX tag_photo_combo ON fastbacktags(file,tag)";
+		$res = $this->sql->query($q_create_index);
 	}
 
 	private function sql_disconnect(){
@@ -362,7 +378,7 @@ class FastbackOutput {
 			} 
 
 			$this->log("Using $this->nproc processes for forks");
-			$this->log("Using sqlite database " . $this->sqlitefile);
+			$this->log("Using sqlite database " . $this->filecache . '/fastback.sqlite');
 
 			$tasks = array();
 			switch($argv[1]) {
@@ -373,6 +389,10 @@ class FastbackOutput {
 				break;
 			case 'reset_db':
 				$tasks = array('reset_db');
+				break;
+			case 'setup_db':
+				$this->sql_connect();
+				$tasks = array('setup_db');
 				break;
 			case 'load_cache':
 				$tasks = array('load_cache');
@@ -497,7 +517,7 @@ class FastbackOutput {
 			$lastmod = $this->meta['lastmod'];
 		}
 
-		$this->log("Changing to " . $this->photobase);
+		$this->log("Looking for new photos in $this->photobase");
 		chdir($this->photobase);
 		$filetypes = implode('\|',array_merge($this->supported_photo_types, $this->supported_video_types));
 		if ( $this->filestructure === 'datebased' ) {
@@ -666,20 +686,20 @@ class FastbackOutput {
 	public function make_csv(){
 		$this->sql_connect();
 		$q = "SELECT 
-			file,
-			isvideo,
-			DATETIME(sorttime) AS sorttime,
-			lon,
-			lat,
-			elev
-			FROM fastback 
+			fb.file,
+			fb.isvideo,
+			DATETIME(fb.sorttime) AS sorttime,
+			fb.lon,
+			fb.lat,
+			fb.elev
+			FROM fastback fb
 			WHERE 
 			thumbnail IS NOT NULL 
 			AND thumbnail NOT LIKE 'RESERVE%' 
 			AND flagged IS NOT TRUE 
 			AND sorttime NOT LIKE '% 00:00:01' 
-			AND DATETIME(sorttime) IS NOT NULL 
-			ORDER BY sorttime " . $this->sortorder . ",file";
+			AND DATETIME(fb.sorttime) IS NOT NULL 
+			ORDER BY fb.sorttime " . $this->sortorder . ",fb.file";
 		$res = $this->sql->query($q);
 
 		$fh = fopen($this->filecache . '/fastback.csv','w');
@@ -1248,7 +1268,6 @@ class FastbackOutput {
 	}
 
 	private function update_files_in($update_q,$files) {
-
 		if ( count($files) === 0 ) {
 			return;
 		}
@@ -1267,9 +1286,70 @@ class FastbackOutput {
 		$this->sql->query($update_q);
 		$this->sql_disconnect();
 	}
-}
 
-=======
-require_once('fastback_assets/fastback.php');
->>>>>>> 5b90f80d218f19a14954007ae8eb51425459ba73
-$fb = new FastbackOutput();
+	private function handle_tags() {
+		if ( !empty($_GET['get_tags']) ) {
+			$this->sql_connect();
+			$q = "SELECT DISTINCT tag FROM fastbacktags ORDER BY tag WHERE tag != '' AND tag IS NOT NULL";
+			$res = $this->sql->query($q);
+			$tags = array();
+
+			if ( $res !== false ) {
+				while($row = $res->fetchArray(SQLITE3_ASSOC)){
+					$tags[] = $row['tag'];
+				}
+			}
+			$this->sql_disconnect();
+
+			header("Content-Type: application/json");
+			header("Cache-Control: no-cache");
+			print json_encode($tags);
+		} else if ( !empty($_REQUEST['new_tags']) ) {
+			$this->sql_connect();
+			$no_commas = str_replace(',','',$_POST['tags']);
+			$tags = explode(" ", $no_commas);
+			$tags = array_filter($tags);
+			$stmt = $this->sql->prepare("INSERT INTO fastbacktags (file,tag) VALUES (:file,:tag)");
+			foreach($_POST['photos'] as $photo) {
+				$stmt->bindValue(':file',$photo);
+				foreach($tags as $tag) {
+					$stmt->bindValue(':tag',$tag);
+					$stmt->execute();
+				}
+			}
+			$this->sql_disconnect();
+		} else if (!empty($_REQUEST['file_tags'])) {
+			$this->sql_connect();
+			$params = array();
+
+			for($i=0;$i<count($_REQUEST['file_tags']);$i++){
+				$params[] = ':' . chr(97 + $i);
+			}
+
+			$sql = "SELECT file,GROUP_CONCAT(tag) AS tags FROM fastbacktags WHERE file IN (" . implode(',',$params) . ") GROUP BY file ORDER BY tag";
+			$stmt = $this->sql->prepare($sql);
+
+			$key = 0;
+			foreach($_REQUEST['file_tags'] as $param => $file) {
+				$stmt->bindValue(":" . chr(97 + $key),$file);
+				$key++;
+			}
+
+			$res = $stmt->execute();
+
+			$data = array();
+			while($row = $res->fetchArray(SQLITE3_ASSOC)){
+				if ( $tn = array_search($row['file'],$_REQUEST['file_tags']) ) {
+					$data[$tn] = $row['tags'];
+				}
+			}
+
+			$this->sql_disconnect();
+			header("Content-Type: application/json");
+			header("Cache-Control: no-cache");
+			print json_encode($data);
+		} else{
+			die("Unknown tag action");
+		}
+	}
+}
