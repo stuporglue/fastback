@@ -136,12 +136,13 @@ class FastbackOutput {
 		$html .= '<div id="map"></div>';
 		$html .= '<div id="hyperlist_wrap">';
 		$html .= '<div id="photos"></div>';
+		$html .= '</div>';
 		$html .= '<input id="speedslide" type="range" orient="vertical" min="0" max="100" value="0"/>';
 		$html .= '<div id="resizer">';
-			$html .= '<div id="calendaricon"><input readonly id="datepicker" type="text"></div>';
-			$html .= '<div id="rewindicon"></div>';
-			$html .= '<div id="globeicon"></div>';
 			$html .= '<input type="range" min="1" max="10" value="5" class="slider" id="zoom">';
+			$html .= '<div id="globeicon"></div>';
+			$html .= '<div id="rewindicon"></div>';
+			$html .= '<div id="calendaricon"><input readonly id="datepicker" type="text"></div>';
 		$html .= '</div>';
 		$html .= '<div id="thumb">
 					<div id="thumbcontent"></div>
@@ -487,6 +488,7 @@ class FastbackOutput {
 			$lastmod = $this->meta['lastmod'];
 		}
 
+		$this->log("Changing to " . $this->photobase);
 		chdir($this->photobase);
 		$filetypes = implode('\|',array_merge($this->supported_photo_types, $this->supported_video_types));
 		if ( $this->filestructure === 'datebased' ) {
