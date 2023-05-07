@@ -10,6 +10,10 @@ class FastbackOutput {
 	// Optional, will create a cache folder in the currend directory as the default
 	var $filecache;
 
+	// Path to .sqlite file 
+	// Optional, will use $filecache/fastback.sqlite 
+	var $sqlitefile;
+
 	// URL path to cache directory. 
 	// Optional, will use current web path + cache as default
 	var $cacheurl;
@@ -103,6 +107,10 @@ class FastbackOutput {
 		$this->photobase = rtrim($this->photobase,'/') . '/';
 		$this->photourl = rtrim($this->photourl,'/') . '/';
 
+		if ( !isset($this->sqlitefile) ){
+			$this->sqlitefile = $this->filecache . 'fastback.sqlite';
+		}
+
 		if (php_sapi_name() === 'cli') {
 			$this->handle_cli();
 		} else if (!empty($_GET['proxy'])) {
@@ -136,12 +144,13 @@ class FastbackOutput {
 		$html .= '<div id="map"></div>';
 		$html .= '<div id="hyperlist_wrap">';
 		$html .= '<div id="photos"></div>';
+		$html .= '</div>';
 		$html .= '<input id="speedslide" type="range" orient="vertical" min="0" max="100" value="0"/>';
 		$html .= '<div id="resizer">';
-			$html .= '<div id="calendaricon"><input readonly id="datepicker" type="text"></div>';
-			$html .= '<div id="rewindicon"></div>';
-			$html .= '<div id="globeicon"></div>';
 			$html .= '<input type="range" min="1" max="10" value="5" class="slider" id="zoom">';
+			$html .= '<div id="globeicon"></div>';
+			$html .= '<div id="rewindicon"></div>';
+			$html .= '<div id="calendaricon"><input readonly id="datepicker" type="text"></div>';
 		$html .= '</div>';
 		$html .= '<div id="thumb">
 					<div id="thumbcontent"></div>
@@ -254,21 +263,21 @@ class FastbackOutput {
 
 	private function sql_connect($try_no = 1){
 
-		if ( !file_exists($this->filecache . '/fastback.sqlite') ) {
-			$this->sql = new SQLite3($this->filecache . '/fastback.sqlite');
+		if ( !file_exists($this->sqlitefile) ) {
+			$this->sql = new SQLite3($this->sqlitefile);
 			$this->setup_db();
 			$this->sql->close();
 		}
 
 		if (php_sapi_name() === 'cli') {
-			$this->db_lock = fopen($this->filecache . '/fastback.lock','w');
+			$this->db_lock = fopen($this->sqlitefile . '.lock','w');
 			if( flock($this->db_lock,LOCK_EX)){
-				$this->sql = new SQLite3($this->filecache . '/fastback.sqlite');
+				$this->sql = new SQLite3($this->sqlitefile);
 			} else {
 				throw new Exception("Couldn't lock db");
 			}
 		} else {
-			$this->sql = new SQLite3($this->filecache .'/fastback.sqlite');
+			$this->sql = new SQLite3($this->sqlitefile);
 		}
 
 		if (empty($this->meta)){
@@ -352,7 +361,7 @@ class FastbackOutput {
 			} 
 
 			$this->log("Using $this->nproc processes for forks");
-			$this->log("Using sqlite database " . $this->filecache . '/fastback.sqlite');
+			$this->log("Using sqlite database " . $this->sqlitefile);
 
 			$tasks = array();
 			switch($argv[1]) {
@@ -487,6 +496,7 @@ class FastbackOutput {
 			$lastmod = $this->meta['lastmod'];
 		}
 
+		$this->log("Changing to " . $this->photobase);
 		chdir($this->photobase);
 		$filetypes = implode('\|',array_merge($this->supported_photo_types, $this->supported_video_types));
 		if ( $this->filestructure === 'datebased' ) {

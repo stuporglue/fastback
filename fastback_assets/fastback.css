@@ -149,9 +149,6 @@ body .up10 .tn {width: calc(100vw/10); height: calc(100vw/10); font-size: 2vw;  
 /** Tools */
 
 #calendaricon {
-	position: fixed;
-	bottom: 0;
-	right: 0;
 	z-index: 1000;
 	background-color: rgba(255,255,255,0.8);
 	width: 30px;
@@ -188,10 +185,13 @@ body .up10 .tn {width: calc(100vw/10); height: calc(100vw/10); font-size: 2vw;  
 #resizer {
 	position: absolute;
 	bottom: 0;
-	right: 100px;
-	width: calc(100% - 60px);
-	direction: rtl;
+	right: 0;
+	height: 30px;
 	z-index: 1000;
+}
+
+#resizer > input {
+	direction: rtl;
 }
 
 #resizer > div {
@@ -201,6 +201,8 @@ body .up10 .tn {width: calc(100vw/10); height: calc(100vw/10); font-size: 2vw;  
 #resizer > input,
 #speedslide {
 	opacity: 0.7;
+	display: inline-block;
+	vertical-align: middle;
 }
 
 #resizer > div:hover,
@@ -210,9 +212,6 @@ body .up10 .tn {width: calc(100vw/10); height: calc(100vw/10); font-size: 2vw;  
 }
 
 #rewindicon, #globeicon {
-	position: fixed;
-	bottom: 0;
-	right: 30px;
 	width: 30px;
 	height: 30px;
 	z-index: 1000;
