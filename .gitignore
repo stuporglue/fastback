@@ -4,3 +4,4 @@
 fastback.ini
 *.swp
 *.sqlite
+*.sqlite.lock
