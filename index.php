@@ -1037,7 +1037,17 @@ class FastbackOutput {
 
 
 					$cur_exif = array_filter($cur_exif);
-					$found_exif[$file] = json_encode($cur_exif,JSON_FORCE_OBJECT);
+
+					if ( empty($cur_exif) ) {
+						die("Why do I have empty exif for $file");
+					} else {
+						print($file . "\n");
+						print_r($cur_exif);
+						print($file . "\n");
+					}
+
+					$found_exif[$file] = json_encode($cur_exif,JSON_FORCE_OBJECT | JSON_PARTIAL_OUTPUT_ON_ERROR);
+					var_dump($found_exif);
 				}
 
 			$this->update_case_when("UPDATE fastback SET _util=NULL, exif=CASE",$found_exif,"ELSE exif END",True);
