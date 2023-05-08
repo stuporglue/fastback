@@ -36,7 +36,7 @@ class FastbackOutput {
 	var $nproc = 1;
 
 	// Are we debugging
-	var $debug = false;
+	var $debug;
 
 	// Is the db locked by us?
 	var $db_lock;
@@ -79,9 +79,11 @@ class FastbackOutput {
 	var $spindex = 0;
 
 	function __construct(){
-		$this->filecache = __DIR__ . '/cache/';
+		global $argv;
+
+		$this->filecache = __DIR__ . '/../cache/';
 		$this->cacheurl = dirname($_SERVER['SCRIPT_NAME']) . '/cache/';
-		$this->photobase = __DIR__ . '/';
+		$this->photobase = __DIR__ . '/../';
 		$this->photourl = dirname($_SERVER['SCRIPT_NAME']) . '/';
 		$this->sitetitle = "Fastback Photo Gallery";
 		$this->sortorder = ($this->sortorder == 'ASC' ? 'ASC' : 'DESC');
@@ -92,6 +94,15 @@ class FastbackOutput {
 			$settings = parse_ini_file(__DIR__ . '/fastback.ini');
 			foreach($settings as $k => $v) {
 				$this->$k = $v;
+			}
+		}
+
+		if ( isset($argv) ) {
+			$debug_found = array_search('debug',$argv);
+
+			if ( $debug_found !== FALSE ) {
+				$this->debug = true;
+				array_splice($argv,$debug_found,1);
 			}
 		}
 
@@ -109,9 +120,33 @@ class FastbackOutput {
 		if ( !isset($this->sqlitefile) ){
 			$this->sqlitefile = $this->filecache . 'fastback.sqlite';
 		}
+
+		if ( !isset($this->debug) && $_GET['debug'] == 'true' )  {
+			$this->debug = true;
+		} else {
+			$this->debug = false;
+		}
+
+		if ( $this->debug ) {
+			$this->nproc = 1;
+			$this->log("Debug enabled");
+		}
+
+		$this->log("Using $this->nproc processes for forks");
+		$this->log("SETTINGS: " . print_r(array(
+			'filecache' => $this->filecache,
+			'cacheurl' => $this->cacheurl,
+			'photobase' => $this->photobase,
+			'sitetitle' => $this->sitetitle,
+			'sortorder' => $this->sortorder,
+			'filestructure' => $this->filestructure,
+			'nproc' => $this->nproc,
+			'sqlitefile' => $this->sqlitefile,
+			'debug' => $this->debug
+		),TRUE));
 	}
 
-	function run() {
+	public function run() {
 		if (php_sapi_name() === 'cli') {
 			$this->handle_cli();
 			exit();
@@ -126,7 +161,7 @@ class FastbackOutput {
 		}
 	}
 
-	function make_html() {
+	public function make_html() {
 
 		$html = '<!doctype html>
 			<html lang="en">
@@ -265,7 +300,7 @@ class FastbackOutput {
 		print json_encode(array('file_flagged' => $_GET['flag']));
 	}
 
-	private function sql_connect($try_no = 1){
+	public function sql_connect($try_no = 1){
 
 		if ( !file_exists($this->sqlitefile) ) {
 			$this->sql = new SQLite3($this->sqlitefile);
@@ -289,6 +324,13 @@ class FastbackOutput {
 		}
 	}
 
+	public function query($sql){
+		$this->sql_connect();
+		$res = $this->sql->query($sql);
+		$this->sql_disconnect();
+		return $res;
+	}
+
 	/**
 	 * Initialize the database
 	 */
@@ -308,13 +350,14 @@ class FastbackOutput {
 			lon DECIMAL(15,10), 
 			elev DECIMAL(15,10), 
 			nullgeom BOOL,
-			_util TEXT
+			_util TEXT,
+			maybe_meme INT 
 		)";
 
 		$res = $this->sql->query($q_create_files);
 	}
 
-	private function sql_disconnect(){
+	public function sql_disconnect(){
 		$this->sql->close();
 		if (!empty($this->db_lock) ) {
 			flock($this->db_lock,LOCK_UN);
@@ -344,32 +387,16 @@ class FastbackOutput {
 
 
 	private function handle_cli(){
-			global $argv,$argc;
+			global $argv;
+
+			if ( !isset($argv) || count($argv) == 1 ) {
+				$argv[1] = 'handle_new';
+			}
 
 			pcntl_signal(SIGINT, array(&$this,'signal_handler'));
 			pcntl_signal(SIGTERM, array(&$this,'signal_handler'));
 			$this->end_all_children = false;
 			$this->children = array();
-
-			if ( !isset($argv) || count($argv) == 1 ) {
-				$argv[1] = 'handle_new';
-			} else {
-				if ( $argv[1] == 'debug' ) {
-					array_splice($argv,1,0,'handle_new');
-				}
-
-				if ( isset($argv[2]) && $argv[2] == 'debug' ) {
-					$this->debug = true;
-					$this->log("Debug enabled");
-				}
-			} 
-
-			if ( $this->debug ) {
-				$this->nproc = 1;
-			}
-
-			$this->log("Using $this->nproc processes for forks");
-			$this->log("Using sqlite database " . $this->sqlitefile);
 
 			$tasks = array();
 			switch($argv[1]) {
@@ -402,17 +429,20 @@ class FastbackOutput {
 			case 'get_geo':
 				$tasks = array('get_geo');
 				break;
+			case 'flag_memes':
+				$tasks = array('flag_memes');
+				break;
 			case 'make_csv':
 				$tasks = array('make_csv');
 				break;
 			case 'full_reset':
-				$tasks = array('reset_db','reset_cache','load_cache','make_thumbs','get_exif','get_times','get_geo','make_csv');
+				$tasks = array('reset_db','reset_cache','load_cache','make_thumbs','get_exif','get_times','get_geo','flag_memes','make_csv');
 				break;
 			case 'help':
 				$tasks = array('help');
 				break;
 			case 'handle_new':
-				$tasks = array('load_cache','make_thumbs','get_exif','get_times','get_geo','make_csv');
+				$tasks = array('load_cache','make_thumbs','get_exif','get_times','get_geo','flag_memes','make_csv');
 				break;
 			default:
 				$tasks = array('help');
@@ -448,8 +478,6 @@ class FastbackOutput {
 			}
 
 			$this->print_if_no_debug("\e[?25l"); // Show cursor
-
-
 	}
 
 	/**
@@ -467,14 +495,12 @@ class FastbackOutput {
 	 * Reset the cache
 	 */
 	public function reset_cache() {
-		global $argv;
 		$this->sql_connect();
 		$this->sql->query('UPDATE fastbackmeta SET value="19000101" WHERE key="lastmod"');
 		$this->sql_disconnect();
 	}
 
 	public function clear_thumbs_db() {
-		global $argv;
 		$this->sql_connect();
 		$this->sql->query('UPDATE fastback SET thumbnail=NULL, flagged=NULL');
 		$this->sql_disconnect();
@@ -484,7 +510,6 @@ class FastbackOutput {
 	 * Reset database
 	 */
 	public function reset_db() {
-		global $argv;
 		$this->sql_connect();
 		$this->sql->query("DELETE FROM fastback");
 		$this->sql_disconnect();
@@ -494,8 +519,6 @@ class FastbackOutput {
 	 * Get all modified files into the db cache
 	 */
 	public function load_cache() {
-		global $argv;
-
 		if ( !file_exists($this->filecache) ) {
 			mkdir($this->filecache,0700,TRUE);
 		}
@@ -679,8 +702,8 @@ class FastbackOutput {
 			file,
 			isvideo,
 			DATETIME(sorttime) AS sorttime,
-			lon,
-			lat,
+			ROUND(lon,5) AS lon,
+			ROUND(lat,5) AS lat,
 			elev
 			FROM fastback 
 			WHERE 
@@ -689,6 +712,7 @@ class FastbackOutput {
 			AND flagged IS NOT TRUE 
 			AND sorttime NOT LIKE '% 00:00:01' 
 			AND DATETIME(sorttime) IS NOT NULL 
+			AND (maybe_meme > 0)
 			ORDER BY sorttime " . $this->sortorder . ",file";
 		$res = $this->sql->query($q);
 
@@ -737,6 +761,10 @@ class FastbackOutput {
 
 	public function get_times() {
 		$this->_fork_em('_get_times', "SELECT COUNT(*) FROM fastback WHERE sorttime IS NULL AND flagged IS NOT TRUE AND exif IS NOT NULL");
+	}
+
+	public function flag_memes() {
+		$this->_fork_em('_flag_memes', "SELECT COUNT(*) FROM fastback WHERE maybe_meme IS NULL");
 	}
 
 	private function _fork_em($childfunc,$statussql) {
@@ -844,7 +872,7 @@ class FastbackOutput {
 			$updated_timestamps = array();
 			$flagged = array();
 
-			$queue = $this->get_queue("sorttime IS NULL AND _util IS NULL AND file != \"\" AND flagged IS NOT TRUE AND exif IS NOT NULL",10); 
+			$queue = $this->get_queue("sorttime IS NULL AND _util IS NULL AND file != \"\" AND flagged IS NOT TRUE AND exif IS NOT NULL",100); 
 
 			foreach($queue as $file => $row) {
 
@@ -1064,7 +1092,7 @@ class FastbackOutput {
 			$updated_geoms = array();
 			$no_geoms = array();
 
-			$queue = $this->get_queue("lat IS NULL AND lon IS NULL and elev IS NULL AND _util IS NULL AND file != \"\" AND nullgeom IS NOT TRUE AND exif IS NOT NULL",10);
+			$queue = $this->get_queue("lat IS NULL AND lon IS NULL and elev IS NULL AND _util IS NULL AND file != \"\" AND nullgeom IS NOT TRUE AND exif IS NOT NULL",100);
 
 			foreach($queue as $file => $row){
 				$found = false;
@@ -1107,7 +1135,7 @@ class FastbackOutput {
 					$xyz[1] = $exif['GPSLatitude'];
 				}
 
-				if ( count($xyz) === 2 && array_key_exists('GPSAltitude',$exif) ) { //  && floatval($exif['GPSAltitude']) == $exif['GPSAltitude']) {
+				if ( count($xyz) === 2 && array_key_exists('GPSAltitude',$exif) ) { //  && floatval($exif['GPSAltitude']) == $exif['GPSAltitude']) 
 					if ( preg_match('/([0-9.]+) m/',$exif['GPSAltitude'],$matches ) ) {
 						if ( array_key_exists('GPSAltitudeRef',$exif) && $exif['GPSAltitudeRef'] == 'Below Sea Level' ) {
 							$xyz[2] = $matches[1] * -1;
@@ -1180,6 +1208,55 @@ class FastbackOutput {
 		return $xyz;
 	}
 
+	private function _flag_memes($childno = "Unknown") {
+		$bad_filetypes = array('MacOS','WEBP');
+		$bad_mimetypes = array('application/unknown');
+
+		do {
+			$queue = $this->get_queue("maybe_meme IS NULL",100);
+
+			$batch = array();
+				foreach($queue as $file => $row) {
+						$maybe_meme = 0;
+						$exif = json_decode($row['exif'],true);
+
+						// Bad filetype  or Mimetype
+						// "FileType":"MacOS"
+						// FileType WEBP
+						// "MIMEType":"application\/unknown"
+						if ( in_array($exif['FileType'],$bad_filetypes) ) {
+							$maybe_meme += 1;
+						}
+
+						if ( in_array($exif['MIMEType'],$bad_mimetypes) ) {
+							$maybe_meme += 1;
+						}
+
+						//  Error present
+						// "Error":"File format error"
+						if ( array_key_exists('Error',$exif) ) {
+							$maybe_meme +=1 ;
+						}
+
+						// If there's no real exif info
+						// Unsure how to detect and how to account for scanned images
+
+						// IF the image is too small
+						// "ImageWidth":"2592",
+						// "ImageHeight":"1944",
+						if ( array_key_exists('ImageHeight',$exif) && array_key_exists('ImageWidth',$exif) ) {
+							if ( $exif['ImageHeight'] * $exif['ImageWidth'] <  1000000 ) {
+								$maybe_meme += 1;
+							}
+						}
+
+						$batch[$row['file']] = $maybe_meme;
+				}
+
+				$this->update_case_when("UPDATE fastback SET maybe_meme=CASE",$batch," ELSE maybe_meme END");
+			} while (count($batch) > 0);
+		}
+
 	public function help() {
 		print "\n";
 		print "index.php [command] [debug]
@@ -1191,6 +1268,7 @@ class FastbackOutput {
 			- get_exif
 			- get_time
 			- get_geo
+			- flag_memes
 			- make_csv
 		* db_test - Just tests if the database exists or can be created, and if it can be written to.
 		* reset_cache – Clears the lastmod timestamp from the fastbackmeta database, causing all files to be reconsidered
@@ -1202,6 +1280,7 @@ class FastbackOutput {
 		* get_exif – Read needed exif info into the database. Must happen before gettime or getgeo
 		* get_time – Uses exif data or file creation or modified time to find the files's sort time
 		* get_geo – Uses exif data to find the media geolocation info so it can be shown on a map
+		* flag_memes – Searches for files that may be memes or other junk photos and makes a score for each image
 		* make_csv - Regenerates the cached .json file based on the cache database. Doesn't touch or look at files.
 		* full_reset - Runs reset_cache and reset_db first and then runs handle_new
 
@@ -1266,7 +1345,7 @@ class FastbackOutput {
 		return $queue;
 	}
 
-	private function update_case_when($update_q,$ar,$else,$escape_val = False) {
+	public function update_case_when($update_q,$ar,$else,$escape_val = False) {
 
 		if ( empty($ar) ) {
 			return;
@@ -1290,7 +1369,7 @@ class FastbackOutput {
 		$this->sql_disconnect();
 	}
 
-	private function update_files_in($update_q,$files) {
+	public function update_files_in($update_q,$files) {
 
 		if ( count($files) === 0 ) {
 			return;
