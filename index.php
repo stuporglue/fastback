@@ -1067,6 +1067,10 @@ class FastbackOutput {
 
 				$xyz = array();
 
+				if ( $exif == "" ) {
+					$exif = array();
+				}
+
 				if ( array_key_exists('GPSPosition',$exif) ) {
 					// eg "38.741200 N, 90.642800 W"
 					$xyz = $this->parse_gps_line($exif['GPSPosition']);	
