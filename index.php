@@ -1,4 +1,4 @@
 <?php
-require_once('fastback_assets/fastback.php');
+require_once('fastback/fastback.php');
 $fb = new FastbackOutput();
 $fb->run();

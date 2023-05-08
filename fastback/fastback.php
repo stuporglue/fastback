@@ -123,7 +123,7 @@ class FastbackOutput {
 
 		if ( !isset($this->debug) && $_GET['debug'] == 'true' )  {
 			$this->debug = true;
-		} else {
+		} else if ( !isset($this->debug) ) {
 			$this->debug = false;
 		}
 
@@ -169,14 +169,14 @@ class FastbackOutput {
 			<meta charset="utf-8">
 			<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
 			<title>' . htmlspecialchars($this->sitetitle) . '</title>
-			<link rel="shortcut icon" href="fastback_assets/favicon.png"> 
-			<link rel="apple-touch-icon" href="fastback_assets/favicon.png">
+			<link rel="shortcut icon" href="fastback/favicon.png"> 
+			<link rel="apple-touch-icon" href="fastback/favicon.png">
 			<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
-			<link rel="stylesheet" href="fastback_assets/jquery-ui.min.css">
+			<link rel="stylesheet" href="fastback/jquery-ui.min.css">
 			<link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" integrity="sha512-xodZBNTC5n17Xt2atTPuE1HxjVMSvLVW9ocqUKLsCC5CXdbqCmblAshOMAS6/keqq/sMZMZ19scR4PsZChSR7A==" crossorigin="" />
 			<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.0.3/dist/MarkerCluster.Default.css"/>
 			<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>
-			<link rel="stylesheet" href="fastback_assets/fastback.css">
+			<link rel="stylesheet" href="fastback/fastback.css">
 			</head>';
 
 		$html .= '<body class="photos">';
@@ -227,15 +227,15 @@ class FastbackOutput {
 			</div>
 			</div>';
 		$html .= '</div>';
-		$html .= '<script src="fastback_assets/jquery.min.js"></script>';
-		$html .= '<script src="fastback_assets/jquery-ui.min.js"></script>';
-		$html .= '<script src="fastback_assets/hyperlist.js"></script>';
-		$html .= '<script src="fastback_assets/hammer.js"></script>';
-		$html .= '<script src="fastback_assets/papaparse.min.js"></script>';
-		$html .= '<script src="fastback_assets/jquery.hammer.js"></script>';
+		$html .= '<script src="fastback/jquery.min.js"></script>';
+		$html .= '<script src="fastback/jquery-ui.min.js"></script>';
+		$html .= '<script src="fastback/hyperlist.js"></script>';
+		$html .= '<script src="fastback/hammer.js"></script>';
+		$html .= '<script src="fastback/papaparse.min.js"></script>';
+		$html .= '<script src="fastback/jquery.hammer.js"></script>';
 		$html .= '<script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js" integrity="sha512-XQoYMqMTK8LvdxXYG3nZ448hOEQiglfqkJs1NOQV44cWnUrBc8PkAOcXy20w0vlaXaVUearIOBhiXZ5V3ynxwA==" crossorigin=""></script>';
 		$html .= '<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>';
-		$html .= '<script src="fastback_assets/fastback.js"></script>';
+		$html .= '<script src="fastback/fastback.js"></script>';
 		$html .= '<script>
 			var FastbackBase = "' . $_SERVER['SCRIPT_NAME'] . '";
 		var FastbackBase = "' . $_SERVER['SCRIPT_NAME'] . '";
@@ -941,39 +941,17 @@ class FastbackOutput {
 	}
 
 	private function _get_exif($childno = "Unknown") {
-		// these are all the exif tags we might use right now
-		$tags_to_consider = array(
-			"-GPSPosition",
-			"-GPSCoordinates",
-			"-GPSLatitudeRef",
-			"-GPSLatitude",
-			"-GPSLongitudeRef",
-			"-GPSLongitude",
-			"-GPSAltitude",
-			"-GPSAltitudeRef",
-			"-DateTimeOriginal",
-			"-CreateDate",
-			"-CreationDate",
-			"-DateCreated",
-			"-TrackCreateDate",
-			"-MediaCreateDate",
-			"-GPSDateTime",
-			"-ModifyDate",
-			"-MediaModifyDate",
-			"-TrackModifyDate",
-			"-FileModifyDate",
-			"-FileName",
-		);
+	;
 
 		$cmd = "exiftool -stay_open True  -@ -";
-		$cmdargs = $tags_to_consider;
 		$cmdargs = [];
-		$cmdargs[] = "-lang";
-		$cmdargs[] = "en";
-		$cmdargs[] = "-s";
-		$cmdargs[] = "-c";
-		$cmdargs[] = "'%.6f'";
-		$cmdargs[] = "-extractEmbedded";
+		$cmdargs[] = "-lang"; // Lang to english
+		$cmdargs[] = "en"; // Lang to english
+		$cmdargs[] = "-s"; // Tag names instead of descriptions
+		$cmdargs[] = "-c"; // Set format for GPS numbers
+		$cmdargs[] = "'%.5f'"; // Set format for GPS numbers
+		$cmdargs[] = "-extractEmbedded"; // get embedded data like geo data
+		$cmdargs[] = "-e"; // Don't generate composite tags
 
 		$descriptors = array(
 			0 => array("pipe", "r"),  // STDIN
@@ -1069,6 +1047,10 @@ class FastbackOutput {
 
 
 					$cur_exif = array_filter($cur_exif);
+					ksort($cur_exif);
+
+					// $this->log("===== EXIF: " . $file . "======\n");
+					// $this->log(print_r($cur_exif,TRUE));
 
 					$found_exif[$file] = json_encode($cur_exif,JSON_FORCE_OBJECT | JSON_PARTIAL_OUTPUT_ON_ERROR);
 				}
@@ -1220,21 +1202,26 @@ class FastbackOutput {
 						$maybe_meme = 0;
 						$exif = json_decode($row['exif'],true);
 
+						$this->log("======== MEME CHECK: $file =========\n");
+
 						// Bad filetype  or Mimetype
 						// "FileType":"MacOS"
 						// FileType WEBP
 						// "MIMEType":"application\/unknown"
 						if ( in_array($exif['FileType'],$bad_filetypes) ) {
+							$this->log("Bad file type: {$exif['FileType']}");
 							$maybe_meme += 1;
 						}
 
 						if ( in_array($exif['MIMEType'],$bad_mimetypes) ) {
+							$this->log("Bad mime type: {$exif['MIMEType']}");
 							$maybe_meme += 1;
 						}
 
 						//  Error present
 						// "Error":"File format error"
 						if ( array_key_exists('Error',$exif) ) {
+							$this->log("Has Error type: {$exif['Error']}");
 							$maybe_meme +=1 ;
 						}
 
@@ -1246,14 +1233,15 @@ class FastbackOutput {
 						// "ImageHeight":"1944",
 						if ( array_key_exists('ImageHeight',$exif) && array_key_exists('ImageWidth',$exif) ) {
 							if ( $exif['ImageHeight'] * $exif['ImageWidth'] <  1000000 ) {
+								$this->log("Size too small: {$exif['ImageHeight']} * {$exif['ImageWidth']} = " . ($exif['ImageHeight'] * $exif['ImageWidth']));
 								$maybe_meme += 1;
 							}
 						}
 
-						$batch[$row['file']] = $maybe_meme;
+						$batch[$file] = $maybe_meme;
 				}
 
-				$this->update_case_when("UPDATE fastback SET maybe_meme=CASE",$batch," ELSE maybe_meme END");
+				$this->update_case_when("UPDATE fastback SET _util=NULL,maybe_meme=CASE",$batch," ELSE maybe_meme END");
 			} while (count($batch) > 0);
 		}
 
@@ -1361,6 +1349,7 @@ class FastbackOutput {
 		}
 		$update_q .= " " . $else;
 		$update_q .= " WHERE _util='RESERVED-" . getmypid() . "'";
+		print "\n\n" . $update_q . "\n\n";
 		$res = $this->sql->query($update_q);
 		if ( $res == False ) {
 			$this->log($update_q);

@@ -123,7 +123,7 @@ class Fastback {
 		// Find our stylesheet
 		var stylesheet;
 		for(var s = 0;s<document.styleSheets.length;s++){
-			if ( document.styleSheets[s].href.match(/.*\/fastback_assets\/fastback.css$/) !== null ) {
+			if ( document.styleSheets[s].href.match(/.*\/fastback\/fastback.css$/) !== null ) {
 				stylesheet = document.styleSheets[s];
 			}
 		}
