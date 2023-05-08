@@ -10,10 +10,6 @@ class FastbackOutput {
 	// Optional, will create a cache folder in the currend directory as the default
 	var $filecache;
 
-	// Path to .sqlite file 
-	// Optional, will use $filecache/fastback.sqlite 
-	var $sqlitefile;
-
 	// URL path to cache directory. 
 	// Optional, will use current web path + cache as default
 	var $cacheurl;
@@ -79,6 +75,7 @@ class FastbackOutput {
 	var $spindex = 0;
 
 	function __construct(){
+
 		$this->filecache = __DIR__ . '/cache/';
 		$this->cacheurl = dirname($_SERVER['SCRIPT_NAME']) . '/cache/';
 		$this->photobase = __DIR__ . '/';
@@ -87,6 +84,11 @@ class FastbackOutput {
 		$this->sortorder = ($this->sortorder == 'ASC' ? 'ASC' : 'DESC');
 		$this->filestructure = 'datebased'; // Or all
 		$this->nproc = `nproc`;
+
+		$this->show_map = true;
+		$this->show_onthisday = true;
+		$this->show_datejump = true;
+		$this->show_tagging = true;
 
 		if ( file_exists(__DIR__ . '/fastback.ini') ) {
 			$settings = parse_ini_file(__DIR__ . '/fastback.ini');
@@ -106,12 +108,6 @@ class FastbackOutput {
 		$this->photobase = rtrim($this->photobase,'/') . '/';
 		$this->photourl = rtrim($this->photourl,'/') . '/';
 
-		if ( !isset($this->sqlitefile) ){
-			$this->sqlitefile = $this->filecache . 'fastback.sqlite';
-		}
-	}
-
-	function run() {
 		if (php_sapi_name() === 'cli') {
 			$this->handle_cli();
 			exit();
@@ -121,12 +117,15 @@ class FastbackOutput {
 		} else if (!empty($_GET['flag'])) {
 			$this->flag_photo();
 			exit();
+		} else if (!empty($_GET['tags']) || !empty($_POST['tags'])) {
+			$this->handle_tags();
+			exit();
 		} else {
-			$this->make_html();
+			$this->gallery_html();
 		}
 	}
 
-	function make_html() {
+	function gallery_html() {
 
 		$html = '<!doctype html>
 			<html lang="en">
@@ -134,8 +133,8 @@ class FastbackOutput {
 			<meta charset="utf-8">
 			<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
 			<title>' . htmlspecialchars($this->sitetitle) . '</title>
-			<link rel="shortcut icon" href="fastback_assets/favicon.png"> 
-			<link rel="apple-touch-icon" href="fastback_assets/favicon.png">
+			<link rel="shortcut icon" href="fastback_assets/img/favicon.png"> 
+			<link rel="apple-touch-icon" href="fastback_assets/img/favicon.png">
 			<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
 			<link rel="stylesheet" href="fastback_assets/jquery-ui.min.css">
 			<link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" integrity="sha512-xodZBNTC5n17Xt2atTPuE1HxjVMSvLVW9ocqUKLsCC5CXdbqCmblAshOMAS6/keqq/sMZMZ19scR4PsZChSR7A==" crossorigin="" />
@@ -145,70 +144,72 @@ class FastbackOutput {
 			</head>';
 
 		$html .= '<body class="photos">';
-		$html .= '<div id="map"></div>';
 		$html .= '<div id="hyperlist_wrap">';
 		$html .= '<div id="photos"></div>';
 		$html .= '</div>';
 		$html .= '<input id="speedslide" type="range" orient="vertical" min="0" max="100" value="0"/>';
-		$html .= '<div id="resizer">';
+		$html .= '<div id="widgets">';
 		$html .= '<input type="range" min="1" max="10" value="5" class="slider" id="zoom">';
-		$html .= '<div id="globeicon"></div>';
-		$html .= '<div id="rewindicon"></div>';
-		$html .= '<div id="calendaricon"><input readonly id="datepicker" type="text"></div>';
 		$html .= '</div>';
 		$html .= '<div id="thumb">
-			<div id="thumbcontent"></div>
-			<div id="thumbleft" class="thumbctrl">LEFT</div>
-			<div id="thumbright" class="thumbctrl">RIGHT</div>
-			<div id="thumbcontrols">
-			<div id="thumbclose">🆇</div>
-			<div id="thumbdownload"></div>
-			<div id="thumbflag"></div>
-			<div id="thumbinfo"></div>
-			<div id="socialbuttons">
-			<!-- Sharingbutton Facebook -->
-			<a id="share_fb" class="resp-sharing-button__link" href="about:blank" target="_blank" rel="noopener" aria-label="">
-			<div class="resp-sharing-button resp-sharing-button--facebook resp-sharing-button--small"><div aria-hidden="true" class="resp-sharing-button__icon resp-sharing-button__icon--solid">
-			<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M18.77 7.46H14.5v-1.9c0-.9.6-1.1 1-1.1h3V.5h-4.33C10.24.5 9.5 3.44 9.5 5.32v2.15h-3v4h3v12h5v-12h3.85l.42-4z"/></svg>
-			</div>
-			</div>
-			</a>
+					<div id="thumbcontent"></div>
+					<div id="thumbleft" class="thumbctrl">LEFT</div>
+					<div id="thumbright" class="thumbctrl">RIGHT</div>
+					<div id="thumbcontrols">
+						<div id="thumbclose">🆇</div>
+						<div id="thumbdownload"></div>
+						<div id="thumbflag"></div>
+						<div id="thumbinfo"></div>
+						<div id="socialbuttons">
+							<!-- Sharingbutton Facebook -->
+							<a id="share_fb" class="resp-sharing-button__link" href="about:blank" target="_blank" rel="noopener" aria-label="">
+							<div class="resp-sharing-button resp-sharing-button--facebook resp-sharing-button--small"><div aria-hidden="true" class="resp-sharing-button__icon resp-sharing-button__icon--solid">
+								<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M18.77 7.46H14.5v-1.9c0-.9.6-1.1 1-1.1h3V.5h-4.33C10.24.5 9.5 3.44 9.5 5.32v2.15h-3v4h3v12h5v-12h3.85l.42-4z"/></svg>
+								</div>
+							</div>
+							</a>
 
-			<!-- Sharingbutton E-Mail -->
-			<a id="share_email" class="resp-sharing-button__link" href="about:blank" target="_blank" rel="noopener" aria-label="">
-			<div class="resp-sharing-button resp-sharing-button--email resp-sharing-button--small"><div aria-hidden="true" class="resp-sharing-button__icon resp-sharing-button__icon--solid">
-			<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M22 4H2C.9 4 0 4.9 0 6v12c0 1.1.9 2 2 2h20c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zM7.25 14.43l-3.5 2c-.08.05-.17.07-.25.07-.17 0-.34-.1-.43-.25-.14-.24-.06-.55.18-.68l3.5-2c.24-.14.55-.06.68.18.14.24.06.55-.18.68zm4.75.07c-.1 0-.2-.03-.27-.08l-8.5-5.5c-.23-.15-.3-.46-.15-.7.15-.22.46-.3.7-.14L12 13.4l8.23-5.32c.23-.15.54-.08.7.15.14.23.07.54-.16.7l-8.5 5.5c-.08.04-.17.07-.27.07zm8.93 1.75c-.1.16-.26.25-.43.25-.08 0-.17-.02-.25-.07l-3.5-2c-.24-.13-.32-.44-.18-.68s.44-.32.68-.18l3.5 2c.24.13.32.44.18.68z"/></svg>
-			</div>
-			</div>
-			</a>
+							<!-- Sharingbutton E-Mail -->
+							<a id="share_email" class="resp-sharing-button__link" href="about:blank" target="_blank" rel="noopener" aria-label="">
+							<div class="resp-sharing-button resp-sharing-button--email resp-sharing-button--small"><div aria-hidden="true" class="resp-sharing-button__icon resp-sharing-button__icon--solid">
+								<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M22 4H2C.9 4 0 4.9 0 6v12c0 1.1.9 2 2 2h20c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zM7.25 14.43l-3.5 2c-.08.05-.17.07-.25.07-.17 0-.34-.1-.43-.25-.14-.24-.06-.55.18-.68l3.5-2c.24-.14.55-.06.68.18.14.24.06.55-.18.68zm4.75.07c-.1 0-.2-.03-.27-.08l-8.5-5.5c-.23-.15-.3-.46-.15-.7.15-.22.46-.3.7-.14L12 13.4l8.23-5.32c.23-.15.54-.08.7.15.14.23.07.54-.16.7l-8.5 5.5c-.08.04-.17.07-.27.07zm8.93 1.75c-.1.16-.26.25-.43.25-.08 0-.17-.02-.25-.07l-3.5-2c-.24-.13-.32-.44-.18-.68s.44-.32.68-.18l3.5 2c.24.13.32.44.18.68z"/></svg>
+								</div>
+							</div>
+							</a>
 
-			<!-- Sharingbutton WhatsApp -->
-			<a id="share_whatsapp" class="resp-sharing-button__link" href="about:blank" target="_blank" rel="noopener" aria-label="">
-			<div class="resp-sharing-button resp-sharing-button--whatsapp resp-sharing-button--small"><div aria-hidden="true" class="resp-sharing-button__icon resp-sharing-button__icon--solid">
-			<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.1 3.9C17.9 1.7 15 .5 12 .5 5.8.5.7 5.6.7 11.9c0 2 .5 3.9 1.5 5.6L.6 23.4l6-1.6c1.6.9 3.5 1.3 5.4 1.3 6.3 0 11.4-5.1 11.4-11.4-.1-2.8-1.2-5.7-3.3-7.8zM12 21.4c-1.7 0-3.3-.5-4.8-1.3l-.4-.2-3.5 1 1-3.4L4 17c-1-1.5-1.4-3.2-1.4-5.1 0-5.2 4.2-9.4 9.4-9.4 2.5 0 4.9 1 6.7 2.8 1.8 1.8 2.8 4.2 2.8 6.7-.1 5.2-4.3 9.4-9.5 9.4zm5.1-7.1c-.3-.1-1.7-.9-1.9-1-.3-.1-.5-.1-.7.1-.2.3-.8 1-.9 1.1-.2.2-.3.2-.6.1s-1.2-.5-2.3-1.4c-.9-.8-1.4-1.7-1.6-2-.2-.3 0-.5.1-.6s.3-.3.4-.5c.2-.1.3-.3.4-.5.1-.2 0-.4 0-.5C10 9 9.3 7.6 9 7c-.1-.4-.4-.3-.5-.3h-.6s-.4.1-.7.3c-.3.3-1 1-1 2.4s1 2.8 1.1 3c.1.2 2 3.1 4.9 4.3.7.3 1.2.5 1.6.6.7.2 1.3.2 1.8.1.6-.1 1.7-.7 1.9-1.3.2-.7.2-1.2.2-1.3-.1-.3-.3-.4-.6-.5z"/></svg>
-			</div>
-			</div>
-			</a>
-			</div>
-			</div>';
+							<!-- Sharingbutton WhatsApp -->
+							<a id="share_whatsapp" class="resp-sharing-button__link" href="about:blank" target="_blank" rel="noopener" aria-label="">
+							<div class="resp-sharing-button resp-sharing-button--whatsapp resp-sharing-button--small"><div aria-hidden="true" class="resp-sharing-button__icon resp-sharing-button__icon--solid">
+								<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.1 3.9C17.9 1.7 15 .5 12 .5 5.8.5.7 5.6.7 11.9c0 2 .5 3.9 1.5 5.6L.6 23.4l6-1.6c1.6.9 3.5 1.3 5.4 1.3 6.3 0 11.4-5.1 11.4-11.4-.1-2.8-1.2-5.7-3.3-7.8zM12 21.4c-1.7 0-3.3-.5-4.8-1.3l-.4-.2-3.5 1 1-3.4L4 17c-1-1.5-1.4-3.2-1.4-5.1 0-5.2 4.2-9.4 9.4-9.4 2.5 0 4.9 1 6.7 2.8 1.8 1.8 2.8 4.2 2.8 6.7-.1 5.2-4.3 9.4-9.5 9.4zm5.1-7.1c-.3-.1-1.7-.9-1.9-1-.3-.1-.5-.1-.7.1-.2.3-.8 1-.9 1.1-.2.2-.3.2-.6.1s-1.2-.5-2.3-1.4c-.9-.8-1.4-1.7-1.6-2-.2-.3 0-.5.1-.6s.3-.3.4-.5c.2-.1.3-.3.4-.5.1-.2 0-.4 0-.5C10 9 9.3 7.6 9 7c-.1-.4-.4-.3-.5-.3h-.6s-.4.1-.7.3c-.3.3-1 1-1 2.4s1 2.8 1.1 3c.1.2 2 3.1 4.9 4.3.7.3 1.2.5 1.6.6.7.2 1.3.2 1.8.1.6-.1 1.7-.7 1.9-1.3.2-.7.2-1.2.2-1.3-.1-.3-.3-.4-.6-.5z"/></svg>
+								</div>
+							</div>
+							</a>
+						</div>
+					</div>';
 		$html .= '</div>';
-		$html .= '<script src="fastback_assets/jquery.min.js"></script>';
-		$html .= '<script src="fastback_assets/jquery-ui.min.js"></script>';
-		$html .= '<script src="fastback_assets/hyperlist.js"></script>';
-		$html .= '<script src="fastback_assets/hammer.js"></script>';
-		$html .= '<script src="fastback_assets/papaparse.min.js"></script>';
-		$html .= '<script src="fastback_assets/jquery.hammer.js"></script>';
-		$html .= '<script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js" integrity="sha512-XQoYMqMTK8LvdxXYG3nZ448hOEQiglfqkJs1NOQV44cWnUrBc8PkAOcXy20w0vlaXaVUearIOBhiXZ5V3ynxwA==" crossorigin=""></script>';
-		$html .= '<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>';
+		$html .= '<script src="fastback_assets/js/jquery.min.js"></script>';
+		$html .= '<script src="fastback_assets/js/jquery-ui.min.js"></script>';
+		$html .= '<script src="fastback_assets/js/hyperlist.js"></script>';
+		$html .= '<script src="fastback_assets/js/hammer.js"></script>';
+		$html .= '<script src="fastback_assets/js/papaparse.min.js"></script>';
+		$html .= '<script src="fastback_assets/js/jquery.hammer.js"></script>';
+		$html .= '<script src="fastback_assets/js/leaflet.js"></script>';
+		$html .= '<script src="fastback_assets/js/leaflet.markercluster.js"></script>';
 		$html .= '<script src="fastback_assets/fastback.js"></script>';
 		$html .= '<script>
 			var FastbackBase = "' . $_SERVER['SCRIPT_NAME'] . '";
-		var FastbackBase = "' . $_SERVER['SCRIPT_NAME'] . '";
-		var fastback = new Fastback({
-		cacheurl:    "' . $this->cacheurl . '",
-			photourl:    "' . $this->photourl .'",
-			fastbackurl: "' . $_SERVER['SCRIPT_NAME'] . '"
-	});
+		    var FastbackBase = "' . $_SERVER['SCRIPT_NAME'] . '";
+		    var fastback = new Fastback({
+					cacheurl:    "' . $this->cacheurl . '",
+					photourl:    "' . $this->photourl .'",
+					fastbackurl: "' . $_SERVER['SCRIPT_NAME'] . '",
+					features:  {
+						map: ' . ( $this->show_map ? 'true' : 'false' ) . ',
+						onthisday: ' . ( $this->show_onthisday ? 'true' : 'false' ) . ',
+						datejump: ' . ( $this->show_datejump ? 'true' : 'false' ) . ',
+						tagging: ' . ( $this->show_tagging ? 'true' : 'false' ) . '
+					}
+			});
 			</script>';
 		$html .= '</body></html>';
 
@@ -266,22 +267,21 @@ class FastbackOutput {
 	}
 
 	private function sql_connect($try_no = 1){
-
-		if ( !file_exists($this->sqlitefile) ) {
-			$this->sql = new SQLite3($this->sqlitefile);
+		if ( !file_exists($this->filecache . '/fastback.sqlite') ) {
+			$this->sql = new SQLite3($this->filecache . '/fastback.sqlite');
 			$this->setup_db();
 			$this->sql->close();
 		}
 
 		if (php_sapi_name() === 'cli') {
-			$this->db_lock = fopen($this->sqlitefile . '.lock','w');
+			$this->db_lock = fopen($this->filecache . '/fastback.lock','w');
 			if( flock($this->db_lock,LOCK_EX)){
-				$this->sql = new SQLite3($this->sqlitefile);
+				$this->sql = new SQLite3($this->filecache . '/fastback.sqlite');
 			} else {
 				throw new Exception("Couldn't lock db");
 			}
 		} else {
-			$this->sql = new SQLite3($this->sqlitefile);
+			$this->sql = new SQLite3($this->filecache .'/fastback.sqlite');
 		}
 
 		if (empty($this->meta)){
@@ -293,7 +293,10 @@ class FastbackOutput {
 	 * Initialize the database
 	 */
 	public function setup_db() {
-		$q_create_meta = "Create TABLE IF NOT EXISTS fastbackmeta ( key VARCHAR(20) PRIMARY KEY, value VARCHAR(255))";
+		$q_create_meta = "CREATE TABLE IF NOT EXISTS fastbackmeta ( 
+			key VARCHAR(20) PRIMARY KEY, 
+			value VARCHAR(255)
+		)";
 		$res = $this->sql->query($q_create_meta);
 
 		$q_create_files = "CREATE TABLE IF NOT EXISTS fastback ( 
@@ -310,8 +313,18 @@ class FastbackOutput {
 			nullgeom BOOL,
 			_util TEXT
 		)";
-
 		$res = $this->sql->query($q_create_files);
+
+		$q_create_tags = "CREATE TABLE IF NOT EXISTS fastbacktags ( 
+			tag_id INTEGER PRIMARY KEY AUTOINCREMENT,
+			file INTEGER NOT NULL,
+			tag TEXT NOT NULL
+		)";
+		$res = $this->sql->query($q_create_tags);
+
+		// TODO: Add index on tags
+		$q_create_index = "CREATE UNIQUE INDEX tag_photo_combo ON fastbacktags(file,tag)";
+		$res = $this->sql->query($q_create_index);
 	}
 
 	private function sql_disconnect(){
@@ -364,12 +377,8 @@ class FastbackOutput {
 				}
 			} 
 
-			if ( $this->debug ) {
-				$this->nproc = 1;
-			}
-
 			$this->log("Using $this->nproc processes for forks");
-			$this->log("Using sqlite database " . $this->sqlitefile);
+			$this->log("Using sqlite database " . $this->filecache . '/fastback.sqlite');
 
 			$tasks = array();
 			switch($argv[1]) {
@@ -380,6 +389,10 @@ class FastbackOutput {
 				break;
 			case 'reset_db':
 				$tasks = array('reset_db');
+				break;
+			case 'setup_db':
+				$this->sql_connect();
+				$tasks = array('setup_db');
 				break;
 			case 'load_cache':
 				$tasks = array('load_cache');
@@ -392,9 +405,6 @@ class FastbackOutput {
 				break;
 			case 'get_exif':
 				$tasks = array('get_exif');
-				break;
-			case 'clear_exif':
-				$tasks = array('clear_exif');
 				break;
 			case 'get_time':
 				$tasks = array('get_times');
@@ -507,7 +517,7 @@ class FastbackOutput {
 			$lastmod = $this->meta['lastmod'];
 		}
 
-		$this->log("Changing to " . $this->photobase);
+		$this->log("Looking for new photos in $this->photobase");
 		chdir($this->photobase);
 		$filetypes = implode('\|',array_merge($this->supported_photo_types, $this->supported_video_types));
 		if ( $this->filestructure === 'datebased' ) {
@@ -676,20 +686,20 @@ class FastbackOutput {
 	public function make_csv(){
 		$this->sql_connect();
 		$q = "SELECT 
-			file,
-			isvideo,
-			DATETIME(sorttime) AS sorttime,
-			lon,
-			lat,
-			elev
-			FROM fastback 
+			fb.file,
+			fb.isvideo,
+			DATETIME(fb.sorttime) AS sorttime,
+			fb.lon,
+			fb.lat,
+			fb.elev
+			FROM fastback fb
 			WHERE 
 			thumbnail IS NOT NULL 
 			AND thumbnail NOT LIKE 'RESERVE%' 
 			AND flagged IS NOT TRUE 
 			AND sorttime NOT LIKE '% 00:00:01' 
-			AND DATETIME(sorttime) IS NOT NULL 
-			ORDER BY sorttime " . $this->sortorder . ",file";
+			AND DATETIME(fb.sorttime) IS NOT NULL 
+			ORDER BY fb.sorttime " . $this->sortorder . ",fb.file";
 		$res = $this->sql->query($q);
 
 		$fh = fopen($this->filecache . '/fastback.csv','w');
@@ -711,14 +721,6 @@ class FastbackOutput {
 
 	public function get_exif() {
 		$this->_fork_em('_get_exif', "SELECT COUNT(*) FROM fastback WHERE exif IS NULL");
-	}
-
-	public function clear_exif() {
-		$clear_partials = 'UPDATE fastback SET exif=NULL';
-
-		$this->sql_connect();
-		$this->sql->query($clear_partials);
-		$this->sql_disconnect();
 	}
 
 	public function get_geo() {
@@ -939,7 +941,6 @@ class FastbackOutput {
 
 		$cmd = "exiftool -stay_open True  -@ -";
 		$cmdargs = $tags_to_consider;
-		$cmdargs = [];
 		$cmdargs[] = "-lang";
 		$cmdargs[] = "en";
 		$cmdargs[] = "-s";
@@ -973,38 +974,10 @@ class FastbackOutput {
 				$cur_exif = array();
 				$end_of_exif = FALSE;
 
-				$exifout = "";
 				while(!$end_of_exif){
-					// Handle stdout. Build a single chunk of text then split it since some tag output seems to get split in some cases
+					// Handle stdout
 					$line = fgets($pipes[1]);	
-					if ($line == FALSE ) {
-						continue;
-					}
-
-					$exifout .= $line;
-
-					if (preg_match('/.*{ready}$/',$line)){
-						$end_of_exif = TRUE;
-
-						$exifout = preg_replace('/\n\s*{ready}\s*/','',$exifout);
-					}
-
-					// Handle stderr
-					$err = fgets($pipes[2]);
-					if ( $err !== FALSE ) {
-						$no_err = FALSE;
-						$this->log($err);
-					}
-
-					if ($err === FALSE && $line === FALSE) {
-						time_nanosleep(0,200);
-					}
-				}
-
-				$exifout = explode("\n",$exifout);
-
-				foreach($exifout as $line) {
-
+					if ($line !== FALSE ) { 
 						$line = trim($line);
 
 						if ( preg_match('/^======== (.*)/',$line, $matches ) ) {
@@ -1035,15 +1008,24 @@ class FastbackOutput {
 							// do nothing
 						} else {
 							$this->log("Don't know how to handle exif line '" . $line . "'");
-							// die("Quitting for fun");
+							die("Quitting for fun");
 						}
 					}
 
+					// Handle stderr
+					$err = fgets($pipes[2]);
+					if ( $err !== FALSE ) {
+						$no_err = FALSE;
+						$this->log($err);
+					}
 
-					$cur_exif = array_filter($cur_exif);
-
-					$found_exif[$file] = json_encode($cur_exif,JSON_FORCE_OBJECT | JSON_PARTIAL_OUTPUT_ON_ERROR);
+					if ($err === FALSE && $line === FALSE) {
+						time_nanosleep(0,200);
+					}
 				}
+
+				$found_exif[$file] = json_encode($cur_exif,JSON_FORCE_OBJECT);
+			}
 
 			$this->update_case_when("UPDATE fastback SET _util=NULL, exif=CASE",$found_exif,"ELSE exif END",True);
 
@@ -1071,10 +1053,6 @@ class FastbackOutput {
 				$exif = json_decode($row['exif'],TRUE);
 
 				$xyz = array();
-
-				if ( $exif == "" ) {
-					$exif = array();
-				}
 
 				if ( array_key_exists('GPSPosition',$exif) ) {
 					// eg "38.741200 N, 90.642800 W"
@@ -1198,7 +1176,6 @@ class FastbackOutput {
 		* clear_thumbs_db – Makes the database think there are no thumbnails generated. If files exist they will not be re-created. Useful if you delete some thumbnails and want to regenerate them.
 		* load_cache – Finds all new files in the library and make cache entries for them. Does not generate new thumbnails.
 		* make_thumbs – Generates thumbnails for all entries found in the cache.
-		* clear_exif – Sets exif field for all files to NULL
 		* get_exif – Read needed exif info into the database. Must happen before gettime or getgeo
 		* get_time – Uses exif data or file creation or modified time to find the files's sort time
 		* get_geo – Uses exif data to find the media geolocation info so it can be shown on a map
@@ -1291,7 +1268,6 @@ class FastbackOutput {
 	}
 
 	private function update_files_in($update_q,$files) {
-
 		if ( count($files) === 0 ) {
 			return;
 		}
@@ -1309,5 +1285,71 @@ class FastbackOutput {
 
 		$this->sql->query($update_q);
 		$this->sql_disconnect();
+	}
+
+	private function handle_tags() {
+		if ( !empty($_GET['get_tags']) ) {
+			$this->sql_connect();
+			$q = "SELECT DISTINCT tag FROM fastbacktags ORDER BY tag WHERE tag != '' AND tag IS NOT NULL";
+			$res = $this->sql->query($q);
+			$tags = array();
+
+			if ( $res !== false ) {
+				while($row = $res->fetchArray(SQLITE3_ASSOC)){
+					$tags[] = $row['tag'];
+				}
+			}
+			$this->sql_disconnect();
+
+			header("Content-Type: application/json");
+			header("Cache-Control: no-cache");
+			print json_encode($tags);
+		} else if ( !empty($_REQUEST['new_tags']) ) {
+			$this->sql_connect();
+			$no_commas = str_replace(',','',$_POST['tags']);
+			$tags = explode(" ", $no_commas);
+			$tags = array_filter($tags);
+			$stmt = $this->sql->prepare("INSERT INTO fastbacktags (file,tag) VALUES (:file,:tag)");
+			foreach($_POST['photos'] as $photo) {
+				$stmt->bindValue(':file',$photo);
+				foreach($tags as $tag) {
+					$stmt->bindValue(':tag',$tag);
+					$stmt->execute();
+				}
+			}
+			$this->sql_disconnect();
+		} else if (!empty($_REQUEST['file_tags'])) {
+			$this->sql_connect();
+			$params = array();
+
+			for($i=0;$i<count($_REQUEST['file_tags']);$i++){
+				$params[] = ':' . chr(97 + $i);
+			}
+
+			$sql = "SELECT file,GROUP_CONCAT(tag) AS tags FROM fastbacktags WHERE file IN (" . implode(',',$params) . ") GROUP BY file ORDER BY tag";
+			$stmt = $this->sql->prepare($sql);
+
+			$key = 0;
+			foreach($_REQUEST['file_tags'] as $param => $file) {
+				$stmt->bindValue(":" . chr(97 + $key),$file);
+				$key++;
+			}
+
+			$res = $stmt->execute();
+
+			$data = array();
+			while($row = $res->fetchArray(SQLITE3_ASSOC)){
+				if ( $tn = array_search($row['file'],$_REQUEST['file_tags']) ) {
+					$data[$tn] = $row['tags'];
+				}
+			}
+
+			$this->sql_disconnect();
+			header("Content-Type: application/json");
+			header("Cache-Control: no-cache");
+			print json_encode($data);
+		} else{
+			die("Unknown tag action");
+		}
 	}
 }
