@@ -121,7 +121,7 @@ class FastbackOutput {
 			$this->sqlitefile = $this->filecache . 'fastback.sqlite';
 		}
 
-		if ( !isset($this->debug) && $_GET['debug'] == 'true' )  {
+		if ( !isset($this->debug) && array_key_exists('debug',$_GET) && $_GET['debug'] == 'true' )  {
 			$this->debug = true;
 		} else if ( !isset($this->debug) ) {
 			$this->debug = false;
@@ -1192,7 +1192,7 @@ class FastbackOutput {
 
 	private function _flag_memes($childno = "Unknown") {
 		$bad_filetypes = array('MacOS','WEBP');
-		$bad_mimetypes = array('application/unknown');
+		$bad_mimetypes = array('application/unknown','image/png');
 
 		do {
 			$queue = $this->get_queue("maybe_meme IS NULL",100);
@@ -1216,6 +1216,9 @@ class FastbackOutput {
 						if ( in_array($exif['MIMEType'],$bad_mimetypes) ) {
 							$this->log("Bad mime type: {$exif['MIMEType']}");
 							$maybe_meme += 1;
+						} else if ( preg_match('/video/',$exif['MIMEType']) ) {
+							// Most videos aren't memes
+							$maybe_meme -= 1;
 						}
 
 						//  Error present
@@ -1232,10 +1235,38 @@ class FastbackOutput {
 						// "ImageWidth":"2592",
 						// "ImageHeight":"1944",
 						if ( array_key_exists('ImageHeight',$exif) && array_key_exists('ImageWidth',$exif) ) {
-							if ( $exif['ImageHeight'] * $exif['ImageWidth'] <  1000000 ) {
+							if ( $exif['ImageHeight'] * $exif['ImageWidth'] <  804864 ) { // Less than 1024x768
 								$this->log("Size too small: {$exif['ImageHeight']} * {$exif['ImageWidth']} = " . ($exif['ImageHeight'] * $exif['ImageWidth']));
 								$maybe_meme += 1;
 							}
+						}
+
+						// Having GPS is good
+						if ( array_key_exists('GPSLatitude',$exif) ) {
+							$maybe_meme -= 1;
+						}
+
+						// Having a camera name is good
+						if ( array_key_exists('CameraModelName',$exif) ) {
+							$maybe_meme -= 1;
+						}
+
+						// Scanners might put a comment in 
+						if ( array_key_exists('Comment',$exif) ) {
+							$maybe_meme -= 1;
+						}
+
+						// Absolutely no meta data? Then it might be a scan
+						if ( !array_key_exists('CMMFlags',$exif) && !array_key_exists('ExifByteOrder',$exif) ) {
+							$maybe_meme -= 1;
+						}
+
+						if ( array_key_exists('ThumbnailImage',$exif) ) {
+							$maybe_meme -= 1;
+						}
+
+						if ( array_key_exists('IPTCDigest',$exif) ) {
+							$maybe_meme -= 1;
 						}
 
 						$batch[$file] = $maybe_meme;
@@ -1349,7 +1380,6 @@ class FastbackOutput {
 		}
 		$update_q .= " " . $else;
 		$update_q .= " WHERE _util='RESERVED-" . getmypid() . "'";
-		print "\n\n" . $update_q . "\n\n";
 		$res = $this->sql->query($update_q);
 		if ( $res == False ) {
 			$this->log($update_q);
