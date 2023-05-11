@@ -180,8 +180,41 @@ class FastbackOutput {
 			<title>' . htmlspecialchars($this->sitetitle) . '</title>
 			<link rel="shortcut icon" href="fastback/favicon.png"> 
 			<link rel="apple-touch-icon" href="fastback/favicon.png">
-			<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
-			<link rel="stylesheet" href="fastback/jquery-ui.min.css">
+			<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">';
+
+		$html .= '<script src="fastback/jquery.min.js"></script>';
+		$html .= '<script>
+			var FastbackBase = "' . $_SERVER['SCRIPT_NAME'] . '";
+
+			function waitfor(cls,method) {
+				if (window[cls]) {
+					method();
+				} else {
+					setTimeout(function() { waitfor(cls,method) }, 50);
+				}
+			}
+
+
+			waitfor("jQuery",function(){
+				$.get("' . $this->cacheurl . $this->csvfile . '").then(function(csvdata){
+
+								waitfor("Fastback", function(){
+									return function(){
+										var fastback = new Fastback({
+											csvdata: csvdata,	
+											cacheurl:    "' . $this->cacheurl . '",
+											photourl:    "' . $this->photourl .'",
+											fastbackurl: "' . $_SERVER['SCRIPT_NAME'] . '",
+											csvfile: "' . $this->csvfile . '"	
+										});
+									};
+							}(csvdata));
+					});
+			});
+			</script>';
+
+
+			$html .= '<link rel="stylesheet" href="fastback/jquery-ui.min.css">
 			<link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" integrity="sha512-xodZBNTC5n17Xt2atTPuE1HxjVMSvLVW9ocqUKLsCC5CXdbqCmblAshOMAS6/keqq/sMZMZ19scR4PsZChSR7A==" crossorigin="" />
 			<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.0.3/dist/MarkerCluster.Default.css"/>
 			<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>
@@ -236,25 +269,14 @@ class FastbackOutput {
 			</div>
 			</div>';
 		$html .= '</div>';
-		$html .= '<script src="fastback/jquery.min.js"></script>';
+		$html .= '<script src="fastback/hammer.js"></script>';
+		$html .= '<script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js" integrity="sha512-XQoYMqMTK8LvdxXYG3nZ448hOEQiglfqkJs1NOQV44cWnUrBc8PkAOcXy20w0vlaXaVUearIOBhiXZ5V3ynxwA==" crossorigin=""></script>';
 		$html .= '<script src="fastback/jquery-ui.min.js"></script>';
 		$html .= '<script src="fastback/hyperlist.js"></script>';
-		$html .= '<script src="fastback/hammer.js"></script>';
 		$html .= '<script src="fastback/papaparse.min.js"></script>';
 		$html .= '<script src="fastback/jquery.hammer.js"></script>';
-		$html .= '<script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js" integrity="sha512-XQoYMqMTK8LvdxXYG3nZ448hOEQiglfqkJs1NOQV44cWnUrBc8PkAOcXy20w0vlaXaVUearIOBhiXZ5V3ynxwA==" crossorigin=""></script>';
 		$html .= '<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>';
 		$html .= '<script src="fastback/fastback.js"></script>';
-		$html .= '<script>
-			var FastbackBase = "' . $_SERVER['SCRIPT_NAME'] . '";
-		var FastbackBase = "' . $_SERVER['SCRIPT_NAME'] . '";
-		var fastback = new Fastback({
-		cacheurl:    "' . $this->cacheurl . '",
-			photourl:    "' . $this->photourl .'",
-			fastbackurl: "' . $_SERVER['SCRIPT_NAME'] . '",
-			csvfile: "' . $this->csvfile . '"	
-	});
-			</script>';
 		$html .= '</body></html>';
 
 		print $html;
@@ -724,7 +746,7 @@ class FastbackOutput {
 			AND sorttime NOT LIKE '% 00:00:01' 
 			AND DATETIME(sorttime) IS NOT NULL 
 			-- AND (maybe_meme > 0) -- Only display memes
-			AND (maybe_meme < 1) -- Only display non-memes. Threshold of 1 seems pretty ok
+			AND (maybe_meme <= 1) -- Only display non-memes. Threshold of 1 seems pretty ok
 			ORDER BY sorttime " . $this->sortorder . ",file";
 		$res = $this->sql->query($q);
 

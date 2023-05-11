@@ -1,4 +1,4 @@
-class Fastback {
+Fastback = class Fastback {
 	/**
 	 * Load the data and set up event handlers
 	 */
@@ -6,64 +6,69 @@ class Fastback {
 		this.setProps();
 
 		var self = this;
-		jQuery.extend(this,args);
-		$.get(this.cacheurl + this.csvfile , function(data) {
-			var res = Papa.parse(data.trim());
-			self.photos = res.data.map(function(r){
 
-				if ( self.has_map || !isNaN(parseFloat(r[3]) ) ) {
-					self.has_map = true;
-					jQuery('#globeicon').addClass('enabled');
+		Papa.parse(args.csvdata.trim(),{
+
+			complete: function(res){
+				args.csvdata = undefined;
+				jQuery.extend(self,args);
+
+				self.photos = res.data.map(function(r){
+
+					if ( self.has_map || !isNaN(parseFloat(r[3]) ) ) {
+						self.has_map = true;
+						jQuery('#globeicon').addClass('enabled');
+					}
+
+					return {
+						'file': r[0],
+						'isvideo': Boolean(parseInt(r[1])),
+						'date': new Date(r[2].replaceAll('-','/')),
+						'type': 'media',
+						// Our csv is in x,y,z (lon,lat,elevation), but leaflet wants (lat,lon,elevation) so we swap lat/lon here.
+						'coordinates': (isNaN(parseFloat(r[3])) ? null : [parseFloat(r[4]),parseFloat(r[3]),parseFloat(r[5])]),
+						'dateorig': r[2],
+						'maybememe': r[6]
+					};
+				});
+
+				self.photos = self.add_date_blocks(self.photos);
+
+				// Browsers can only support an object so big, so we can only use so many rows.
+				// Calculate the new max zoom
+				self.maxzoom = Math.ceil(Math.sqrt(self.hyperlist_container.width() * self.photos.length / HyperList.getMaxBrowserHeight()));
+
+				// Make sure our new cols doesn't go over the max zoom
+				self.cols = Math.max(self.maxzoom, self.cols);
+
+				self.hyperlist_container.addClass('up' + self.cols);
+
+				self.orig_photos = self.photos;
+				self.hyperlist_init();
+				self.load_nav();
+
+				if ( jQuery('body').hasClass('map') ) {
+					self.map_init();
 				}
 
-				return {
-					'file': r[0],
-					'isvideo': Boolean(parseInt(r[1])),
-					'date': new Date(r[2].replaceAll('-','/')),
-					'type': 'media',
-					// Our csv is in x,y,z (lon,lat,elevation), but leaflet wants (lat,lon,elevation) so we swap lat/lon here.
-					'coordinates': (isNaN(parseFloat(r[3])) ? null : [parseFloat(r[4]),parseFloat(r[3]),parseFloat(r[5])]),
-					'dateorig': r[2],
-					'maybememe': r[6]
-				};
-			});
+				jQuery('#speedslide').on('input',self.speed_slide.bind(self));
+				jQuery('#zoom').on('change',self.zoom_change.bind(self));
+				jQuery('#photos').on('click','.tn',self.handle_thumb_click.bind(self));
 
+				/* Nav action handlers stuff */
+				jQuery('#thumbright').on('click',self.handle_thumb_next.bind(self));
+				jQuery('#thumbleft').on('click',self.handle_thumb_prev.bind(self));
+				jQuery('#thumbclose').on('click',self.hide_thumb.bind(self));
+				jQuery(document).on('keydown',self.keydown_handler.bind(self));
+				// Touch stuff
+				jQuery('#thumb').hammer({recognizers: [ 
+					[Hammer.Swipe,{ direction: Hammer.DIRECTION_ALL }],
+				]}).on('swiperight swipeup swipeleft', self.handle_thumb_swipe.bind(self));
 
-			self.photos = self.add_date_blocks(self.photos);
+				// Map interations
+				jQuery('#hyperlist_wrap').on('mouseenter','.tn',self.handle_tn_mouseover.bind(self));
 
-			// Browsers can only support an object so big, so we can only use so many rows.
-			// Calculate the new max zoom
-			self.maxzoom = Math.ceil(Math.sqrt(fastback.hyperlist_container.width() * fastback.photos.length / HyperList.getMaxBrowserHeight()));
-
-			// Make sure our new cols doesn't go over the max zoom
-			self.cols = Math.max(self.maxzoom, self.cols);
-
-			self.hyperlist_container.addClass('up' + self.cols);
-		}).then(function(){
-			self.orig_photos = self.photos;
-			self.hyperlist_init();
-			self.load_nav();
-
-			if ( jQuery('body').hasClass('map') ) {
-				self.map_init();
 			}
-
-			jQuery('#speedslide').on('input',self.speed_slide.bind(self));
-			jQuery('#zoom').on('change',self.zoom_change.bind(self));
-			jQuery('#photos').on('click','.tn',self.handle_thumb_click.bind(self));
-
-			/* Nav action handlers stuff */
-			jQuery('#thumbright').on('click',self.handle_thumb_next.bind(self));
-			jQuery('#thumbleft').on('click',self.handle_thumb_prev.bind(self));
-			jQuery('#thumbclose').on('click',self.hide_thumb.bind(self));
-			jQuery(document).on('keydown',self.keydown_handler.bind(self));
-			// Touch stuff
-			jQuery('#thumb').hammer({recognizers: [ 
-				[Hammer.Swipe,{ direction: Hammer.DIRECTION_ALL }],
-			]}).on('swiperight swipeup swipeleft', self.handle_thumb_swipe.bind(self));
-
-			// Map interations
-			jQuery('#hyperlist_wrap').on('mouseenter','.tn',self.handle_tn_mouseover.bind(self));
 		});
 	}
 
@@ -95,7 +100,7 @@ class Fastback {
 			'jpg','jpeg','gif','png','webp' ];
 
 		if ( this.isSafari ) {
-			this.browser_supported_file_types.push('heic');
+			// this.browser_supported_file_types.push('heic');
 			this.browser_supported_file_types.push('mov');
 			this.browser_supported_file_types.push('mpg');
 		}
@@ -331,7 +336,7 @@ class Fastback {
 	 */
 	after_render() {
 		// Non-map render
-		var totalheight = Math.ceil(fastback.photos.length / fastback.cols) * fastback.hyperlist_config.itemHeight
+		var totalheight = Math.ceil(this.photos.length / this.cols) * this.hyperlist_config.itemHeight
 		jQuery('#speedslide').val(this.hyperlist_container[0].scrollTop / totalheight * 100);
 
 		if ( this.fmap === undefined ) {
@@ -545,8 +550,8 @@ class Fastback {
 
 		// Handle click on individual markers
 		this.fmap.clusterlayer.on('click',function(e){
-				var id = e.layer.feature.properties.id
-				self.go_to_photo_id(id);
+			var id = e.layer.feature.properties.id
+			self.go_to_photo_id(id);
 		});
 
 		// Scroll to first, if we're all the way zoomed in
