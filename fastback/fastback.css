@@ -560,3 +560,12 @@ only screen and (min-device-pixel-ratio : 1.5) {
 #mapfilter:hover {
 	background-color: #f4f4f4;
 }
+
+
+body.debug .tn:before {
+content: attr(data-maybememe);
+	color: #444;
+	position: absolute;
+	padding: 3px;
+	background-color: rgba(256,256,256,0.8);
+}

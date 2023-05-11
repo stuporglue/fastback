@@ -14,6 +14,10 @@ class FastbackOutput {
 	// Optional, will use $filecache/fastback.sqlite 
 	var $sqlitefile;
 
+	// Path to .csv file 
+	// Optional, will use $filecache/fastback.sqlite 
+	var $csvfile;
+
 	// URL path to cache directory. 
 	// Optional, will use current web path + cache as default
 	var $cacheurl;
@@ -121,6 +125,10 @@ class FastbackOutput {
 			$this->sqlitefile = $this->filecache . 'fastback.sqlite';
 		}
 
+		if ( !isset($this->csvfile) ){
+			$this->csvfile = 'fastback.csv';
+		}
+
 		if ( !isset($this->debug) && array_key_exists('debug',$_GET) && $_GET['debug'] == 'true' )  {
 			$this->debug = true;
 		} else if ( !isset($this->debug) ) {
@@ -142,6 +150,7 @@ class FastbackOutput {
 			'filestructure' => $this->filestructure,
 			'nproc' => $this->nproc,
 			'sqlitefile' => $this->sqlitefile,
+			'csvfile' => $this->csvfile,
 			'debug' => $this->debug
 		),TRUE));
 	}
@@ -242,7 +251,8 @@ class FastbackOutput {
 		var fastback = new Fastback({
 		cacheurl:    "' . $this->cacheurl . '",
 			photourl:    "' . $this->photourl .'",
-			fastbackurl: "' . $_SERVER['SCRIPT_NAME'] . '"
+			fastbackurl: "' . $_SERVER['SCRIPT_NAME'] . '",
+			csvfile: "' . $this->csvfile . '"	
 	});
 			</script>';
 		$html .= '</body></html>';
@@ -704,7 +714,8 @@ class FastbackOutput {
 			DATETIME(sorttime) AS sorttime,
 			ROUND(lon,5) AS lon,
 			ROUND(lat,5) AS lat,
-			elev
+			elev,
+			maybe_meme
 			FROM fastback 
 			WHERE 
 			thumbnail IS NOT NULL 
@@ -712,11 +723,12 @@ class FastbackOutput {
 			AND flagged IS NOT TRUE 
 			AND sorttime NOT LIKE '% 00:00:01' 
 			AND DATETIME(sorttime) IS NOT NULL 
-			AND (maybe_meme > 0)
+			-- AND (maybe_meme > 0) -- Only display memes
+			AND (maybe_meme < 1) -- Only display non-memes. Threshold of 1 seems pretty ok
 			ORDER BY sorttime " . $this->sortorder . ",file";
 		$res = $this->sql->query($q);
 
-		$fh = fopen($this->filecache . '/fastback.csv','w');
+		$fh = fopen($this->filecache . '/' . $this->csvfile,'w');
 		while($row = $res->fetchArray(SQLITE3_ASSOC)){
 			fputcsv($fh,$row);
 		}
@@ -1202,29 +1214,32 @@ class FastbackOutput {
 						$maybe_meme = 0;
 						$exif = json_decode($row['exif'],true);
 
+
 						$this->log("======== MEME CHECK: $file =========\n");
+						$this->log(print_r($exif,TRUE));
 
 						// Bad filetype  or Mimetype
 						// "FileType":"MacOS"
 						// FileType WEBP
 						// "MIMEType":"application\/unknown"
 						if ( in_array($exif['FileType'],$bad_filetypes) ) {
-							$this->log("Bad file type: {$exif['FileType']}");
+							$this->log("MEME + 1: Bad file type: {$exif['FileType']}");
 							$maybe_meme += 1;
 						}
 
 						if ( in_array($exif['MIMEType'],$bad_mimetypes) ) {
-							$this->log("Bad mime type: {$exif['MIMEType']}");
+							$this->log("MEME + 1: Bad mime type: {$exif['MIMEType']}");
 							$maybe_meme += 1;
 						} else if ( preg_match('/video/',$exif['MIMEType']) ) {
 							// Most videos aren't memes
+							$this->log("MEME - 1: Most videos aren't memes");
 							$maybe_meme -= 1;
 						}
 
 						//  Error present
 						// "Error":"File format error"
 						if ( array_key_exists('Error',$exif) ) {
-							$this->log("Has Error type: {$exif['Error']}");
+							$this->log("MEME + 1: Has Error type: {$exif['Error']}");
 							$maybe_meme +=1 ;
 						}
 
@@ -1236,38 +1251,97 @@ class FastbackOutput {
 						// "ImageHeight":"1944",
 						if ( array_key_exists('ImageHeight',$exif) && array_key_exists('ImageWidth',$exif) ) {
 							if ( $exif['ImageHeight'] * $exif['ImageWidth'] <  804864 ) { // Less than 1024x768
-								$this->log("Size too small: {$exif['ImageHeight']} * {$exif['ImageWidth']} = " . ($exif['ImageHeight'] * $exif['ImageWidth']));
+								$this->log("MEME + 1: Size too small: {$exif['ImageHeight']} * {$exif['ImageWidth']} = " . ($exif['ImageHeight'] * $exif['ImageWidth']));
 								$maybe_meme += 1;
 							}
 						}
 
+						$exif_keys = array_filter($exif,function($k){
+							return strpos($k,"Exif") === 0;
+						},ARRAY_FILTER_USE_KEY);
+						if ( count($exif_keys) <= 4 ) {
+							$this->log("MEME + 1: Minimal exif keys, maybe a meme or screenshot");
+							$maybe_meme += 1;
+						}
+
+						if ( count($exif_keys) === 1 ) {
+							$this->log("MEME - 1: Absolutely no Exif. Maybe from Whatsapp or very old");
+							$maybe_meme -= 1;
+							
+						}
+
 						// Having GPS is good
 						if ( array_key_exists('GPSLatitude',$exif) ) {
+							$this->log("MEME - 1: Has GPS");
 							$maybe_meme -= 1;
 						}
 
 						// Having a camera name is good
-						if ( array_key_exists('CameraModelName',$exif) ) {
+						if ( array_key_exists('Model',$exif) ) {
+							$this->log("MEME - 1: Has Camer Model Name");
 							$maybe_meme -= 1;
+						} else 
+
+						// Not having a camera is extra bad in 2020s
+						if ( preg_match('/^202[0-9]:/',$exif['FileModifyDate']) && !array_key_exists('Model',$exif) ) {
+							$this->log("MEME + 1: Recent image and no Camera Model");
+							$maybe_meme += 1;
 						}
 
 						// Scanners might put a comment in 
 						if ( array_key_exists('Comment',$exif) ) {
+							$this->log("MEME - 1: Has Comment");
 							$maybe_meme -= 1;
 						}
 
-						// Absolutely no meta data? Then it might be a scan
-						if ( !array_key_exists('CMMFlags',$exif) && !array_key_exists('ExifByteOrder',$exif) ) {
-							$maybe_meme -= 1;
+						// Scanners might put a comment in 
+						if ( array_key_exists('UserComment',$exif) && $exif['UserComment'] == 'Screenshot' ) {
+							$this->log("MEME + 2: Comment says screenshot");
+							$maybe_meme += 2;
+						}
+
+						if ( array_key_exists('Software',$exif) && $exif['Software'] == 'Instagram' ) {
+							$this->log("MEME + 1: Software is Instagram");
+							$maybe_meme += 1;
 						}
 
 						if ( array_key_exists('ThumbnailImage',$exif) ) {
+							$this->log("MEME - 1: Has Thumbnail");
 							$maybe_meme -= 1;
 						}
 
-						if ( array_key_exists('IPTCDigest',$exif) ) {
+						// if ( array_key_exists('IPTCDigest',$exif) ) {
+						// 	$this->log("MEME - 1: Has IPTC Digest");
+						// 	$maybe_meme -= 1;
+						// }
+
+						if ( array_key_exists('ProfileDescriptionML',$exif) ) {
+							$this->log("MEME - 1: Has ProfileDescription");
 							$maybe_meme -= 1;
 						}
+
+						// Luminance seems to maybe be something in some of our photos that aren't memes?
+						if ( array_key_exists('Luminance',$exif) ) {
+							$this->log("MEME - 1: Has Luminance");
+							$maybe_meme -= 1;
+						}
+
+						if ( array_key_exists('TagsList',$exif) ) {
+							$this->log("MEME - 1: Has Tags List");
+							$maybe_meme -= 1;
+						}
+
+						if ( array_key_exists('Subject',$exif) ) {
+							$this->log("MEME - 1: Has Subject");
+							$maybe_meme -= 1;
+						}
+
+						if ( array_key_exists('DeviceMfgDesc',$exif) ) {
+							$this->log("MEME - 1: Has ICC DeviceMfgDesc "); // eg value Gimp
+							$maybe_meme -= 1;
+						}
+
+						$this->log("MEME SCORE $maybe_meme for $file");
 
 						$batch[$file] = $maybe_meme;
 				}

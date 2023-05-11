@@ -7,7 +7,7 @@ class Fastback {
 
 		var self = this;
 		jQuery.extend(this,args);
-		$.get(this.cacheurl + 'fastback.csv', function(data) {
+		$.get(this.cacheurl + this.csvfile , function(data) {
 			var res = Papa.parse(data.trim());
 			self.photos = res.data.map(function(r){
 
@@ -23,7 +23,8 @@ class Fastback {
 					'type': 'media',
 					// Our csv is in x,y,z (lon,lat,elevation), but leaflet wants (lat,lon,elevation) so we swap lat/lon here.
 					'coordinates': (isNaN(parseFloat(r[3])) ? null : [parseFloat(r[4]),parseFloat(r[3]),parseFloat(r[5])]),
-					'dateorig': r[2]
+					'dateorig': r[2],
+					'maybememe': r[6]
 				};
 			});
 
@@ -260,7 +261,7 @@ class Fastback {
 					} else {
 						vidclass = '';
 					}
-					return '<div class="tn' + vidclass + '"><img data-dateorig="' + p['dateorig']+ '" data-photoid="' + p['id'] + '" src="' + encodeURI(self.cacheurl + p['file']) + '.webp"/></div>';
+					return '<div data-maybememe="' + p['maybememe'] + '" class="tn' + vidclass + '"><img data-dateorig="' + p['dateorig']+ '" data-photoid="' + p['id'] + '" src="' + encodeURI(self.cacheurl + p['file']) + '.webp"/></div>';
 				} else if ( p['type'] == 'dateblock' ) {
 					date = p['date'];
 					// I feel like this is kind of clever. I take the Year-Month, eg. 2021-12, parse it to an int like 202112 and then take the mod of the palette length to get a fixed random color for each date.
