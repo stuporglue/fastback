@@ -200,7 +200,7 @@ class FastbackOutput {
 
 								waitfor("Fastback", function(){
 									return function(){
-										var fastback = new Fastback({
+										window.fastback = new Fastback({
 											csvdata: csvdata,	
 											cacheurl:    "' . $this->cacheurl . '",
 											photourl:    "' . $this->photourl .'",
@@ -215,7 +215,7 @@ class FastbackOutput {
 
 
 			$html .= '<link rel="stylesheet" href="fastback/jquery-ui.min.css">
-			<link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" integrity="sha512-xodZBNTC5n17Xt2atTPuE1HxjVMSvLVW9ocqUKLsCC5CXdbqCmblAshOMAS6/keqq/sMZMZ19scR4PsZChSR7A==" crossorigin="" />
+			<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" integrity="sha256-kLaT2GOSpHechhsozzB+flnD+zUyjE2LlfWPgU04xyI=" crossorigin=""/>
 			<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.0.3/dist/MarkerCluster.Default.css"/>
 			<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>
 			<link rel="stylesheet" href="fastback/fastback.css">
@@ -270,7 +270,7 @@ class FastbackOutput {
 			</div>';
 		$html .= '</div>';
 		$html .= '<script src="fastback/hammer.js"></script>';
-		$html .= '<script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js" integrity="sha512-XQoYMqMTK8LvdxXYG3nZ448hOEQiglfqkJs1NOQV44cWnUrBc8PkAOcXy20w0vlaXaVUearIOBhiXZ5V3ynxwA==" crossorigin=""></script>';
+		$html .= '<script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js" integrity="sha256-WBkoXOwTeyKclOHuWtc+i2uENFpDZ9YPdf5Hf+D7ewM=" crossorigin=""></script>';
 		$html .= '<script src="fastback/jquery-ui.min.js"></script>';
 		$html .= '<script src="fastback/hyperlist.js"></script>';
 		$html .= '<script src="fastback/papaparse.min.js"></script>';

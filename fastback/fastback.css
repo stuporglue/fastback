@@ -122,29 +122,6 @@ body .up8  .tn {width: calc(100vw/8);  height: calc(100vw/8);  font-size: 2.5vw;
 body .up9  .tn {width: calc(100vw/9);  height: calc(100vw/9);  font-size: 2.2vw; }
 body .up10 .tn {width: calc(100vw/10); height: calc(100vw/10); font-size: 2vw;   }
 
-/* When the map is open AND we're landscape, everything is half as wide */
-@media(orientation: landscape) {
-	body.map	   .tn {width: calc(50vw/5);  height: calc(50vw/5);  font-size: 2px;   }
-	body.map .up1  .tn {width: calc(50vw/1);  height: calc(50vw/1);  font-size: 11vw;  }
-	body.map .up2  .tn {width: calc(50vw/2);  height: calc(50vw/2);  font-size: 5vw;  }
-	body.map .up3  .tn {width: calc(50vw/3);  height: calc(50vw/3);  font-size: 3.5vw;   }
-	body.map .up4  .tn {width: calc(50vw/4);  height: calc(50vw/4);  font-size: 2.5vw;   }
-	body.map .up5  .tn {width: calc(50vw/5);  height: calc(50vw/5);  font-size: 2vw;   }
-	body.map .up6  .tn {width: calc(50vw/6);  height: calc(50vw/6);  font-size: 1.75vw; }
-	body.map .up7  .tn {width: calc(50vw/7);  height: calc(50vw/7);  font-size: 1.5vw;   }
-	body.map .up8  .tn {width: calc(50vw/8);  height: calc(50vw/8);  font-size: 1.25vw; }
-	body.map .up9  .tn {width: calc(50vw/9);  height: calc(50vw/9);  font-size: 1.1vw; }
-	body.map .up10 .tn {width: calc(50vw/10); height: calc(50vw/10); font-size: 1vw;   }
-}
-
-/* If we're in portrait mode we just swap into over under and widths remain the same */
-@media(orientation: portrait) {
-	body.map #map, 
-	body.map #hyperlist_wrap {
-		width: 100%;
-		height: 50%;
-	}
-}
 
 /** Tools */
 
@@ -241,11 +218,11 @@ body .up10 .tn {width: calc(100vw/10); height: calc(100vw/10); font-size: 2vw;  
 #thumb {
 	position: absolute;
 	box-sizing: border-box;
-	top: 0;
-	left: 0;
+	bottom: 0;
+	right: 0;
 	height: calc(100% - 30px);
 	width: 100%;
-	margin: 0;
+	margin: 0 0 30px 0;
 	background-color: rgba(255,255,255,.8);
 	border-radius: 4px;
 	-webkit-transition: opacity 5s ease-in-out;
@@ -255,6 +232,10 @@ body .up10 .tn {width: calc(100vw/10); height: calc(100vw/10); font-size: 2vw;  
 	padding: 10px;
 	display: none;
 	z-index: 10;
+}
+
+body.map #thumb {
+	width: 50%;
 }
 
 #thumbcontrols {
@@ -358,18 +339,6 @@ body .up10 .tn {width: calc(100vw/10); height: calc(100vw/10); font-size: 2vw;  
 	scrollbar-width: none;  /* Firefox */
 } 
 
-
-/** Media Queries */
-
-@media
-only screen and (-webkit-min-device-pixel-ratio : 1.5),
-only screen and (min-device-pixel-ratio : 1.5) {
-	.container {
-		width: 100%;
-		height: 100%;
-		min-height: 100%;
-	}
-}
 
 /** Social media icons – https://sharingbuttons.io/**/
 
@@ -557,8 +526,13 @@ only screen and (min-device-pixel-ratio : 1.5) {
   cursor: pointer;
 }
 
-#mapfilter:hover {
+#mapfilter:hover,#mapfilter.active:hover {
 	background-color: #f4f4f4;
+}
+
+
+#mapfilter.active:hover {
+	background-color: yellow;
 }
 
 
@@ -568,4 +542,46 @@ content: attr(data-maybememe);
 	position: absolute;
 	padding: 3px;
 	background-color: rgba(256,256,256,0.8);
+}
+
+/** Media Queries */
+
+@media
+only screen and (-webkit-min-device-pixel-ratio : 1.5),
+only screen and (min-device-pixel-ratio : 1.5) {
+	.container {
+		width: 100%;
+		height: 100%;
+		min-height: 100%;
+	}
+}
+
+
+
+/* When the map is open AND we're landscape, everything is half as wide */
+@media(orientation: landscape) {
+	body.map	   .tn {width: calc(50vw/5);  height: calc(50vw/5);  font-size: 2px;   }
+	body.map .up1  .tn {width: calc(50vw/1);  height: calc(50vw/1);  font-size: 11vw;  }
+	body.map .up2  .tn {width: calc(50vw/2);  height: calc(50vw/2);  font-size: 5vw;  }
+	body.map .up3  .tn {width: calc(50vw/3);  height: calc(50vw/3);  font-size: 3.5vw;   }
+	body.map .up4  .tn {width: calc(50vw/4);  height: calc(50vw/4);  font-size: 2.5vw;   }
+	body.map .up5  .tn {width: calc(50vw/5);  height: calc(50vw/5);  font-size: 2vw;   }
+	body.map .up6  .tn {width: calc(50vw/6);  height: calc(50vw/6);  font-size: 1.75vw; }
+	body.map .up7  .tn {width: calc(50vw/7);  height: calc(50vw/7);  font-size: 1.5vw;   }
+	body.map .up8  .tn {width: calc(50vw/8);  height: calc(50vw/8);  font-size: 1.25vw; }
+	body.map .up9  .tn {width: calc(50vw/9);  height: calc(50vw/9);  font-size: 1.1vw; }
+	body.map .up10 .tn {width: calc(50vw/10); height: calc(50vw/10); font-size: 1vw;   }
+}
+
+/* If we're in portrait mode we just swap into over under and widths remain the same */
+@media(orientation: portrait) {
+	body.map #map, 
+	body.map #hyperlist_wrap {
+		width: 100%;
+		height: 50%;
+	}
+	body.map #thumb {
+		height: calc(50% - 30px);
+		width: 100%;
+	}
 }

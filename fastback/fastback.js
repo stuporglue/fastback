@@ -521,11 +521,11 @@ Fastback = class Fastback {
 
 		L.Control.MapFilter = L.Control.extend({
 			onAdd: function(map) {
-				var button = jQuery('<div id="mapfilter">🛰</div>');
-				button.on('click',function(){
+				self.fmap.mapfilter_button = jQuery('<div id="mapfilter">🛰</div>');
+				self.fmap.mapfilter_button.on('click',function(){
 					self.toggle_map_filter();
 				});
-				return button[0];
+				return self.fmap.mapfilter_button[0];
 			},
 
 			onRemove: function(map) {
@@ -738,10 +738,14 @@ Fastback = class Fastback {
 	 * Handle globe icon click
 	 */
 	handle_globe_click() {
+		var icon = jQuery('#globeicon');
+
 		if ( jQuery('body').hasClass('map') ) {
+			icon.removeClass('active');
 			jQuery('body').removeClass('map');
 		} else {
 			jQuery('body').addClass('map');
+			icon.addClass('active');
 
 			if ( this.fmap === undefined ) {
 				this.map_init();
@@ -802,9 +806,12 @@ Fastback = class Fastback {
 	toggle_map_filter() {
 		console.log("Map filter");
 
-		var is_filtered = (this.map_filter === undefined || this.map_filter === false );
+		var is_filtered = !(this.map_filter === undefined || this.map_filter === false );
 
 		if ( !is_filtered ) {
+			this.fmap.mapfilter_button.addClass('active');
+
+			var self = this;
 			this.active_filters.map = function(p){
 				var mapbounds = self.fmap.lmap.getBounds()
 				self.photos = self.photos.filter(function(p){
@@ -816,6 +823,7 @@ Fastback = class Fastback {
 				});
 			};
 		} else {
+			this.fmap.mapfilter_button.removeClass('active');
 			delete this.active_filters.map;
 		}
 
