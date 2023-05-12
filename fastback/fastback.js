@@ -519,6 +519,11 @@ Fastback = class Fastback {
 			})
 		}
 
+		this.fmap.lmap.on({
+			'zoomend': this._map_handle_zoom_move_end.bind(self),
+			'moveend': this._map_handle_zoom_move_end.bind(self)
+		});
+
 		L.Control.MapFilter = L.Control.extend({
 			onAdd: function(map) {
 				self.fmap.mapfilter_button = jQuery('<div id="mapfilter">🛰</div>');
@@ -571,6 +576,15 @@ Fastback = class Fastback {
 		this.after_render();
 	}
 
+	_map_handle_zoom_move_end(e) {
+		if ( !this.fmap.updating_cluster ) {
+			if (this.active_filters.map !== undefined ) {
+				this.dirty_filters = true;
+				this.refresh_layout();
+			}
+		}
+	}
+
 	/**
 	 * Update the clustermarker content
 	 */
@@ -578,6 +592,8 @@ Fastback = class Fastback {
 		if ( this.fmap === undefined ) {
 			return;
 		}
+
+		this.fmap.updating_cluster = true;
 
 		var geojson = this.build_geojson();
 
@@ -588,7 +604,11 @@ Fastback = class Fastback {
 			'chunkedLoading': true
 		});
 
-		this.fmap.lmap.fitBounds(this.fmap.clusterlayer.getBounds());
+		var bounds = this.fmap.clusterlayer.getBounds();
+		if ( bounds._southWest != undefined ) {
+			this.fmap.lmap.fitBounds(bounds);
+		}
+		this.fmap.updating_cluster = false;
 	}
 
 	/**
@@ -712,7 +732,7 @@ Fastback = class Fastback {
 			delete this.active_filters.rewind;
 			this.dirty_filters = true;
 		} else {
-			jQuery('#rewindicon').addClass('active');
+			icon.addClass('active');
 			this.rewind_date = new Date();
 			this.setup_new_rewind_date();
 		}
@@ -813,7 +833,7 @@ Fastback = class Fastback {
 	toggle_map_filter() {
 		console.log("Map filter");
 
-		var is_filtered = !(this.map_filter === undefined || this.map_filter === false );
+		var is_filtered = (this.active_filters.map !== undefined );
 
 		if ( !is_filtered ) {
 			this.fmap.mapfilter_button.addClass('active');
@@ -827,6 +847,7 @@ Fastback = class Fastback {
 						return false;
 					}
 					// Reject any photos outside the bounds of the map
+					return mapbounds.contains(p.coordinates);
 				});
 			};
 		} else {
@@ -835,5 +856,6 @@ Fastback = class Fastback {
 		}
 
 		this.dirty_filters = true;
+		this.refresh_layout();
 	}
 }

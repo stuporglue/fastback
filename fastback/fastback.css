@@ -526,15 +526,18 @@ body.map #thumb {
   cursor: pointer;
 }
 
-#mapfilter:hover,#mapfilter.active:hover {
+#mapfilter:hover {
 	background-color: #f4f4f4;
 }
 
 
-#mapfilter.active:hover {
+#mapfilter.active {
 	background-color: yellow;
 }
 
+#mapfilter.active:hover {
+	background-color: #fbff86;
+}
 
 body.debug .tn:before {
 content: attr(data-maybememe);
