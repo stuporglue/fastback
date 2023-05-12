@@ -380,9 +380,9 @@ Fastback = class Fastback {
 			}
 			jQuery('#thumbcontent').html(imghtml);
 
-			jQuery('#thumbdownload').html(`<h2><a class="download" href="${fullsize}" download>${basename}</a></h2>`);
-			jQuery('#thumbflag').html(`<a class="flag" onclick="return fastback.sendbyajax(this)" href="${this.fastbackurl}?flag=${encodeURIComponent(imgsrc)}">Flag Image</a>`);
-			jQuery('#thumbinfo').html(this.photos[photoid]['date']);
+			jQuery('#thumbdownload').html(`<h2><a class="download" href="${fullsize}" download></a></h2>`);
+			jQuery('#thumbflag').html(`<a class="flag" onclick="return fastback.sendbyajax(this)" href="${this.fastbackurl}?flag=${encodeURIComponent(imgsrc)}"></a>`);
+			// jQuery('#thumbinfo').html(this.photos[photoid]['date']);
 
 			var share_uri = jQuery('a.download')[0].href;
 			jQuery('#share_fb').attr('href','https://facebook.com/sharer/sharer.php?u=' + encodeURIComponent(share_uri));
@@ -645,6 +645,21 @@ Fastback = class Fastback {
 		return geojson;
 	}
 
+
+	scroll_to_photo(id) {
+		// If we don't find one, go all the way to the end
+		if ( id === undefined || id === -1 ) {
+			id = this.photos.length - 1;
+		}
+
+		// Get the row number now
+		var rownum = parseInt(id / this.cols)
+
+		// Set the scrollTop
+		this.hyperlist_container.prop('scrollTop',(rownum * this.hyperlist_config.itemHeight));
+	}
+
+
 	/**
 	 * Handle the datepicker change
 	 */
@@ -658,16 +673,7 @@ Fastback = class Fastback {
 		// Find the first photo that is younger than our target photo
 		var first = this.photos.findIndex(o => o['date'] <= targetdate);
 
-		// If we don't find one, go all the way to the end
-		if ( first === undefined || first === -1 ) {
-			first = this.photos.length - 1;
-		}
-
-		// Get the row number now
-		var rownum = parseInt(first / this.cols)
-
-		// Set the scrollTop
-		this.hyperlist_container.prop('scrollTop',(rownum * this.hyperlist_config.itemHeight));
+		this.scroll_to_photo(first);
 
 		this.refresh_layout();
 	}
@@ -677,6 +683,7 @@ Fastback = class Fastback {
 	 */
 	go_to_photo_id(id) {
 		this._go_to_photo('id',id);
+		this.flash_square_for_id(id);
 	}
 
 	/**
@@ -691,13 +698,7 @@ Fastback = class Fastback {
 			first = this.photos.length - 1;
 		}
 
-		// Get the row number now
-		var rownum = parseInt(first / this.cols)
-
-		// Set the scrollTop
-		this.hyperlist_container.prop('scrollTop',(rownum * this.hyperlist_config.itemHeight));
-
-		this.refresh_layout();
+		this.scroll_to_photo(first);
 	}
 
 	/**
@@ -772,7 +773,6 @@ Fastback = class Fastback {
 		}
 
 		var one_layer;
-		var one_tn
 		var self = this;
 
 		this.fmap.flashlayer.eachLayer(function(l){
@@ -781,17 +781,24 @@ Fastback = class Fastback {
 			}
 		});
 
-		one_tn = jQuery('img[data-photoid="' + target_id +'"]').closest('.tn').addClass('flash');
-
 		if ( one_layer !== undefined ) {
 			one_layer.setStyle(this.flashstyle_hover);
 		}
 
 		setTimeout(function(){
-			one_tn.removeClass('flash');
 			if ( one_layer !== undefined ) {
 				one_layer.setStyle(self.flashstyle);
 			}
+		},500);
+		this.flash_square_for_id(target_id);
+	}
+
+	flash_square_for_id(target_id) {
+		var one_tn
+		one_tn = jQuery('img[data-photoid="' + target_id +'"]').closest('.tn').addClass('flash');
+
+		setTimeout(function(){
+			one_tn.removeClass('flash');
 		},500);
 	}
 
