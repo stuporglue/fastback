@@ -749,6 +749,9 @@ class FastbackOutput {
 
 		$fh = fopen($this->filecache . '/' . $this->csvfile,'w');
 		while($row = $res->fetchArray(SQLITE3_ASSOC)){
+			if ( $row['isvideo'] == 0 ) {
+				$row['isvideo'] = NULL;
+			}
 			fputcsv($fh,$row);
 		}
 		fclose($fh);

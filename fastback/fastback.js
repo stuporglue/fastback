@@ -22,7 +22,7 @@ Fastback = class Fastback {
 
 					return {
 						'file': r[0],
-						'isvideo': Boolean(parseInt(r[1])),
+						'isvideo': r[1] == 1,
 						'date': new Date(r[2] * 1000),
 						'type': 'media',
 						// Our csv is in x,y,z (lon,lat,elevation), but leaflet wants (lat,lon,elevation) so we swap lat/lon here.
