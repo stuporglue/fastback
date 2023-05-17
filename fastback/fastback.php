@@ -733,21 +733,18 @@ class FastbackOutput {
 		$q = "SELECT 
 			file,
 			isvideo,
-			DATETIME(sorttime) AS sorttime,
+			CAST(STRFTIME('%s',sorttime) AS INTEGER) AS filemtime,
 			ROUND(lon,5) AS lon,
-			ROUND(lat,5) AS lat,
-			elev,
-			maybe_meme
+			ROUND(lat,5) AS lat
 			FROM fastback 
 			WHERE 
 			thumbnail IS NOT NULL 
 			AND thumbnail NOT LIKE 'RESERVE%' 
 			AND flagged IS NOT TRUE 
-			AND sorttime NOT LIKE '% 00:00:01' 
+			AND sorttime IS NOT NULL 
 			AND DATETIME(sorttime) IS NOT NULL 
-			-- AND (maybe_meme > 0) -- Only display memes
 			AND (maybe_meme <= 1) -- Only display non-memes. Threshold of 1 seems pretty ok
-			ORDER BY sorttime " . $this->sortorder . ",file";
+			ORDER BY filemtime " . $this->sortorder . ",file " . $this->sortorder;
 		$res = $this->sql->query($q);
 
 		$fh = fopen($this->filecache . '/' . $this->csvfile,'w');
@@ -960,7 +957,6 @@ class FastbackOutput {
 				}
 
 				if ( !$found ){
-					// $updated_timestamps[$file] = 'sorttime || " 00:00:01"';
 					die("Every file should have a FileModifyDate since that's not actually exif. $file");
 				}
 			}

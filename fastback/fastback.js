@@ -23,12 +23,10 @@ Fastback = class Fastback {
 					return {
 						'file': r[0],
 						'isvideo': Boolean(parseInt(r[1])),
-						'date': new Date(r[2].replaceAll('-','/')),
+						'date': new Date(r[2] * 1000),
 						'type': 'media',
 						// Our csv is in x,y,z (lon,lat,elevation), but leaflet wants (lat,lon,elevation) so we swap lat/lon here.
-						'coordinates': (isNaN(parseFloat(r[3])) ? null : [parseFloat(r[4]),parseFloat(r[3]),parseFloat(r[5])]),
-						'dateorig': r[2],
-						'maybememe': r[6]
+						'coordinates': (isNaN(parseFloat(r[3])) ? null : [parseFloat(r[4]),parseFloat(r[3])])
 					};
 				});
 
@@ -220,11 +218,7 @@ Fastback = class Fastback {
 				continue;
 			}
 
-			if ( photos[i].dateorig === undefined ) {
-				continue;
-			}
-
-			cur_date = photos[i].dateorig.replace(/(....-..).*/,"$1");
+			cur_date = photos[i].date.getFullYear() + '-' + (photos[i].date.getMonth() + 1);
 
 			if ( cur_date != prev_date ) {
 				photos.splice(i,0,{
@@ -266,7 +260,7 @@ Fastback = class Fastback {
 					} else {
 						vidclass = '';
 					}
-					return '<div data-maybememe="' + p['maybememe'] + '" class="tn' + vidclass + '"><img data-dateorig="' + p['dateorig']+ '" data-photoid="' + p['id'] + '" src="' + encodeURI(self.cacheurl + p['file']) + '.webp"/></div>';
+					return '<div class="tn' + vidclass + '"><img data-photoid="' + p['id'] + '" src="' + encodeURI(self.cacheurl + p['file']) + '.webp"/></div>';
 				} else if ( p['type'] == 'dateblock' ) {
 					date = p['date'];
 					// I feel like this is kind of clever. I take the Year-Month, eg. 2021-12, parse it to an int like 202112 and then take the mod of the palette length to get a fixed random color for each date.
@@ -520,7 +514,6 @@ Fastback = class Fastback {
 		}
 
 		this.fmap.lmap.on({
-			'zoomend': this._map_handle_zoom_move_end.bind(self),
 			'moveend': this._map_handle_zoom_move_end.bind(self)
 		});
 
@@ -577,10 +570,12 @@ Fastback = class Fastback {
 	}
 
 	_map_handle_zoom_move_end(e) {
-		if ( !this.fmap.updating_cluster ) {
+		console.log("Move/zoom end");
+		// If we're already updating the cluster or already have dirty filters, then something else will handle refreshing
+		if ( !this.fmap.updating_cluster && !this.dirty_filters ) {
 			if (this.active_filters.map !== undefined ) {
 				this.dirty_filters = true;
-				this.refresh_layout();
+				// this.refresh_layout();
 			}
 		}
 	}
@@ -592,6 +587,7 @@ Fastback = class Fastback {
 		if ( this.fmap === undefined ) {
 			return;
 		}
+		console.log("Updating cluster");
 
 		this.fmap.updating_cluster = true;
 
@@ -653,10 +649,6 @@ Fastback = class Fastback {
 				// Lat
 				bbox[1] = Math.min(bbox[1],photos[i].coordinates[1]);
 				bbox[4] = Math.max(bbox[4],photos[i].coordinates[1]);
-
-				// Elev
-				bbox[2] = Math.min(bbox[2],photos[i].coordinates[2]);
-				bbox[5] = Math.max(bbox[5],photos[i].coordinates[2]);
 			}
 		}
 
@@ -747,10 +739,12 @@ Fastback = class Fastback {
 	setup_new_rewind_date(date_to_use) {
 		var self = this;
 		var d = date_to_use || new Date();
-		var datepart = ((d.getMonth() + 1) + "").padStart(2,"0") + '-' + (d.getDate() + "").padStart(2,"0")
-		var re = new RegExp('^....-' + datepart + ' ');
+		var month = d.getMonth();
+		var date = d.getDate();
 		this.active_filters.rewind = function() {
-			self.photos = self.photos.filter(function(p){ return p.dateorig.match(re);});
+			self.photos = self.photos.filter(function(p){ 
+				return p.date.getMonth() == month && p.date.getDate() == date;
+			});
 		};
 		this.dirty_filters = true;
 	}
