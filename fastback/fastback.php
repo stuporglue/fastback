@@ -126,7 +126,7 @@ class FastbackOutput {
 		}
 
 		if ( !isset($this->csvfile) ){
-			$this->csvfile = 'fastback.csv';
+			$this->csvfile = $this->filecache . 'fastback.csv';
 		}
 
 		if ( !isset($this->debug) && array_key_exists('debug',$_GET) && $_GET['debug'] == 'true' )  {
@@ -165,6 +165,9 @@ class FastbackOutput {
 		} else if (!empty($_GET['flag'])) {
 			$this->flag_photo();
 			exit();
+		} else if (!empty($_GET['csv'])) {
+			$this->send_csv();
+			exit();
 		} else {
 			$this->make_html();
 		}
@@ -196,7 +199,7 @@ class FastbackOutput {
 
 
 			waitfor("jQuery",function(){
-				$.get("' . $this->cacheurl . $this->csvfile . '").then(function(csvdata){
+				$.get("' . $_SERVER['SCRIPT_NAME'] . '?csv=get").then(function(csvdata){
 
 								waitfor("Fastback", function(){
 									return function(){
@@ -204,8 +207,7 @@ class FastbackOutput {
 											csvdata: csvdata,	
 											cacheurl:    "' . $this->cacheurl . '",
 											photourl:    "' . $this->photourl .'",
-											fastbackurl: "' . $_SERVER['SCRIPT_NAME'] . '",
-											csvfile: "' . $this->csvfile . '"	
+											fastbackurl: "' . $_SERVER['SCRIPT_NAME'] . '"
 										});
 									};
 							}(csvdata));
@@ -747,7 +749,7 @@ class FastbackOutput {
 			ORDER BY filemtime " . $this->sortorder . ",file " . $this->sortorder;
 		$res = $this->sql->query($q);
 
-		$fh = fopen($this->filecache . '/' . $this->csvfile,'w');
+		$fh = fopen($this->csvfile,'w');
 		while($row = $res->fetchArray(SQLITE3_ASSOC)){
 			if ( $row['isvideo'] == 0 ) {
 				$row['isvideo'] = NULL;
@@ -1502,5 +1504,26 @@ class FastbackOutput {
 
 		$this->sql->query($update_q);
 		$this->sql_disconnect();
+	}
+
+	public function send_csv() {
+
+		if ( !file_exists($this->csvfile) ) {
+			$this->make_csv();
+		}
+
+		if ( !file_exists($this->csvfile) ) {
+			header("HTTP/1.0 404 Not Found");
+			print("CSV file not found");
+			exit();
+		}
+
+		ob_start("ob_gzhandler");
+		header("Content-type: text/csv");
+		header("Content-Disposition: inline; filename=\"photos.csv\"");
+		header("Last-Modified: " . filemtime($this->csvfile));
+		readfile($this->csvfile);
+		ob_end_flush();
+		exit();
 	}
 }

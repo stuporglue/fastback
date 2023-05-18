@@ -6,6 +6,10 @@
 ; Optional, defaults to filecache/fastback.sqlite
 sqlitefile = "/shared/big/no_backup/web_cache/allphotos.sqlite"
 
+; Specify the CSV file name
+; Optional, defaults to fastback.csv
+csvfile = "/var/www/html/photos/photos.csv"
+
 ; URL path to cache directory. 
 ; Optional, will use current web path + cache as default
 ; cacheurl = "/shared/big/no_backup/web_cache/famvacation_2021/"
