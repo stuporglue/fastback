@@ -272,7 +272,8 @@ class FastbackOutput {
 			</div>';
 		$html .= '</div>';
 		$html .= '<script src="fastback/hammer.js"></script>';
-		$html .= '<script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js" integrity="sha256-WBkoXOwTeyKclOHuWtc+i2uENFpDZ9YPdf5Hf+D7ewM=" crossorigin=""></script>';
+		// $html .= '<script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js" integrity="sha256-WBkoXOwTeyKclOHuWtc+i2uENFpDZ9YPdf5Hf+D7ewM=" crossorigin=""></script>';
+		$html .= '<script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet-src.js" integrity=”sha256-tPonvXioSHRQt1+4ztWR5mz/1KG1X3yHNzVXprP2gLo=” crossorigin=""></script>';
 		$html .= '<script src="fastback/jquery-ui.min.js"></script>';
 		$html .= '<script src="fastback/hyperlist.js"></script>';
 		$html .= '<script src="fastback/papaparse.min.js"></script>';
@@ -736,8 +737,8 @@ class FastbackOutput {
 			file,
 			isvideo,
 			CAST(STRFTIME('%s',sorttime) AS INTEGER) AS filemtime,
-			ROUND(lon,5) AS lon,
-			ROUND(lat,5) AS lat
+			ROUND(lat,5) AS lat,
+			ROUND(lon,5) AS lon
 			FROM fastback 
 			WHERE 
 			thumbnail IS NOT NULL 

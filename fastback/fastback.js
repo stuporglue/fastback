@@ -25,8 +25,7 @@ Fastback = class Fastback {
 						'isvideo': r[1] == 1,
 						'date': new Date(r[2] * 1000),
 						'type': 'media',
-						// Our csv is in x,y,z (lon,lat,elevation), but leaflet wants (lat,lon,elevation) so we swap lat/lon here.
-						'coordinates': (isNaN(parseFloat(r[3])) ? null : [parseFloat(r[4]),parseFloat(r[3])])
+						'coordinates': (isNaN(parseFloat(r[3])) ? null : [parseFloat(r[3]),parseFloat(r[4])])
 					};
 				});
 
@@ -571,25 +570,17 @@ Fastback = class Fastback {
 
 	_map_handle_zoom_move_end(e) {
 		console.log("Move/zoom end");
-		// If we're already updating the cluster or already have dirty filters, then something else will handle refreshing
-		if ( !this.fmap.updating_cluster && !this.dirty_filters ) {
-			if (this.active_filters.map !== undefined ) {
-				this.dirty_filters = true;
-				// this.refresh_layout();
-			}
-		}
+		// this.apply_filters();
 	}
 
 	/**
-	 * Update the clustermarker content
+	 * Update the markercluster content
 	 */
 	map_update_cluster() {
 		if ( this.fmap === undefined ) {
 			return;
 		}
 		console.log("Updating cluster");
-
-		this.fmap.updating_cluster = true;
 
 		var geojson = this.build_geojson();
 
@@ -600,11 +591,8 @@ Fastback = class Fastback {
 			'chunkedLoading': true
 		});
 
-		var bounds = this.fmap.clusterlayer.getBounds();
-		if ( bounds._southWest != undefined ) {
-			this.fmap.lmap.fitBounds(bounds);
-		}
-		this.fmap.updating_cluster = false;
+		console.log("Fitting bounds due to updating cluster");
+		this.fmap.lmap.fitBounds(this.fmap.clusterlayer.getBounds());
 	}
 
 	/**
@@ -766,6 +754,7 @@ Fastback = class Fastback {
 				this.map_init();
 			} else {
 				this.fmap.lmap.invalidateSize();
+				console.log("Fitting bounds due to globe click");
 				this.fmap.lmap.fitBounds(this.fmap.clusterlayer.getBounds());
 			}
 		}
@@ -834,14 +823,15 @@ Fastback = class Fastback {
 
 			var self = this;
 			this.active_filters.map = function(p){
-				var mapbounds = self.fmap.lmap.getBounds()
+				var mapbounds = self.fmap.lmap.getBounds();
+				console.log(mapbounds.toBBoxString());
 				self.photos = self.photos.filter(function(p){
 					// Reject any photos without geo
 					if ( p.coordinates === null ) {
 						return false;
 					}
 					// Reject any photos outside the bounds of the map
-					return mapbounds.contains(p.coordinates);
+					return mapbounds.contains([p.coordinates[1],p.coordinates[0]]);
 				});
 			};
 		} else {
