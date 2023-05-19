@@ -282,6 +282,13 @@ Fastback = class Fastback {
 	 * Only apply filters to data strctures, no redraws.
 	 */
 	apply_filters() {
+
+		// We never want to get stuck in an applying_filters loop
+		if ( this.applying_filters === true ) {
+			return;
+		}
+
+		this.applying_filters = true;
 		if ( this.dirty_filters ) {
 			var self = this;
 			this.photos = this.orig_photos.filter(function(item) { return item.type === 'media'; });
@@ -294,6 +301,7 @@ Fastback = class Fastback {
 			this.map_update_cluster();
 			this.dirty_filters = false;
 		}
+		delete this.applying_filters;
 	}
 
 	/*
@@ -570,7 +578,16 @@ Fastback = class Fastback {
 
 	_map_handle_zoom_move_end(e) {
 		console.log("Move/zoom end");
-		// this.apply_filters();
+
+		this.handling_map_move_end = true;
+
+		// Moving the map only dirties our filters if we're doing map based filtering.
+		if ( this.active_filters.map !== undefined ) {
+			this.dirty_filters = true;
+			this.refresh_layout();
+		}
+
+		delete this.handling_map_move_end;
 	}
 
 	/**
@@ -580,6 +597,8 @@ Fastback = class Fastback {
 		if ( this.fmap === undefined ) {
 			return;
 		}
+
+
 		console.log("Updating cluster");
 
 		var geojson = this.build_geojson();
@@ -591,8 +610,12 @@ Fastback = class Fastback {
 			'chunkedLoading': true
 		});
 
-		console.log("Fitting bounds due to updating cluster");
-		this.fmap.lmap.fitBounds(this.fmap.clusterlayer.getBounds());
+
+		// If we're handling a user inited map move we don't want to update zoom. Let the user go where they want.
+		if ( this.handling_map_move_end === undefined ) {
+			console.log("Fitting bounds due to updating cluster");
+			this.fmap.lmap.fitBounds(this.fmap.clusterlayer.getBounds());
+		}
 	}
 
 	/**
