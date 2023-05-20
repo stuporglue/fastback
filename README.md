@@ -99,6 +99,8 @@ $_GET options
 
 * ?flag=filepath - Flags a file (marks file and hides it in CSV output during next time csv is compiled)
 * ?proxy=filepath - Proxies a file from an unsupported format to a browser supported format.
+* ?download=filepath - Requests a file for download
+* ?csv=1 - Sends the photo list csv file
 
 Exif data
 ---------
@@ -126,10 +128,6 @@ The following tags are used to find location info
  	+ GPSLatitude
  	+ GPSLongitudeRef
  	+ GPSLongitude
- 
- 	Additionally, if the altitude tag is present, the altitude is recorded. Otherwise it is set to 0
- 	+ GPSAltitude
-
 
 Map Modes
 ---------
@@ -154,3 +152,13 @@ It uses code from many other projects under various Open Source licenses, includ
  * hammer.js
 
 Many thanks to the maintainers and developers of these projects for making this possible.
+
+
+TODO
+----
+* Location search input 
+* Authentication and conditional flag tool
+* Fix fullscreen android
+* Better icon
+* Face tag support
+* Web based loading support

@@ -325,7 +325,7 @@ Fastback = class Fastback {
 					} else {
 						vidclass = '';
 					}
-					return '<div class="tn' + vidclass + '"><img data-photoid="' + p['id'] + '" src="' + encodeURI(self.cacheurl + p['file']) + '.webp"/></div>';
+					return '<div class="tn' + vidclass + '"><img data-photoid="' + p['id'] + '" src="' + encodeURI(self.fastbackurl + '?thumbnail=' + p['file']) + '"/></div>';
 				} else if ( p['type'] == 'dateblock' ) {
 					date = p['date'];
 					// I feel like this is kind of clever. I take the Year-Month, eg. 2021-12, parse it to an int like 202112 and then take the mod of the palette length to get a fixed random color for each date.

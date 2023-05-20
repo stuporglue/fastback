@@ -165,6 +165,9 @@ class FastbackOutput {
 		} else if (!empty($_GET['download'])) {
 			$this->download();
 			exit();
+		} else if (!empty($_GET['thumbnail'])) {
+			$this->thumbnail();
+			exit();
 		} else if (!empty($_GET['flag'])) {
 			$this->flag_photo();
 			exit();
@@ -342,6 +345,10 @@ class FastbackOutput {
 	}
 
 	public function sql_disconnect(){
+
+		if ( !isset($this->sql) ) {
+			return;
+		}
 
 		$max = 5;
 		while ( $err = $this->sql->lastErrorMsg() && $max--) {
@@ -610,66 +617,14 @@ class FastbackOutput {
 	private function _make_thumbs($childno = "Unknown") {
 		do {
 
+			$this->sql_disconnect();
 			$queue = $this->get_queue("flagged IS NOT TRUE AND thumbnail IS NULL AND file != ''");
 
 			$made_thumbs = array();
 			$flag_these = array();
 
-			chdir($this->photobase);
-
 			foreach($queue as $file => $row) {
-
-				$thumbnailfile = $this->filecache . '/' . ltrim($file,'./') . '.webp';
-
-				// Make it if needed
-				if ( !file_exists($thumbnailfile) ) {
-					$dirname = dirname($thumbnailfile);
-					if (!file_exists($dirname) ){
-						@mkdir($dirname,0700,TRUE);
-					}
-
-					$shellfile = escapeshellarg($file);
-					$shellthumb = escapeshellarg($thumbnailfile);
-					$pathinfo = pathinfo($file);
-
-					if (in_array(strtolower($pathinfo['extension']),$this->supported_photo_types)){
-						$cmd = "vipsthumbnail --size=120x120 --output=$shellthumb --smartcrop=attention $shellfile";
-						$res = `$cmd`;
-					} else if ( in_array(strtolower($pathinfo['extension']),$this->supported_video_types) ) {
-
-						$tmpthumb = $this->filecache . 'tmpthumb_' . getmypid() . '.webp';
-						$tmpshellthumb = escapeshellarg($tmpthumb);
-
-						$cmd = "ffmpeg -y -ss 10 -i $shellfile -vframes 1 $tmpshellthumb 2>&1 > /tmp/fastback.ffmpeg.log.$childno";
-						$res = `$cmd`;
-
-						if ( !file_exists($tmpthumb)) {
-							$cmd = "ffmpeg -y -ss 2 -i $shellfile -vframes 1 $tmpshellthumb 2>&1 > /tmp/fastback.ffmpeg.log.$childno";
-							$res = `$cmd`;
-						}
-
-						if ( !file_exists($tmpthumb)) {
-							$cmd = "ffmpeg -y -ss 00:00:00 -i $shellfile -frames:v 1 $tmpshellthumb 2>&1 > /tmp/fastback.ffmpeg.log.$childno";
-							$res = `$cmd`;
-						}
-
-						clearstatcache();
-						if ( file_exists($tmpthumb) && filesize($tmpthumb) !== 0) {
-							$cmd = "vipsthumbnail --size=120x120 --output=$shellthumb --smartcrop=attention $tmpshellthumb";
-							$res = `$cmd`;
-							unlink($tmpthumb);
-						}
-
-					} else {
-						$this->log("What do I do with ");
-						$this->log(print_r($pathinfo,TRUE));
-					}
-
-					if ( file_exists( $thumbnailfile ) ) {
-						$cmd = "jpegoptim --strip-all --strip-exif --strip-iptc $shellthumb";
-						$res = `$cmd`;
-					} 
-				}
+				$thumbnailfile = $this->make_a_thumb($file,true);
 
 				// If we've got the file, we're good
 				if ( file_exists($thumbnailfile) ) {
@@ -679,11 +634,94 @@ class FastbackOutput {
 				}
 			}
 
+			$this->sql_connect();
 			$this->update_case_when("UPDATE fastback SET _util=NULL, thumbnail=CASE", $made_thumbs, "ELSE thumbnail END", TRUE);
-
 			$this->update_files_in("UPDATE fastback SET flagged=1 WHERE file IN (",$flag_these);
 
 		} while (count($made_thumbs) > 0);
+	}
+
+	/**
+	 * For a given file, make a thumbnail
+	 *
+	 * @return the thumbnail file name or false
+	 */
+	public function make_a_thumb($file,$skip_db_write=false){
+
+		$file = $this->file_is_ok($file);
+
+		chdir($this->photobase);
+
+		$thumbnailfile = $this->filecache . '/' . ltrim($file,'./') . '.webp';
+
+		if ( file_exists($thumbnailfile) ) {
+			$this->log("Thumb $thumbnailfile already exists");
+			return $thumbnailfile;
+		}
+
+		$dirname = dirname($thumbnailfile);
+		if (!file_exists($dirname) ){
+			@mkdir($dirname,0700,TRUE);
+		}
+
+		$shellfile = escapeshellarg($file);
+		$shellthumb = escapeshellarg($thumbnailfile);
+		$pathinfo = pathinfo($file);
+
+		if (in_array(strtolower($pathinfo['extension']),$this->supported_photo_types)){
+			$cmd = "vipsthumbnail --size=120x120 --output=$shellthumb --smartcrop=attention $shellfile";
+			$res = `$cmd`;
+		} else if ( in_array(strtolower($pathinfo['extension']),$this->supported_video_types) ) {
+			if ( empty($childno) ) {
+				$childno = 0;
+			}
+
+			$tmpthumb = $this->filecache . 'tmpthumb_' . getmypid() . '.webp';
+			$tmpshellthumb = escapeshellarg($tmpthumb);
+
+			$cmd = "ffmpeg -y -ss 10 -i $shellfile -vframes 1 $tmpshellthumb 2>&1 > /tmp/fastback.ffmpeg.log.$childno";
+			$res = `$cmd`;
+
+			if ( !file_exists($tmpthumb)) {
+				$cmd = "ffmpeg -y -ss 2 -i $shellfile -vframes 1 $tmpshellthumb 2>&1 > /tmp/fastback.ffmpeg.log.$childno";
+				$res = `$cmd`;
+			}
+
+			if ( !file_exists($tmpthumb)) {
+				$cmd = "ffmpeg -y -ss 00:00:00 -i $shellfile -frames:v 1 $tmpshellthumb 2>&1 > /tmp/fastback.ffmpeg.log.$childno";
+				$res = `$cmd`;
+			}
+
+			clearstatcache();
+			if ( file_exists($tmpthumb) && filesize($tmpthumb) !== 0) {
+				$cmd = "vipsthumbnail --size=120x120 --output=$shellthumb --smartcrop=attention $tmpshellthumb";
+				$res = `$cmd`;
+				unlink($tmpthumb);
+			}
+
+		} else {
+			$this->log("What do I do with ");
+			$this->log(print_r($pathinfo,TRUE));
+		}
+
+		if ( file_exists( $thumbnailfile ) ) {
+			$cmd = "jpegoptim --strip-all --strip-exif --strip-iptc $shellthumb";
+			$res = `$cmd`;
+		} 
+
+		if ( file_exists($thumbnailfile) ) {
+
+			if ( !$skip_db_write ) {
+				$this->sql_connect();
+				$made_thumbs[$file] = $thumbnailfile;
+				$this->update_case_when("UPDATE fastback SET _util=NULL, thumbnail=CASE", $made_thumbs, "ELSE thumbnail END", TRUE);
+				$this->sql_disconnect();
+			}
+
+			return $thumbnailfile;
+		}
+
+		return false;
 	}
 
 /**
@@ -1445,7 +1483,6 @@ class FastbackOutput {
 	}
 
 	public function update_files_in($update_q,$files) {
-
 		if ( count($files) === 0 ) {
 			return;
 		}
@@ -1465,6 +1502,9 @@ class FastbackOutput {
 		$this->sql_disconnect();
 	}
 
+	/**
+	 * Send, creating if needed, the CSV file of all the photos
+	 */
 	public function send_csv() {
 
 		if ( !file_exists($this->csvfile) ) {
@@ -1486,11 +1526,16 @@ class FastbackOutput {
 		exit();
 	}
 
+	/**
+	 * Proxy a file type which is not supported by the browser.
+	 */
 	public function proxy() {
 
 		if ( !$file = $this->file_is_ok($_GET['proxy']) ) {
 			die();
 		}
+
+		$file = $this->photobase . $file;
 
 		$mime = mime_content_type($file);
 		$mime = explode('/',$mime);
@@ -1513,14 +1558,18 @@ class FastbackOutput {
 		}
 	}
 
-
-
+	/**
+	 * Download a specific file
+	 *
+	 * Dies if file not in database or not on disk
+	 */
 	public function download() {
-		$file = $_GET['download'];
 
 		if ( !$file = $this->file_is_ok($_GET['download']) ) {
 			die();
 		}
+
+		$file = $this->photobase . $file;
 
 		$mime = mime_content_type($file);
 		header("Content-Type: $mime");
@@ -1530,6 +1579,41 @@ class FastbackOutput {
 		readfile($file);
 	}
 
+	/**
+	 * Send a thumbnail for the requested file
+	 *
+	 * Dies if file not in database or not on disk
+	 */
+	public function thumbnail() {
+		if ( !$file = $this->file_is_ok($_GET['thumbnail']) ) {
+			$this->log("No thumb found for {$_GET['thumbnail']}");
+			die();
+		}
+
+		$thumbnailfile = $this->make_a_thumb($file);
+
+		if ( $thumbnailfile === false ) {
+			http_response_code(404);
+			$this->log("Couldn't find thumbnail for '''$file'''");
+			die();
+		}
+
+		$mime = mime_content_type($thumbnailfile);
+		header("Content-Type: $mime");
+		header("Content-Transfer-Encoding: Binary");
+		header("Content-Length: ".filesize($thumbnailfile));
+		readfile($thumbnailfile);
+	}
+
+	/**
+	 * For a short file name check if the file is a valid photo option
+	 *
+	 * @param $file A short file name to check the database for.
+	 *
+	 * @return A file name that is valid according to the database and which exists on disk.
+	 *
+	 * Dies on file not exist or not in database.
+	 */
 	private function file_is_ok($file) {
 		$this->sql_connect();
 		$stmt = $this->sql->prepare("SELECT file FROM fastback WHERE file=:file");
@@ -1542,12 +1626,12 @@ class FastbackOutput {
 			$this->log("Someone tried to access file '''$file'''");
 			die();
 		} else {
-			$file = $this->photobase . $row['file'];
+			$file = $row['file'];
 		}
 
 		$this->sql_disconnect();
 
-		if ( !file_exists($file) ) {
+		if ( !file_exists($this->photobase . $file) ) {
 			http_response_code(404);
 			$this->log("Someone tried to access $file, which doesn't exist");
 			die();
