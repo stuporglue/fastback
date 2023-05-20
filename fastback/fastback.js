@@ -446,7 +446,7 @@ Fastback = class Fastback {
 			imghtml = '<img src="' + fullsize +'"/>';
 		}
 		jQuery('#thumbcontent').html(imghtml);
-		jQuery('#thumbinfo').html(this.photos[photoid]['file']);
+		jQuery('#thumbinfo').html('<div id="infowrap">' + this.photos[photoid]['file'] + '</div>');
 		jQuery('#thumbgeo').attr('data-coordinates',( this.photos[photoid].coordinates == null ? "" : this.photos[photoid].coordinates ));
 		jQuery('#thumbflag').css('opacity',1);
 		jQuery('#thumb').data('curphoto',photoid);

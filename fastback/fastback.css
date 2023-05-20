@@ -277,12 +277,19 @@ body.map #thumb {
 
 #thumbcontrols > div#thumbinfo {
 	width: auto;
-	justify-content: right;
-	line-break:strict;
+	height: auto;
+	margin-left: auto;
+	display: table-cell;
+	vertical-align: middle;
+	text-align: right;
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
-	text-align: right;
+	overflow: hidden;
+}
+
+#infowrap {
+	float: right;
 }
 
 #thumbgeo[data-coordinates=""] {
