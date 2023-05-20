@@ -240,44 +240,49 @@ body.map #thumb {
 
 
 #thumbcontrols {
-    background-color: rgba(100,100,255,.8);
-    height: 30px;
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    margin: 0;
-  display: flex;
-  align-items: center;
-  justify-content: left;
-    text-align: center;
+	background-color: rgba(100,100,255,.8);
+	height: 30px;
+	position: absolute;
+	bottom: 0;
+	left: 0;
+	width: 100%;
+	margin: 0;
+	display: flex;
+	align-items: center;
+	justify-content: left;
+	text-align: center;
 }
 
 #thumbcontrols > div {
-    display: flex;
-justify-content: center; /* align horizontal */
-align-items: center; /* align vertical */
-    cursor: pointer;
-    font-size: 15px;
-    height: 100%;
-    width: 30px;
+	display: flex;
+	justify-content: center; /* align horizontal */
+	align-items: center; /* align vertical */
+	cursor: pointer;
+	font-size: 15px;
+	height: 100%;
+	width: 30px;
 }
 
 #thumbcontrols > div:hover {
-    font-size: 11px;
+	font-size: 11px;
 }
 
 #thumbcontrols > div > img {
-    height: 15px;
+	height: 15px;
 }
 
 #thumbcontrols > div:hover > img {
-    height: 11px;
+	height: 11px;
 }
 
 #thumbcontrols > div#thumbinfo {
-  width: auto;
-  justify-content: right;
+	width: auto;
+	justify-content: right;
+	line-break:strict;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	text-align: right;
 }
 
 #thumbgeo[data-coordinates=""] {
@@ -331,14 +336,14 @@ align-items: center; /* align vertical */
 } 
 
 #mapfilter {
-  border: 2px outset #ddd;
-  background-color: white;
-  width: 30px;
-  height: 30px;
-  border-radius: 5px;
-  text-align: center;
-  line-height: 30px;
-  cursor: pointer;
+	border: 2px outset #ddd;
+	background-color: white;
+	width: 30px;
+	height: 30px;
+	border-radius: 5px;
+	text-align: center;
+	line-height: 30px;
+	cursor: pointer;
 }
 
 #mapfilter:hover {
@@ -355,7 +360,7 @@ align-items: center; /* align vertical */
 }
 
 body.debug .tn:before {
-content: attr(data-maybememe);
+	content: attr(data-maybememe);
 	color: #444;
 	position: absolute;
 	padding: 3px;
