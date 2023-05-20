@@ -424,12 +424,12 @@ Fastback = class Fastback {
 	}
 
 	handle_thumb_click(e) {
-		var divwrap = jQuery(e.target).closest('div.tn');
-		var img = divwrap.find('img');
+		var photoid = jQuery(e.target).closest('div.tn').find('img').data('photoid');
+		this.show_thumb_popup(photoid);
+	}
 
+	show_thumb_popup(photoid) {
 		var imghtml;
-
-		var photoid = img.data('photoid');
 		var imgsrc = this.photos[photoid]['file'];
 		var basename = imgsrc.replace(/.*\//,'');
 		var fullsize = this.photourl + imgsrc;
@@ -440,13 +440,13 @@ Fastback = class Fastback {
 			fullsize = this.fastbackurl + '?proxy=' + encodeURIComponent(imgsrc);	
 		}
 
-		if (divwrap.hasClass('vid') && supported_type){
-			imghtml = '<video controls poster="' + img.attr('src') + '"><source src="' + fullsize + '#t=0.0001">Your browser does not support this video format.</video>';
+		if (this.photos[photoid].isvideo && supported_type){
+			imghtml = '<video controls poster="' + encodeURI(this.cacheurl + imgsrc) + '"><source src="' + fullsize + '#t=0.0001">Your browser does not support this video format.</video>';
 		} else {
 			imghtml = '<img src="' + fullsize +'"/>';
 		}
 		jQuery('#thumbcontent').html(imghtml);
-		// jQuery('#thumbinfo').html(this.photos[photoid]['date']);
+		jQuery('#thumbinfo').html(this.photos[photoid]['file']);
 		jQuery('#thumbgeo').attr('data-coordinates',( this.photos[photoid].coordinates == null ? "" : this.photos[photoid].coordinates ));
 		jQuery('#thumbflag').css('opacity',1);
 		jQuery('#thumb').data('curphoto',photoid);
@@ -559,7 +559,7 @@ Fastback = class Fastback {
 				attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
 			}),
 			'clusterlayer': L.markerClusterGroup({
-				spiderfyOnMaxZoom: false,
+				spiderfyOnMaxZoom: true,
 				maxClusterRadius: 40
 			}),
 			'flashlayer': L.geoJSON(null,{
@@ -762,12 +762,7 @@ Fastback = class Fastback {
 	go_to_photo_id(id) {
 		this._go_to_photo('id',id);
 		this.flash_square_for_id(id);
-		if ( jQuery('#thumb').is(':visible') ) {
-			var one_tn = jQuery('img[data-photoid="' + id +'"]').closest('.tn')
-				this.handle_thumb_click({
-					target: one_tn
-				});
-		}
+		this.show_thumb_popup(id);
 	}
 
 	/**

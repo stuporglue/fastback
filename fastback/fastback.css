@@ -275,6 +275,11 @@ align-items: center; /* align vertical */
     height: 11px;
 }
 
+#thumbcontrols > div#thumbinfo {
+  width: auto;
+  justify-content: right;
+}
+
 #thumbgeo[data-coordinates=""] {
 	display: none;
 }

@@ -1,7 +1,34 @@
 Fastback
 ========
 
-A fast way to look back at photos. Work in progress supporting over 180,000 photos.
+Fastback is a tool for navigating a large home collection of photos. Large in 
+this case means it works well with at least up to 200,000 photos. 
+
+Core features: 
+
+ * Sort thousands of photos by date
+ * Navigate timeline quickly, both linearly (scrolling) and direct jumping (date picker)
+ * Show all photos taken on today's date in previous years
+ * Use map to find photos taken in a specific location
+ * Use photo tags to see all photos of specific people [NOT YET IMPLEMENTED]
+
+Additional features:
+ * Mobile friendly
+ * Convert non-web-friendly image formats on the fly (eg. HEIC)
+ * Sharing buttons for Facebook, WhatsApp and email
+ * Basic authentication [NOT YET IMPLEMENTED]
+ * Easy to set up (for a web app) [PARTIALLY IMPLEMENTED]
+
+Disclaimers and Decisions
+-------------------------
+
+I'm making this for myself and my family. It is provided as-is. I will support
+it as possible, when possible. Please feel free to submit bug reports and feature 
+requests.
+
+It is written with command line tools, PHP and jQuery because they're simple,
+time tested and will still be around for a long time. I know they're not
+the trendiest tools, but I know them well and they're relatively easy to read. 
 
 Prerequisites
 -------------
