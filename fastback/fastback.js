@@ -47,26 +47,34 @@ Fastback = class Fastback {
 				if ( jQuery('body').hasClass('map') ) {
 					self.map_init();
 				}
-
-				jQuery('#speedslide').on('input',self.speed_slide.bind(self));
-				jQuery('#zoom').on('change',self.zoom_change.bind(self));
-				jQuery('#photos').on('click','.tn',self.handle_thumb_click.bind(self));
-
-				/* Nav action handlers stuff */
-				jQuery('#thumbright').on('click',self.handle_thumb_next.bind(self));
-				jQuery('#thumbleft').on('click',self.handle_thumb_prev.bind(self));
-				jQuery('#thumbclose').on('click',self.hide_thumb.bind(self));
-				jQuery(document).on('keydown',self.keydown_handler.bind(self));
-				// Touch stuff
-				jQuery('#thumb').hammer({recognizers: [ 
-					[Hammer.Swipe,{ direction: Hammer.DIRECTION_ALL }],
-				]}).on('swiperight swipeup swipeleft', self.handle_thumb_swipe.bind(self));
-
-				// Map interations
-				jQuery('#hyperlist_wrap').on('mouseenter','.tn',self.handle_tn_mouseover.bind(self));
-
 			}
 		});
+
+		jQuery('#speedslide').on('input',this.speed_slide.bind(this));
+		jQuery('#zoom').on('change',this.zoom_change.bind(this));
+		jQuery('#photos').on('click','.tn',this.handle_thumb_click.bind(this));
+
+		/* Nav action handlers stuff */
+		jQuery('#thumbright').on('click',this.handle_thumb_next.bind(this));
+		jQuery('#thumbleft').on('click',this.handle_thumb_prev.bind(this));
+		jQuery('#thumbclose').on('click',this.hide_thumb.bind(this));
+		jQuery(document).on('keydown',this.keydown_handler.bind(this));
+		// Touch stuff
+		jQuery('#thumb').hammer({recognizers: [ 
+			[Hammer.Swipe,{ direction: Hammer.DIRECTION_ALL }],
+		]}).on('swiperight swipeup swipeleft', this.handle_thumb_swipe.bind(this));
+
+		// Map interations
+		jQuery('#hyperlist_wrap').on('mouseenter','.tn',this.handle_tn_mouseover.bind(this));
+
+		// Thumb buttons
+		// jQuery('#thumbdownload a').on('click',this.sendbyajax.bind(this));
+		jQuery('#thumbdownload').on('click',this.senddownload.bind(this));
+		jQuery('#thumbflag').on('click',this.flagphoto.bind(this));
+		jQuery('#thumbgeo').on('click',this.geoclick.bind(this));
+		jQuery('#sharefb').on('click',this.shareclick.bind(this));
+		jQuery('#shareemail').on('click',this.shareclick.bind(this));
+		jQuery('#sharewhatsapp').on('click',this.shareclick.bind(this));
 	}
 
 	/**
@@ -203,6 +211,64 @@ Fastback = class Fastback {
 		this.hyperlist_container.removeClass('up1 up2 up3 up4 up5 up6 up7 up8 up9 up10'.replace('up' + this.cols,' '));
 		this.hyperlist_container.addClass('up' + this.cols);
 		this.refresh_layout();
+	}
+
+	senddownload(e) {
+		var photoid = jQuery('#thumb').data('curphoto');
+		var download = this.fastbackurl + '?download=' + encodeURIComponent(this.orig_photos[photoid]['file']);	
+		window.open(download, '_blank').focus();
+	}
+
+	flagphoto(e) {
+		var photoid = jQuery('#thumb').data('curphoto');
+		var imgsrc = this.orig_photos[photoid]['file'];
+		var url = this.fastbackurl + '?flag=' + encodeURIComponent(imgsrc);
+		$.get(url).then(function(){
+			$('#thumbflag').animate({ opacity: 0.3 })
+		});
+	}
+
+	geoclick(e) {
+		if ( !jQuery('body').hasClass('map') ) {
+			this.handle_globe_click();
+		}
+		var points = $('#thumbgeo').data('coordinates').split(',');
+		this.fmap.lmap.flyTo([points[1],points[0]], this.fmap.lmap.getMaxZoom());
+	}
+
+	shareclick(e) {
+		var photoid = jQuery('#thumb').data('curphoto');
+		var fullsize = this.photourl + this.orig_photos[photoid]['file'];
+
+		// File type not found, proxy a jpg instead
+		var supported_type = (this.browser_supported_file_types.indexOf(fullsize.replace(/.*\./,'').toLowerCase()) != -1);
+		var share_uri;
+		if ( !supported_type ) {
+			share_uri = this.fastbackurl + '?proxy=' + encodeURIComponent(this.photourl + this.orig_photos[photoid]['file']);
+		} else {
+			share_uri = new URL(fullsize,document.location).href;
+		}
+
+		var basename = fullsize.replace(/.*\//,'');
+
+		switch ( e.target.closest('.fakelink').id ) {
+			case 'sharefb':
+				share_uri = 'https://facebook.com/sharer/sharer.php?u=' + encodeURIComponent(share_uri);
+				window.open(share_uri, 'fb').focus();
+				break;
+			case 'shareemail':
+				share_uri = 'mailto:?subject=' + encodeURIComponent(basename) + '&body=' + encodeURIComponent(share_uri);
+				window.open(share_uri, '_blank').focus();
+				break;
+			case 'sharewhatsapp':
+				if ( this.is_mobile_browser ) {
+					share_uri = 'whatsapp://send?text=' + encodeURIComponent(basename) + '%20' + encodeURIComponent(share_uri);
+				} else {
+					share_uri = 'https://web.whatsapp.com/send?text=' + encodeURIComponent(basename) + '%20' + encodeURIComponent(share_uri);
+				}
+				window.open(share_uri, 'whatsapp').focus();
+				break;
+		}
 	}
 
 	/**
@@ -366,34 +432,23 @@ Fastback = class Fastback {
 		var photoid = img.data('photoid');
 		var imgsrc = this.photos[photoid]['file'];
 		var basename = imgsrc.replace(/.*\//,'');
-			var fullsize = this.photourl + imgsrc;
+		var fullsize = this.photourl + imgsrc;
 
-			// File type not found, proxy a jpg instead
-			var supported_type = (this.browser_supported_file_types.indexOf(fullsize.replace(/.*\./,'').toLowerCase()) != -1);
-			if ( !supported_type ) {
-				fullsize = this.fastbackurl + '?proxy=' + encodeURIComponent(fullsize);	
-			}
+		// File type not found, proxy a jpg instead
+		var supported_type = (this.browser_supported_file_types.indexOf(fullsize.replace(/.*\./,'').toLowerCase()) != -1);
+		if ( !supported_type ) {
+			fullsize = this.fastbackurl + '?proxy=' + encodeURIComponent(imgsrc);	
+		}
 
-			if (divwrap.hasClass('vid') && supported_type){
-				imghtml = '<video controls poster="' + img.attr('src') + '"><source src="' + fullsize + '#t=0.0001">Your browser does not support this video format.</video>';
-			} else {
-				imghtml = '<img src="' + fullsize +'"/>';
-			}
-			jQuery('#thumbcontent').html(imghtml);
-
-			jQuery('#thumbdownload').html(`<h2><a class="download" href="${fullsize}" download></a></h2>`);
-			jQuery('#thumbflag').html(`<a class="flag" onclick="return fastback.sendbyajax(this)" href="${this.fastbackurl}?flag=${encodeURIComponent(imgsrc)}"></a>`);
-			// jQuery('#thumbinfo').html(this.photos[photoid]['date']);
-
-			var share_uri = jQuery('a.download')[0].href;
-			jQuery('#share_fb').attr('href','https://facebook.com/sharer/sharer.php?u=' + encodeURIComponent(share_uri));
-			jQuery('#share_email').attr('href','mailto:?subject=' + encodeURIComponent(basename) + '&body=' + encodeURIComponent(share_uri));
-			if ( this.is_mobile_browser ) {
-				jQuery('#share_whatsapp').attr('href','whatsapp://send?text=' + encodeURIComponent(basename) + '%20' + encodeURIComponent(share_uri));
-			} else {
-				jQuery('#share_whatsapp').attr('href','https://web.whatsapp.com/send?text=' + encodeURIComponent(basename) + '%20' + encodeURIComponent(share_uri));
-			}
-
+		if (divwrap.hasClass('vid') && supported_type){
+			imghtml = '<video controls poster="' + img.attr('src') + '"><source src="' + fullsize + '#t=0.0001">Your browser does not support this video format.</video>';
+		} else {
+			imghtml = '<img src="' + fullsize +'"/>';
+		}
+		jQuery('#thumbcontent').html(imghtml);
+		// jQuery('#thumbinfo').html(this.photos[photoid]['date']);
+		jQuery('#thumbgeo').attr('data-coordinates',( this.photos[photoid].coordinates == null ? "" : this.photos[photoid].coordinates ));
+		jQuery('#thumbflag').css('opacity',1);
 		jQuery('#thumb').data('curphoto',photoid);
 		jQuery('#thumb').show();
 	}
@@ -480,6 +535,11 @@ Fastback = class Fastback {
 	 */
 	sendbyajax(link) {
 		var thelink = link;
+
+		if ( thelink.href === undefined && link.target instanceof Node ) {
+			thelink = link.target;
+		}
+
 		jQuery.get(thelink.href).then(function(){
 			jQuery(thelink).hide();
 		});
@@ -499,7 +559,8 @@ Fastback = class Fastback {
 				attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
 			}),
 			'clusterlayer': L.markerClusterGroup({
-				spiderfyOnMaxZoom: false
+				spiderfyOnMaxZoom: false,
+				maxClusterRadius: 40
 			}),
 			'flashlayer': L.geoJSON(null,{
 				pointToLayer: function (feature, latlng) {
@@ -577,8 +638,6 @@ Fastback = class Fastback {
 	}
 
 	_map_handle_zoom_move_end(e) {
-		console.log("Move/zoom end");
-
 		this.handling_map_move_end = true;
 
 		// Moving the map only dirties our filters if we're doing map based filtering.
@@ -598,9 +657,6 @@ Fastback = class Fastback {
 			return;
 		}
 
-
-		console.log("Updating cluster");
-
 		var geojson = this.build_geojson();
 
 		var gj = L.geoJson(geojson);
@@ -613,7 +669,6 @@ Fastback = class Fastback {
 
 		// If we're handling a user inited map move we don't want to update zoom. Let the user go where they want.
 		if ( this.handling_map_move_end === undefined ) {
-			console.log("Fitting bounds due to updating cluster");
 			this.fmap.lmap.fitBounds(this.fmap.clusterlayer.getBounds());
 		}
 	}
@@ -707,6 +762,12 @@ Fastback = class Fastback {
 	go_to_photo_id(id) {
 		this._go_to_photo('id',id);
 		this.flash_square_for_id(id);
+		if ( jQuery('#thumb').is(':visible') ) {
+			var one_tn = jQuery('img[data-photoid="' + id +'"]').closest('.tn')
+				this.handle_thumb_click({
+					target: one_tn
+				});
+		}
 	}
 
 	/**
@@ -777,7 +838,6 @@ Fastback = class Fastback {
 				this.map_init();
 			} else {
 				this.fmap.lmap.invalidateSize();
-				console.log("Fitting bounds due to globe click");
 				this.fmap.lmap.fitBounds(this.fmap.clusterlayer.getBounds());
 			}
 		}
@@ -820,8 +880,7 @@ Fastback = class Fastback {
 	}
 
 	flash_square_for_id(target_id) {
-		var one_tn
-		one_tn = jQuery('img[data-photoid="' + target_id +'"]').closest('.tn').addClass('flash');
+		var one_tn = jQuery('img[data-photoid="' + target_id +'"]').closest('.tn').addClass('flash');
 
 		setTimeout(function(){
 			one_tn.removeClass('flash');
@@ -837,7 +896,6 @@ Fastback = class Fastback {
 	}
 
 	toggle_map_filter() {
-		console.log("Map filter");
 
 		var is_filtered = (this.active_filters.map !== undefined );
 
@@ -847,7 +905,6 @@ Fastback = class Fastback {
 			var self = this;
 			this.active_filters.map = function(p){
 				var mapbounds = self.fmap.lmap.getBounds();
-				console.log(mapbounds.toBBoxString());
 				self.photos = self.photos.filter(function(p){
 					// Reject any photos without geo
 					if ( p.coordinates === null ) {

@@ -162,6 +162,9 @@ class FastbackOutput {
 		} else if (!empty($_GET['proxy'])) {
 			$this->proxy();
 			exit();
+		} else if (!empty($_GET['download'])) {
+			$this->download();
+			exit();
 		} else if (!empty($_GET['flag'])) {
 			$this->flag_photo();
 			exit();
@@ -217,7 +220,7 @@ class FastbackOutput {
 
 
 			$html .= '<link rel="stylesheet" href="fastback/jquery-ui.min.css">
-			<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" integrity="sha256-kLaT2GOSpHechhsozzB+flnD+zUyjE2LlfWPgU04xyI=" crossorigin=""/>
+			<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
 			<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.0.3/dist/MarkerCluster.Default.css"/>
 			<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>
 			<link rel="stylesheet" href="fastback/fastback.css">
@@ -241,39 +244,18 @@ class FastbackOutput {
 			<div id="thumbright" class="thumbctrl">RIGHT</div>
 			<div id="thumbcontrols">
 			<div id="thumbclose">🆇</div>
-			<div id="thumbdownload"></div>
-			<div id="thumbflag"></div>
+			<div class="fakelink" id="thumbdownload" href="#">⬇️</div>
+			<div class="fakelink" id="thumbflag" data-file="#">🚩</div>
+			<div class="fakelink" id="thumbgeo" data-coordinates="">🌐</div>
+			<div class="fakelink" id="sharefb"><img src="fastback/img/fb.png" /></div>
+			<div class="fakelink" id="sharewhatsapp"><img src="fastback/img/whatsapp.png" /></div>
+			<div class="fakelink" id="shareemail">✉️</div>
 			<div id="thumbinfo"></div>
-			<div id="socialbuttons">
-			<!-- Sharingbutton Facebook -->
-			<a id="share_fb" class="resp-sharing-button__link" href="about:blank" target="_blank" rel="noopener" aria-label="">
-			<div class="resp-sharing-button resp-sharing-button--facebook resp-sharing-button--small"><div aria-hidden="true" class="resp-sharing-button__icon resp-sharing-button__icon--solid">
-			<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M18.77 7.46H14.5v-1.9c0-.9.6-1.1 1-1.1h3V.5h-4.33C10.24.5 9.5 3.44 9.5 5.32v2.15h-3v4h3v12h5v-12h3.85l.42-4z"/></svg>
-			</div>
-			</div>
-			</a>
-
-			<!-- Sharingbutton E-Mail -->
-			<a id="share_email" class="resp-sharing-button__link" href="about:blank" target="_blank" rel="noopener" aria-label="">
-			<div class="resp-sharing-button resp-sharing-button--email resp-sharing-button--small"><div aria-hidden="true" class="resp-sharing-button__icon resp-sharing-button__icon--solid">
-			<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M22 4H2C.9 4 0 4.9 0 6v12c0 1.1.9 2 2 2h20c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zM7.25 14.43l-3.5 2c-.08.05-.17.07-.25.07-.17 0-.34-.1-.43-.25-.14-.24-.06-.55.18-.68l3.5-2c.24-.14.55-.06.68.18.14.24.06.55-.18.68zm4.75.07c-.1 0-.2-.03-.27-.08l-8.5-5.5c-.23-.15-.3-.46-.15-.7.15-.22.46-.3.7-.14L12 13.4l8.23-5.32c.23-.15.54-.08.7.15.14.23.07.54-.16.7l-8.5 5.5c-.08.04-.17.07-.27.07zm8.93 1.75c-.1.16-.26.25-.43.25-.08 0-.17-.02-.25-.07l-3.5-2c-.24-.13-.32-.44-.18-.68s.44-.32.68-.18l3.5 2c.24.13.32.44.18.68z"/></svg>
-			</div>
-			</div>
-			</a>
-
-			<!-- Sharingbutton WhatsApp -->
-			<a id="share_whatsapp" class="resp-sharing-button__link" href="about:blank" target="_blank" rel="noopener" aria-label="">
-			<div class="resp-sharing-button resp-sharing-button--whatsapp resp-sharing-button--small"><div aria-hidden="true" class="resp-sharing-button__icon resp-sharing-button__icon--solid">
-			<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.1 3.9C17.9 1.7 15 .5 12 .5 5.8.5.7 5.6.7 11.9c0 2 .5 3.9 1.5 5.6L.6 23.4l6-1.6c1.6.9 3.5 1.3 5.4 1.3 6.3 0 11.4-5.1 11.4-11.4-.1-2.8-1.2-5.7-3.3-7.8zM12 21.4c-1.7 0-3.3-.5-4.8-1.3l-.4-.2-3.5 1 1-3.4L4 17c-1-1.5-1.4-3.2-1.4-5.1 0-5.2 4.2-9.4 9.4-9.4 2.5 0 4.9 1 6.7 2.8 1.8 1.8 2.8 4.2 2.8 6.7-.1 5.2-4.3 9.4-9.5 9.4zm5.1-7.1c-.3-.1-1.7-.9-1.9-1-.3-.1-.5-.1-.7.1-.2.3-.8 1-.9 1.1-.2.2-.3.2-.6.1s-1.2-.5-2.3-1.4c-.9-.8-1.4-1.7-1.6-2-.2-.3 0-.5.1-.6s.3-.3.4-.5c.2-.1.3-.3.4-.5.1-.2 0-.4 0-.5C10 9 9.3 7.6 9 7c-.1-.4-.4-.3-.5-.3h-.6s-.4.1-.7.3c-.3.3-1 1-1 2.4s1 2.8 1.1 3c.1.2 2 3.1 4.9 4.3.7.3 1.2.5 1.6.6.7.2 1.3.2 1.8.1.6-.1 1.7-.7 1.9-1.3.2-.7.2-1.2.2-1.3-.1-.3-.3-.4-.6-.5z"/></svg>
-			</div>
-			</div>
-			</a>
-			</div>
 			</div>';
 		$html .= '</div>';
 		$html .= '<script src="fastback/hammer.js"></script>';
-		// $html .= '<script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js" integrity="sha256-WBkoXOwTeyKclOHuWtc+i2uENFpDZ9YPdf5Hf+D7ewM=" crossorigin=""></script>';
-		$html .= '<script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet-src.js" integrity=”sha256-tPonvXioSHRQt1+4ztWR5mz/1KG1X3yHNzVXprP2gLo=” crossorigin=""></script>';
+		$html .= '<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>';
+		// $html .= '<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet-src.js" integrity="sha256-tPonvXioSHRQt1+4ztWR5mz/1KG1X3yHNzVXprP2gLo=" crossorigin=""></script>';
 		$html .= '<script src="fastback/jquery-ui.min.js"></script>';
 		$html .= '<script src="fastback/hyperlist.js"></script>';
 		$html .= '<script src="fastback/papaparse.min.js"></script>';
@@ -285,54 +267,21 @@ class FastbackOutput {
 		print $html;
 	}
 
-	public function proxy() {
-		$file = $_GET['proxy'];
-
-		if ( strpos($file,'/../') !== 0 ) {
-			$this->log("Someone tried to use /../ ($file) to get outside of the allowed directories");
-		}
-
-		if ( strpos($file,$this->photobase) !== 0 ) {
-			$this->log("Someone tried to access $file, a photo outside of the photobase");
-			die("");
-		}
-
-		if ( !file_exists($file) ) {
-			$this->log("Someone tried to access $file, which doesn't exist");
-			die("");
-		}
-
-		$mime = mime_content_type($file);
-		$mime = explode('/',$mime);
-
-		if ( $mime[1] == 'x-tga' ) {
-			$mime[0] = 'video';
-			$mime[1] = 'mpeg2';
-		}
-
-		if ( $mime[0] == 'image' ) {
-			header("Content-Type: image/jpeg");
-			$cmd = 'convert ' . escapeshellarg($file) . ' JPG:-';
-			passthru($cmd);
-		} else if ($mime[0] == 'video' ) {
-			header("Content-Type: image/jpeg");
-			$cmd = "ffmpeg -ss 00:00:00 -i " . escapeshellarg($file) . " -frames:v 1 -f singlejpeg - ";
-			passthru($cmd);
-		} else {
-			die("Unsupported file type");
-		}
-	}
-
 	public function flag_photo(){
-		$photo = $_GET['flag'];
 		$this->sql_connect();
 		$stmt = $this->sql->prepare("UPDATE fastback SET flagged=1 WHERE file=:file");
 		$stmt->bindValue(':file',$_GET['flag']);
 		$stmt->execute();
+
+		$stmt = $this->sql->prepare("SELECT file,flagged FROM fastback WHERE file=:file");
+		$stmt->bindValue(':file',$_GET['flag']);
+		$res = $stmt->execute();
+		$row = $res->fetchArray(SQLITE3_ASSOC);
+
 		$this->sql_disconnect();
 		header("Content-Type: application/json");
 		header("Cache-Control: no-cache");
-		print json_encode(array('file_flagged' => $_GET['flag']));
+		print json_encode($row);
 	}
 
 	public function sql_connect($try_no = 1){
@@ -393,6 +342,15 @@ class FastbackOutput {
 	}
 
 	public function sql_disconnect(){
+
+		$max = 5;
+		while ( $err = $this->sql->lastErrorMsg() && $max--) {
+			if ( $err == "1") {
+				break;
+			}
+			$this->log("SQL error: $err");
+		}
+
 		$this->sql->close();
 		if (!empty($this->db_lock) ) {
 			flock($this->db_lock,LOCK_UN);
@@ -1526,5 +1484,75 @@ class FastbackOutput {
 		readfile($this->csvfile);
 		ob_end_flush();
 		exit();
+	}
+
+	public function proxy() {
+
+		if ( !$file = $this->file_is_ok($_GET['proxy']) ) {
+			die();
+		}
+
+		$mime = mime_content_type($file);
+		$mime = explode('/',$mime);
+
+		if ( $mime[1] == 'x-tga' ) {
+			$mime[0] = 'video';
+			$mime[1] = 'mpeg2';
+		}
+
+		if ( $mime[0] == 'image' ) {
+			header("Content-Type: image/jpeg");
+			$cmd = 'convert ' . escapeshellarg($file) . ' JPG:-';
+			passthru($cmd);
+		} else if ($mime[0] == 'video' ) {
+			header("Content-Type: image/jpeg");
+			$cmd = "ffmpeg -ss 00:00:00 -i " . escapeshellarg($file) . " -frames:v 1 -f singlejpeg - ";
+			passthru($cmd);
+		} else {
+			die("Unsupported file type");
+		}
+	}
+
+
+
+	public function download() {
+		$file = $_GET['download'];
+
+		if ( !$file = $this->file_is_ok($_GET['download']) ) {
+			die();
+		}
+
+		$mime = mime_content_type($file);
+		header("Content-Type: $mime");
+		header("Content-Transfer-Encoding: Binary");
+		header("Content-Length: ".filesize($file));
+		header("Content-disposition: attachment; filename=\"" . basename($file) . "\"");
+		readfile($file);
+	}
+
+	private function file_is_ok($file) {
+		$this->sql_connect();
+		$stmt = $this->sql->prepare("SELECT file FROM fastback WHERE file=:file");
+		$stmt->bindValue(":file",$file);
+		$res = $stmt->execute();
+		$row = $res->fetchArray(SQLITE3_ASSOC);
+
+		if ( $row === FALSE ) {
+			http_response_code(404);
+			$this->log("Someone tried to access file '''$file'''");
+			die();
+		} else {
+			$file = $this->photobase . $row['file'];
+		}
+
+		$this->sql_disconnect();
+
+		if ( !file_exists($file) ) {
+			http_response_code(404);
+			$this->log("Someone tried to access $file, which doesn't exist");
+			die();
+		}
+
+		return $file;
 	}
 }
