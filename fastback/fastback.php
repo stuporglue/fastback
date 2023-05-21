@@ -45,6 +45,9 @@ class FastbackOutput {
 	// Is the db locked by us?
 	var $db_lock;
 
+	// Am I a child process?
+	var $is_a_child = false;
+
 	var $supported_photo_types = array(
 		// Photo formats
 		'png',
@@ -344,6 +347,11 @@ class FastbackOutput {
 		$res = $this->sql->query($q_create_files);
 	}
 
+	/**
+	 * Close the sqlite connection, if one exists.
+	 *
+	 * Log the last 5 error messages.
+	 */
 	public function sql_disconnect(){
 
 		if ( !isset($this->sql) ) {
@@ -375,12 +383,25 @@ class FastbackOutput {
 		}
 	}
 
+	/**
+	 * Catch ctrl-c (only useful on command line)
+	 *
+	 * Kill children, try to cleanup queue, then exit.
+	 */
 	private function signal_handler() {
 		$this->end_all_children = true;
+
+		if ( $this->is_a_child ) {
+			$this->release_my_queue();
+			$this->sql_disconnect();
+			exit();
+		}
+
 		if ( !empty($this->children) ) {
 			$this->log("Got an exit command. Telling children and then exiting");
 		} else {
 			$this->log("No children. Exiting directly.");
+			$this->sql_disconnect();
 			exit();
 		}
 	}
@@ -827,6 +848,7 @@ class FastbackOutput {
 				break;
 			case 0:
 				// This is a child
+				$this->is_a_child = true;
 				$this->$childfunc($i);
 				exit();
 				break;
@@ -973,17 +995,20 @@ class FastbackOutput {
 	}
 
 	private function _get_exif($childno = "Unknown") {
-	;
 
 		$cmd = "exiftool -stay_open True  -@ -";
 		$cmdargs = [];
 		$cmdargs[] = "-lang"; // Lang to english
 		$cmdargs[] = "en"; // Lang to english
+		$cmdargs[] = "-a"; // Allow duplicate tags
 		$cmdargs[] = "-s"; // Tag names instead of descriptions
 		$cmdargs[] = "-c"; // Set format for GPS numbers
 		$cmdargs[] = "'%.5f'"; // Set format for GPS numbers
 		$cmdargs[] = "-extractEmbedded"; // get embedded data like geo data
 		$cmdargs[] = "-e"; // Don't generate composite tags
+		// TODO: Extract with -G1 and -json formats to capture everything?
+		$cmdargs = implode("\n",$cmdargs);
+
 
 		$descriptors = array(
 			0 => array("pipe", "r"),  // STDIN
@@ -1003,89 +1028,9 @@ class FastbackOutput {
 			$found_exif = array();
 
 			foreach($queue as $file => $row) {
-				fputs($pipes[0],implode("\n",$cmdargs) . "\n");
-				fputs($pipes[0],$file . "\n");
-				fputs($pipes[0],"-execute\n");
-				fflush($pipes[0]);
-
-				$cur_exif = array();
-				$end_of_exif = FALSE;
-
-				$exifout = "";
-				while(!$end_of_exif){
-					// Handle stdout. Build a single chunk of text then split it since some tag output seems to get split in some cases
-					$line = fgets($pipes[1]);	
-					if ($line == FALSE ) {
-						continue;
-					}
-
-					$exifout .= $line;
-
-					if (preg_match('/.*{ready}$/',$line)){
-						$end_of_exif = TRUE;
-
-						$exifout = preg_replace('/\n\s*{ready}\s*/','',$exifout);
-					}
-
-					// Handle stderr
-					$err = fgets($pipes[2]);
-					if ( $err !== FALSE ) {
-						$no_err = FALSE;
-						$this->log($err);
-					}
-
-					if ($err === FALSE && $line === FALSE) {
-						time_nanosleep(0,200);
-					}
-				}
-
-				$exifout = explode("\n",$exifout);
-
-				foreach($exifout as $line) {
-
-						$line = trim($line);
-
-						if ( preg_match('/^======== (.*)/',$line, $matches ) ) {
-
-							if ($matches[1] != $file) {
-								$this->log("Expected '$file', got '$matches[1]'");
-								die("Somethings broken");
-							}
-
-							$cur_exif = array();
-
-							// Big updates for now to make it worth it
-							if ( count($found_exif) == $this->process_limit ) {
-
-								$escaped = array();
-								foreach($found_exif as $file => $json){
-									$escaped[] = "'" . SQLite3::escapeString($file) . "'";
-								}
-								$files_where = implode(",",$escaped);
-							}
-						} else if (preg_match('/^([^ ]+)\s*:\s*(.*)$/',$line,$matches)){
-							$cur_exif[$matches[1]] = $matches[2];
-						} else if ($line == '{ready}') {
-							$end_of_exif = TRUE;
-						} else if (preg_match('/ExifTool Version Number.*/',$line)){
-							// do nothing
-						} else if ($line === ''){
-							// do nothing
-						} else {
-							$this->log("Don't know how to handle exif line '" . $line . "'");
-							// die("Quitting for fun");
-						}
-					}
-
-
-					$cur_exif = array_filter($cur_exif);
-					ksort($cur_exif);
-
-					// $this->log("===== EXIF: " . $file . "======\n");
-					// $this->log(print_r($cur_exif,TRUE));
-
-					$found_exif[$file] = json_encode($cur_exif,JSON_FORCE_OBJECT | JSON_PARTIAL_OUTPUT_ON_ERROR);
-				}
+				$cur_exif = $this->_read_one_exif($file,$cmdargs,$proc,$pipes);
+				$found_exif[$file] = json_encode($cur_exif,JSON_FORCE_OBJECT | JSON_PARTIAL_OUTPUT_ON_ERROR);
+			}
 
 			$this->update_case_when("UPDATE fastback SET _util=NULL, exif=CASE",$found_exif,"ELSE exif END",True);
 
@@ -1098,6 +1043,90 @@ class FastbackOutput {
 		fclose($pipes[2]);
 		proc_close($proc);
 		exit();
+	}
+
+	private function _read_one_exif($file,$cmdargs,$proc,$pipes) {
+
+		$files_and_sidecars = array($file);
+
+		// For the requested file and any xmp sidecars...
+		if ( file_exists($this->photobase . "$file.xmp") ) {
+			$this->log("Found an xmp for $file");
+			$files_and_sidecars[] = $this->photobase . "$file.xmp";
+		}
+
+		$cur_exif = array();
+		foreach($files_and_sidecars as $exiftarget) {
+
+			// Run the exiftool command
+			fputs($pipes[0],$cmdargs . "\n");
+			fputs($pipes[0],$exiftarget. "\n");
+			fputs($pipes[0],"-execute\n");
+			fflush($pipes[0]);
+
+			$end_of_exif = FALSE;
+
+			// Collect all exiftool output
+			$exifout = "";
+			while(!$end_of_exif){
+				// Handle stdout. Build a single chunk of text then split it since some tag output seems to get split in some cases
+				$line = fgets($pipes[1]);	
+				if ($line == FALSE ) {
+					continue;
+				}
+
+				$exifout .= $line;
+
+				if (preg_match('/.*{ready}$/',$line)){
+					$end_of_exif = TRUE;
+
+					$exifout = preg_replace('/\n\s*{ready}\s*/','',$exifout);
+				}
+
+				// Handle stderr
+				$err = fgets($pipes[2]);
+				if ( $err !== FALSE ) {
+					$no_err = FALSE;
+					$this->log($err);
+				}
+
+				if ($err === FALSE && $line === FALSE) {
+					time_nanosleep(0,200);
+				}
+			}
+			$exifout = explode("\n",$exifout);
+
+			// Process the output
+			foreach($exifout as $line) {
+				$line = trim($line);
+
+				if ( preg_match('/^======== (.*)/',$line, $matches ) ) {
+
+					if ($matches[1] != $exiftarget) {
+						$this->log("Expected '$exiftarget', got '$matches[1]'");
+						die("Somethings broken");
+					}
+				} else if (preg_match('/^([^ ]+)\s*:\s*(.*)$/',$line,$matches)){
+					$cur_exif[$matches[1]] = $matches[2];
+				} else if ($line == '{ready}') {
+					$end_of_exif = TRUE;
+				} else if (preg_match('/ExifTool Version Number.*/',$line)){
+					// do nothing
+				} else if ($line === ''){
+					// do nothing
+				} else {
+					$this->log("Don't know how to handle exif line '" . $line . "'");
+					// die("Quitting for fun");
+				}
+			}
+		}
+
+		// Drop any empty lines
+		$cur_exif = array_filter($cur_exif);
+		// Sort it for ease of use
+		ksort($cur_exif);
+
+		return $cur_exif;
 	}
 
 	private function _get_geo($childno = "Unknown") {
@@ -1456,6 +1485,12 @@ class FastbackOutput {
 		}
 
 		return $queue;
+	}
+
+	private function release_my_queue() {
+		$this->sql_connect();
+		$query = "UPDATE fastabck SET _util=NULL WHERE _util='RESERVED-" . getmypid() . "'";
+		$this->sql_disconnect();
 	}
 
 	public function update_case_when($update_q,$ar,$else,$escape_val = False) {
