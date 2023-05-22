@@ -7,8 +7,8 @@ Fastback = class Fastback {
 
 		var self = this;
 
-		Papa.parse(args.csvdata.trim(),{
-
+		Papa.parse(args.csvurl,{
+			download:true,
 			complete: function(res){
 				args.csvdata = undefined;
 				jQuery.extend(self,args);
@@ -130,18 +130,6 @@ Fastback = class Fastback {
 	 */
 	hyperlist_init() {
 		var self = this;
-
-		// Find our stylesheet
-		var stylesheet;
-		for(var s = 0;s<document.styleSheets.length;s++){
-			if ( document.styleSheets[s].href.match(/.*\/fastback\/fastback.css$/) !== null ) {
-				stylesheet = document.styleSheets[s];
-			}
-		}
-
-		if ( stylesheet === undefined ) {
-			throw new Error("Couldn't find fastback stylesheet.");
-		}
 
 		this.hyperlist_config = {
 			height: window.innerHeight,

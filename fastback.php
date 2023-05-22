@@ -95,17 +95,17 @@ class FastbackOutput {
 	function __construct(){
 		global $argv;
 
-		$this->filecache = __DIR__ . '/cache/';
+		$this->filecache = $this->fastbackbase . '/cache/';
 		$this->cacheurl = dirname($_SERVER['SCRIPT_NAME']) . '/cache/';
-		$this->photobase = __DIR__ . '/../';
+		$this->photobase = $this->fastbackbase . '/../';
 		$this->photourl = dirname($_SERVER['SCRIPT_NAME']) . '/';
 		$this->sitetitle = "Fastback Photo Gallery";
 		$this->sortorder = ($this->sortorder == 'ASC' ? 'ASC' : 'DESC');
 		$this->filestructure = 'datebased'; // Or all
 		$this->nproc = `nproc`;
 
-		if ( file_exists(__DIR__ . '/fastback.ini') ) {
-			$settings = parse_ini_file(__DIR__ . '/fastback.ini');
+		if ( file_exists($this->fastbackbase . '/fastback.ini') ) {
+			$settings = parse_ini_file($this->fastbackbase . '/fastback.ini');
 			foreach($settings as $k => $v) {
 				$this->$k = $v;
 			}
@@ -196,6 +196,9 @@ class FastbackOutput {
 		}
 	}
 
+	/**
+	 * Generate the HTML for the application
+	 */
 	public function make_html() {
 
 		$html = '<!doctype html>
@@ -204,40 +207,9 @@ class FastbackOutput {
 			<meta charset="utf-8">
 			<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
 			<title>' . htmlspecialchars($this->sitetitle) . '</title>
-			<link rel="shortcut icon" href="fastback/favicon.png"> 
-			<link rel="apple-touch-icon" href="fastback/favicon.png">
+			<link rel="shortcut icon" href="fastback/img/favicon.png"> 
+			<link rel="apple-touch-icon" href="fastback/img/favicon.png">
 			<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">';
-
-		$html .= '<script src="fastback/js/jquery.min.js"></script>';
-		$html .= '<script>
-			var FastbackBase = "' . $_SERVER['SCRIPT_NAME'] . '";
-
-			function waitfor(cls,method) {
-				if (window[cls]) {
-					method();
-				} else {
-					setTimeout(function() { waitfor(cls,method) }, 50);
-				}
-			}
-
-
-			waitfor("jQuery",function(){
-				$.get("' . $_SERVER['SCRIPT_NAME'] . '?csv=get").then(function(csvdata){
-
-								waitfor("Fastback", function(){
-									return function(){
-										window.fastback = new Fastback({
-											csvdata: csvdata,	
-											cacheurl:    "' . $this->cacheurl . '",
-											photourl:    "' . $this->photourl .'",
-											fastbackurl: "' . $_SERVER['SCRIPT_NAME'] . '"
-										});
-									};
-							}(csvdata));
-					});
-			});
-			</script>';
-
 
 			$html .= '<link rel="stylesheet" href="fastback/css/jquery-ui.min.css">
 			<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
@@ -273,6 +245,8 @@ class FastbackOutput {
 			<div id="thumbinfo"></div>
 			</div>';
 		$html .= '</div>';
+
+		$html .= '<script src="fastback/js/jquery.min.js"></script>';
 		$html .= '<script src="fastback/js/hammer.js"></script>';
 		$html .= '<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>';
 		// $html .= '<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet-src.js" integrity="sha256-tPonvXioSHRQt1+4ztWR5mz/1KG1X3yHNzVXprP2gLo=" crossorigin=""></script>';
@@ -282,6 +256,14 @@ class FastbackOutput {
 		$html .= '<script src="fastback/js/jquery.hammer.js"></script>';
 		$html .= '<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>';
 		$html .= '<script src="fastback/js/fastback.js"></script>';
+		$html .= '<script>
+			fastback = new Fastback({
+				csvurl: "' . $_SERVER['SCRIPT_NAME'] . '?csv=get",
+				cacheurl:    "' . $this->cacheurl . '",
+				photourl:    "' . $this->photourl .'",
+				fastbackurl: "' . $_SERVER['SCRIPT_NAME'] . '"
+				});
+			</script>';
 		$html .= '</body></html>';
 
 		print $html;
@@ -316,8 +298,8 @@ class FastbackOutput {
 			<meta charset="utf-8">
 			<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
 			<title>' . htmlspecialchars($this->sitetitle) . '</title>
-			<link rel="shortcut icon" href="fastback/favicon.png"> 
-			<link rel="apple-touch-icon" href="fastback/favicon.png">
+			<link rel="shortcut icon" href="fastback/img/favicon.png"> 
+			<link rel="apple-touch-icon" href="fastback/img/favicon.png">
 			<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
 			<link rel="stylesheet" href="fastback/css/fastback.css">
 			</head>';
@@ -1617,7 +1599,7 @@ class FastbackOutput {
 
 		ob_start("ob_gzhandler");
 		header("Content-type: text/csv");
-		header("Content-Disposition: inline; filename=\"photos.csv\"");
+		header("Content-Disposition: inline; filename=\"fastback.csv\"");
 		header("Last-Modified: " . filemtime($this->csvfile));
 		readfile($this->csvfile);
 		ob_end_flush();
