@@ -229,6 +229,7 @@ class FastbackOutput {
 		$html .= '<div id="globeicon"></div>';
 		$html .= '<div id="rewindicon"></div>';
 		$html .= '<div id="calendaricon"><input readonly id="datepicker" type="text"></div>';
+		$html .= '<div id="exiticon" class="' . (isset($this->user) ? '' : 'disabled') . '"></div>';
 		$html .= '</div>';
 		$html .= '<div id="thumb">
 			<div id="thumbcontent"></div>
@@ -275,21 +276,59 @@ class FastbackOutput {
 	 * Print the login form and exit
 	 * Handle auth and continue
 	 * Acknowledge session and continue
+	 * Handle log out
 	 */
 	public function handle_auth() {
+		session_set_cookie_params(["SameSite" => "Strict"]); //none, lax, strict
 		session_start();
+
+		// Log out, just end it and redirect
+		if ( isset($_REQUEST['logout']) ) {
+			session_destroy();
+			header("Location: " . $_SERVER['SCRIPT_URL']);
+			setcookie("fastback","", time() - 3600); // Clear cookie
+			session_write_close();
+			exit();
+		}
+
+		// Already active session
+		if ( $_SESSION['authed'] === true ) {
+			session_write_close();
+			return true;
+		}
 	
+		// User doing a new login
 		if ( isset($_POST['Username']) && isset($_POST['Password']) && isset($this->user[$_POST['Username']]) && $this->user[$_POST['Username']] == $_POST['Password'] ) {
 			$_SESSION['authed'] = true;
+
+			if ( isset($_POST['remember']) && $_POST['remember'] == 1 ) {
+				// There will only ever be a small number of users (for fastback's intended use case) so we're just going to brute force finding this later.
+				// Setting the username + hash of the ini file means that if the ini file changes, the user must log in again.
+				// This will cover the case of the user's password being changed or something.
+				$cookie_val = md5($_POST['Username'] . md5_file('fastback.ini'));
+				setcookie("fastback",$cookie_val, array('expires' => time() + 30 * 24 * 60 * 60,'SameSite' => 'Strict')); // Cookie valid for 30 days
+			}
+
 			session_write_close();
 			return true;
 		}
 
-		if ( $_SESSION['authed'] === true ) {
-			session_write_close();
-			return true;
-		} else {
-			$_SESSION['authed'] = false;
+		// Returning user with a cookie
+		if ( !empty($_COOKIE['fastback']) ) {
+			$ini_md5 = md5_file('fastback.ini');
+			foreach($this->user as $username => $password) {
+				$cookie_val = md5($username . $ini_md5);
+				if ( $cookie_val == $_COOKIE['fastback'] ) {
+					// Refresh the cookie
+					setcookie("fastback",$cookie_val, array('expires' => time() + 30 * 24 * 60 * 60,'SameSite' => 'Strict')); // Cookie valid for 30 days
+					$_SESSION['authed'] = true;
+					session_write_close();
+					return true;
+				}
+			}
+			// Cookie doesn't match. Delete it.
+			setcookie("fastback","", time() - 3600); // Clear cookie
+			// Don't return, fall through to form.
 		}
 
 		$html = '<!doctype html>
@@ -306,9 +345,10 @@ class FastbackOutput {
 
 		$html .= '<body><div id="loginform"><h1>Log in to ' . htmlspecialchars($this->sitetitle) . '</h1>
 			<form method="POST">
-			<label for="Username">Username: </label><input type="text" name="Username"><br>
-			<label for="Password">Password: </label><input type="password" name="Password"><br>
-			<input type="Submit" name="Submit" value="Log In">
+			<div class="inputline"><label for="Username">Username: </label><input id="Username" type="text" name="Username"></div>
+			<div class="inputline"><label for="Password">Password: </label><input id="Password" type="password" name="Password"></div>
+			<div class="inputline"><label for="Remember">Remember me: </label><input id="Remember" type="checkbox" name="remember" value="1"></div>
+			<div class="inputline"><input type="Submit" name="Submit" value="Log In"></div>
 			</form>
 			</div>
 			</body>

@@ -4,22 +4,15 @@ Fastback = class Fastback {
 	 */
 	constructor(args) {
 		this.setProps();
-
+		jQuery.extend(this,args);
 		var self = this;
 
 		Papa.parse(args.csvurl,{
 			download:true,
+			skipEmptyLines: true,
 			complete: function(res){
-				args.csvdata = undefined;
-				jQuery.extend(self,args);
 
 				self.photos = res.data.map(function(r){
-
-					if ( self.has_map || !isNaN(parseFloat(r[3]) ) ) {
-						self.has_map = true;
-						jQuery('#globeicon').addClass('enabled');
-					}
-
 					return {
 						'file': r[0],
 						'isvideo': r[1] == 1,
@@ -29,7 +22,7 @@ Fastback = class Fastback {
 					};
 				});
 
-				self.photos = self.add_date_blocks(self.photos);
+				self.orig_photos = self.photos = self.add_date_blocks(self.photos);
 
 				// Browsers can only support an object so big, so we can only use so many rows.
 				// Calculate the new max zoom
@@ -40,13 +33,8 @@ Fastback = class Fastback {
 
 				self.hyperlist_container.addClass('up' + self.cols);
 
-				self.orig_photos = self.photos;
 				self.hyperlist_init();
 				self.load_nav();
-
-				if ( jQuery('body').hasClass('map') ) {
-					self.map_init();
-				}
 			}
 		});
 
@@ -178,8 +166,8 @@ Fastback = class Fastback {
 		});
 
 		jQuery('#rewindicon').on('click',this.handle_rewind_click.bind(this));
-
 		jQuery('#globeicon').on('click',this.handle_globe_click.bind(this));
+		jQuery('#exiticon').on('click',this.handle_exit_click.bind(this));
 	}
 
 	/*
@@ -802,6 +790,13 @@ Fastback = class Fastback {
 			});
 		};
 		this.dirty_filters = true;
+	}
+
+	/**
+	 * Handle logout
+	 */
+	handle_exit_click() {
+		window.location = this.fastbackurl + '?logout=true';
 	}
 
 	/**

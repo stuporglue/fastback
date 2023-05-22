@@ -125,15 +125,6 @@ body .up10 .tn {width: calc(100vw/10); height: calc(100vw/10); font-size: 2vw;  
 
 /** Tools */
 
-#calendaricon {
-	z-index: 1000;
-	background-color: rgba(255,255,255,0.8);
-	width: 30px;
-	height: 30px;
-	background-image: url('../img/calendar.png');
-	background-size: cover;
-}
-
 #datepicker {
 	display: block;
 	height: 100%;
@@ -173,7 +164,14 @@ body .up10 .tn {width: calc(100vw/10); height: calc(100vw/10); font-size: 2vw;  
 
 #resizer > div {
 	cursor: pointer;
+	width: 30px;
+	height: 30px;
+	z-index: 1000;
+	box-sizing: border-box;
+	background-color: rgba(255,255,255,0.8);
+	background-size: cover;
 }
+
 #resizer > div,
 #resizer > input,
 #speedslide {
@@ -188,31 +186,29 @@ body .up10 .tn {width: calc(100vw/10); height: calc(100vw/10); font-size: 2vw;  
 	opacity: 1;
 }
 
-#rewindicon, #globeicon {
-	width: 30px;
-	height: 30px;
-	z-index: 1000;
-	box-sizing: border-box;
-	background-color: rgba(255,255,255,0.8);
-	background-image: url('../img/rewind.png');
-	background-size: cover;
-}
-
-#globeicon {
-	right: 60px;
-	background-image: url('../img/globe.png');
-	display: none;
-}
-
-#globeicon.enabled {
-	display: inline-block;
-}
-
-#rewindicon.active, #globeicon.active {
+#resizer > div.active  {
 	background-color: yellow;
 	border: 2px inset black;
 }
 
+#rewindicon {
+	background-image: url('../img/rewind.png');
+}
+
+#globeicon {
+	background-image: url('../img/globe.png');
+}
+
+#exiticon {
+	background-image: url('../img/exit.png');
+}
+#exiticon.disabled {
+	display: none;
+}
+
+#calendaricon {
+	background-image: url('../img/calendar.png');
+}
 
 /** Thumbnail controls **/
 #thumb {
@@ -415,4 +411,46 @@ only screen and (min-device-pixel-ratio : 1.5) {
 		width: 100%;
 	}
 }
+
+
+/* Login page */
+
+#loginform {
+ position: absolute;
+  left: 50%;
+  top: 50%;
+  -webkit-transform: translate(-50%, -50%);
+  transform: translate(-50%, -50%);
+	border: 3px solid rgba(100,100,255,.8);
+	padding: 10px 40px;
+	border-radius: 5px;
+	box-shadow: 3px 3px #888888;
+}
+
+
+#loginform .inputline {
+	margin-top: 15px;
+	display: flex;
+}
+
+#loginform input {
+	display: inline-block;
+	margin: auto 0 auto auto;
+	border-radius: 0;
+	border-style: solid;
+}
+
+#loginform input[type=checkbox] {
+	transform: scale(1.5);
+	border: solid 1px;
+	border-radius: 0;
+}
+#loginform label {
+	display: inline-block;
+  margin-right: 5px;
+}
+#loginform input[type=submit] {
+	padding: 6px;
+}
+
 

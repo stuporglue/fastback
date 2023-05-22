@@ -26,6 +26,10 @@ I'm making this for myself and my family. It is provided as-is. I will support
 it as possible, when possible. Please feel free to submit bug reports and feature 
 requests.
 
+Fastback is designed to be simple and for use by a small, trusted group. The default 
+settings leave the config file and sqlite files accessable which may give users
+information about your server or the users and passwords you have configured. 
+
 It is written with command line tools, PHP and jQuery because they're simple,
 time tested and will still be around for a long time. I know they're not
 the trendiest tools, but I know them well and they're relatively easy to read. 
