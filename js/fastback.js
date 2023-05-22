@@ -63,6 +63,7 @@ Fastback = class Fastback {
 		jQuery('#sharefb').on('click',this.shareclick.bind(this));
 		jQuery('#shareemail').on('click',this.shareclick.bind(this));
 		jQuery('#sharewhatsapp').on('click',this.shareclick.bind(this));
+		jQuery('#sharelink').on('click',this.shareclick.bind(this));
 	}
 
 	/**
@@ -214,16 +215,10 @@ Fastback = class Fastback {
 
 	shareclick(e) {
 		var photoid = jQuery('#thumb').data('curphoto');
-		var fullsize = this.photourl + this.orig_photos[photoid]['file'];
+		var fullsize = this.orig_photos[photoid]['file'];
 
-		// File type not found, proxy a jpg instead
-		var supported_type = (this.browser_supported_file_types.indexOf(fullsize.replace(/.*\./,'').toLowerCase()) != -1);
-		var share_uri;
-		if ( !supported_type ) {
-			share_uri = this.fastbackurl + '?proxy=' + encodeURIComponent(this.photourl + this.orig_photos[photoid]['file']);
-		} else {
-			share_uri = new URL(fullsize,document.location).href;
-		}
+		var share_uri = this.fastbackurl + '?proxy=' + encodeURIComponent(fullsize);
+		share_uri = new URL(share_uri,document.location).href;
 
 		var basename = fullsize.replace(/.*\//,'');
 
@@ -243,6 +238,17 @@ Fastback = class Fastback {
 					share_uri = 'https://web.whatsapp.com/send?text=' + encodeURIComponent(basename) + '%20' + encodeURIComponent(share_uri);
 				}
 				window.open(share_uri, 'whatsapp').focus();
+				break;
+			case 'sharelink':
+				jQuery('#sharelinkcopy input').val(share_uri);
+				$('#sharelinkcopy input').select();
+				var res = document.execCommand('copy');
+				window.getSelection().removeAllRanges();
+				$('#thumb').focus();
+				$('#thumb').select();
+				$('#sharelinkcopy input').blur();
+				$('#sharelink').effect('highlight');
+				return false;
 				break;
 		}
 	}
@@ -436,6 +442,7 @@ Fastback = class Fastback {
 		jQuery('#thumbinfo').html('<div id="infowrap">' + photo['file'] + '</div>');
 		jQuery('#thumbgeo').attr('data-coordinates',( photo.coordinates == null ? "" : photo.coordinates ));
 		jQuery('#thumbflag').css('opacity',1);
+		jQuery('#sharelink a').attr('href',fullsize);
 		jQuery('#thumb').data('curphoto',photo.id);
 		jQuery('#thumb').show();
 

@@ -251,6 +251,7 @@ class FastbackOutput {
 			<div id="thumbcontrols">
 			<div id="thumbclose">🆇</div>
 			<div class="fakelink" id="thumbdownload" href="#">⬇️</div>
+			<div class="fakelink" id="sharelink"><a href="#">🔗<form id="sharelinkcopy">><input/></form></a></div>
 			<div class="fakelink ' . (!empty($this->canflag) && !in_array($_SESSION['user'],$this->canflag) ? 'disabled' : '') . '" id="thumbflag" data-file="#">🚩</div>
 			<div class="fakelink" id="thumbgeo" data-coordinates="">🌐</div>
 			<div class="fakelink" id="sharefb"><img src="fastback/img/fb.png" /></div>
@@ -1692,7 +1693,11 @@ class FastbackOutput {
 			$cmd = "ffmpeg -ss 00:00:00 -i " . escapeshellarg($file) . " -frames:v 1 -f singlejpeg - ";
 			passthru($cmd);
 		} else {
-			die("Unsupported file type");
+			$mime = mime_content_type($file);
+			header("Content-Type: $mime");
+			header("Content-Transfer-Encoding: Binary");
+			header("Content-Length: ".filesize($file));
+			readfile($file);
 		}
 	}
 

@@ -285,6 +285,13 @@ body.map #thumb {
 	overflow: hidden;
 }
 
+#sharelinkcopy {
+	position: absolute;
+	height: 0;
+	width: 0;
+	opacity: 0;
+}
+
 #infowrap {
 	float: right;
 }
