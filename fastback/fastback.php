@@ -6,6 +6,9 @@ class FastbackOutput {
 
 	var $sitetitle = "Fastback Photo Gallery";
 
+	// Folder to fastback folder in install
+	var $fastbackbase = __DIR__ . '/';
+
 	// Folder path to cache directory. sqlite and thumbnails will be stored here
 	// Optional, will create a cache folder in the currend directory as the default
 	var $filecache;
@@ -85,10 +88,14 @@ class FastbackOutput {
 
 	var $spindex = 0;
 
+	var $user;
+
+	var $canflag;
+
 	function __construct(){
 		global $argv;
 
-		$this->filecache = __DIR__ . '/../cache/';
+		$this->filecache = __DIR__ . '/cache/';
 		$this->cacheurl = dirname($_SERVER['SCRIPT_NAME']) . '/cache/';
 		$this->photobase = __DIR__ . '/../';
 		$this->photourl = dirname($_SERVER['SCRIPT_NAME']) . '/';
@@ -125,7 +132,7 @@ class FastbackOutput {
 		$this->photourl = rtrim($this->photourl,'/') . '/';
 
 		if ( !isset($this->sqlitefile) ){
-			$this->sqlitefile = $this->filecache . 'fastback.sqlite';
+			$this->sqlitefile = $this->fastbackbase . 'fastback.sqlite';
 		}
 
 		if ( !isset($this->csvfile) ){
@@ -162,7 +169,14 @@ class FastbackOutput {
 		if (php_sapi_name() === 'cli') {
 			$this->handle_cli();
 			exit();
-		} else if (!empty($_GET['proxy'])) {
+		}
+
+
+		if ( isset($this->user) ) {
+			$this->handle_auth();
+		}
+
+		if (!empty($_GET['proxy'])) {
 			$this->proxy();
 			exit();
 		} else if (!empty($_GET['download'])) {
@@ -194,7 +208,7 @@ class FastbackOutput {
 			<link rel="apple-touch-icon" href="fastback/favicon.png">
 			<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">';
 
-		$html .= '<script src="fastback/jquery.min.js"></script>';
+		$html .= '<script src="fastback/js/jquery.min.js"></script>';
 		$html .= '<script>
 			var FastbackBase = "' . $_SERVER['SCRIPT_NAME'] . '";
 
@@ -225,11 +239,11 @@ class FastbackOutput {
 			</script>';
 
 
-			$html .= '<link rel="stylesheet" href="fastback/jquery-ui.min.css">
+			$html .= '<link rel="stylesheet" href="fastback/css/jquery-ui.min.css">
 			<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
 			<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.0.3/dist/MarkerCluster.Default.css"/>
 			<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>
-			<link rel="stylesheet" href="fastback/fastback.css">
+			<link rel="stylesheet" href="fastback/css/fastback.css">
 			</head>';
 
 		$html .= '<body class="photos">';
@@ -259,18 +273,67 @@ class FastbackOutput {
 			<div id="thumbinfo"></div>
 			</div>';
 		$html .= '</div>';
-		$html .= '<script src="fastback/hammer.js"></script>';
+		$html .= '<script src="fastback/js/hammer.js"></script>';
 		$html .= '<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>';
 		// $html .= '<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet-src.js" integrity="sha256-tPonvXioSHRQt1+4ztWR5mz/1KG1X3yHNzVXprP2gLo=" crossorigin=""></script>';
-		$html .= '<script src="fastback/jquery-ui.min.js"></script>';
-		$html .= '<script src="fastback/hyperlist.js"></script>';
-		$html .= '<script src="fastback/papaparse.min.js"></script>';
-		$html .= '<script src="fastback/jquery.hammer.js"></script>';
+		$html .= '<script src="fastback/js/jquery-ui.min.js"></script>';
+		$html .= '<script src="fastback/js/hyperlist.js"></script>';
+		$html .= '<script src="fastback/js/papaparse.min.js"></script>';
+		$html .= '<script src="fastback/js/jquery.hammer.js"></script>';
 		$html .= '<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>';
-		$html .= '<script src="fastback/fastback.js"></script>';
+		$html .= '<script src="fastback/js/fastback.js"></script>';
 		$html .= '</body></html>';
 
 		print $html;
+	}
+
+	/**
+	 * Do everything around authentication. 
+	 * 
+	 * Print the login form and exit
+	 * Handle auth and continue
+	 * Acknowledge session and continue
+	 */
+	public function handle_auth() {
+		session_start();
+	
+		if ( isset($_POST['Username']) && isset($_POST['Password']) && isset($this->user[$_POST['Username']]) && $this->user[$_POST['Username']] == $_POST['Password'] ) {
+			$_SESSION['authed'] = true;
+			session_write_close();
+			return true;
+		}
+
+		if ( $_SESSION['authed'] === true ) {
+			session_write_close();
+			return true;
+		} else {
+			$_SESSION['authed'] = false;
+		}
+
+		$html = '<!doctype html>
+			<html lang="en">
+			<head>
+			<meta charset="utf-8">
+			<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+			<title>' . htmlspecialchars($this->sitetitle) . '</title>
+			<link rel="shortcut icon" href="fastback/favicon.png"> 
+			<link rel="apple-touch-icon" href="fastback/favicon.png">
+			<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
+			<link rel="stylesheet" href="fastback/css/fastback.css">
+			</head>';
+
+		$html .= '<body><div id="loginform"><h1>Log in to ' . htmlspecialchars($this->sitetitle) . '</h1>
+			<form method="POST">
+			<label for="Username">Username: </label><input type="text" name="Username"><br>
+			<label for="Password">Password: </label><input type="password" name="Password"><br>
+			<input type="Submit" name="Submit" value="Log In">
+			</form>
+			</div>
+			</body>
+			</html>';
+
+		print $html;
+		exit();
 	}
 
 	public function flag_photo(){

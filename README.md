@@ -162,3 +162,5 @@ TODO
 * Better icon
 * Face tag support
 * Web based loading support
+* Make it a progressive web app
+* Localize leaflet
