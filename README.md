@@ -16,23 +16,19 @@ Additional features:
  * Mobile friendly
  * Convert non-web-friendly image formats on the fly (eg. HEIC)
  * Sharing buttons for Facebook, WhatsApp and email
- * Basic authentication [NOT YET IMPLEMENTED]
+ * Basic password protection
  * Easy to set up (for a web app) [PARTIALLY IMPLEMENTED]
 
 Disclaimers and Decisions
 -------------------------
 
-I'm making this for myself and my family. It is provided as-is. I will support
-it as possible, when possible. Please feel free to submit bug reports and feature 
-requests.
+I'm making this for myself and my family. 
 
 Fastback is designed to be simple and for use by a small, trusted group. The default 
 settings leave the config file and sqlite files accessable which may give users
 information about your server or the users and passwords you have configured. 
 
-It is written with command line tools, PHP and jQuery because they're simple,
-time tested and will still be around for a long time. I know they're not
-the trendiest tools, but I know them well and they're relatively easy to read. 
+Please feel free to submit bug reports and feature requests.
 
 Prerequisites
 -------------
@@ -146,14 +142,14 @@ Map Modes
 
 License
 -------
-This project is under the MIT License. 
+This project is under the [LICENSE](MIT License). 
 
 It uses code from many other projects under various Open Source licenses, including: 
- * hyperlist 
- * PapaParse 
- * jQuery (jQuery, jQuery-ui, jquery-hammer)
- * Leaflet (Leaflet.js, Leaflet MarkerCluster)
- * hammer.js
+ * [https://github.com/tbranyen/hyperlist](hyperlist)
+ * [PapaParse](https://www.papaparse.com/)
+ * jQuery ([https://jquery.com/](jQuery), [https://jqueryui.com/](jQuery-ui))
+ * Leaflet ([https://leafletjs.com/](Leaflet.js), [https://github.com/Leaflet/Leaflet.markercluster](Leaflet MarkerCluster))
+ * [https://hammerjs.github.io/](hammer.js)
 
 Many thanks to the maintainers and developers of these projects for making this possible.
 
@@ -164,6 +160,4 @@ TODO
 * Fix fullscreen android
 * Better icon
 * Face tag support
-* Web based loading support
 * Make it a progressive web app
-* Localize leaflet
