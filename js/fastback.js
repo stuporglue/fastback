@@ -404,9 +404,20 @@ Fastback = class Fastback {
 		this.show_thumb_popup(photoid);
 	}
 
+	/**
+	 * For a given photo ID, show the thumb popup. 
+	 *
+	 * We assume that the correct ID has been found by now, even though photos may have scrolled or shifted in the background somehow
+	 *
+	 * Returns false if couldn't show thumb
+	 */
 	show_thumb_popup(photoid) {
 		var imghtml;
-		var imgsrc = this.photos[photoid]['file'];
+		var photo = this.orig_photos.find(function(p){return p.id == photoid && p.type == 'media';});
+		if ( photo === undefined ) {
+			return false;
+		}
+		var imgsrc = photo.file;
 		var basename = imgsrc.replace(/.*\//,'');
 		var fullsize = this.photourl + imgsrc;
 
@@ -416,61 +427,75 @@ Fastback = class Fastback {
 			fullsize = this.fastbackurl + '?proxy=' + encodeURIComponent(imgsrc);	
 		}
 
-		if (this.photos[photoid].isvideo && supported_type){
+		if (photo.isvideo && supported_type){
 			imghtml = '<video controls poster="' + encodeURI(this.cacheurl + imgsrc) + '"><source src="' + fullsize + '#t=0.0001">Your browser does not support this video format.</video>';
 		} else {
 			imghtml = '<img src="' + fullsize +'"/>';
 		}
 		jQuery('#thumbcontent').html(imghtml);
-		jQuery('#thumbinfo').html('<div id="infowrap">' + this.photos[photoid]['file'] + '</div>');
-		jQuery('#thumbgeo').attr('data-coordinates',( this.photos[photoid].coordinates == null ? "" : this.photos[photoid].coordinates ));
+		jQuery('#thumbinfo').html('<div id="infowrap">' + photo['file'] + '</div>');
+		jQuery('#thumbgeo').attr('data-coordinates',( photo.coordinates == null ? "" : photo.coordinates ));
 		jQuery('#thumbflag').css('opacity',1);
-		jQuery('#thumb').data('curphoto',photoid);
+		jQuery('#thumb').data('curphoto',photo.id);
 		jQuery('#thumb').show();
+
+		return true;
 	}
 
 	handle_thumb_next(e) {
 		var photoid = jQuery('#thumb').data('curphoto');
 
+		var photo = this.orig_photos.find(function(p){return p.id == photoid && p.type == 'media';});
+
+		if ( photo === undefined ) {
+			return false;
+		}
+
+		photoid = photo.id;
+
 		while(true) {
 			photoid++;
+			// Found the next photo that is in the photos array
+			var found = this.photos.find(function(p){return p.id == photoid && p.type == 'media';});
 
-			if ( photoid === this.photos.length ) {
-				return false;
+			if ( found !== undefined ) {
+				// Scroll to photo
+				this.scroll_to_photo(photoid);
+				this.show_thumb_popup(found.id);				
+				return true;
 			}
 
-			if ( this.photos[photoid].type === 'media' ) {
-				var nextm = jQuery('div.tn img[data-photoid="' + photoid + '"]');
-
-				if (nextm.length > 0) {
-					nextm.trigger('click'); 
-					return true;
-				} else {
-					return false;
-				}
+			if ( photoid === this.orig_photos.length ) {
+				return false;
 			}
 		}
 	}
-
+	
 	handle_thumb_prev(e) {
 		var photoid = jQuery('#thumb').data('curphoto');
 
+		var photo = this.orig_photos.find(function(p){return p.id == photoid && p.type == 'media';});
+
+		if ( photo === undefined ) {
+			return false;
+		}
+
+		photoid = photo.id;
+
 		while(true) {
 			photoid--;
+			// Found the next photo that is in the photos array
+			var found = this.photos.find(function(p){return p.id == photoid && p.type == 'media';});
 
-			if ( photoid < 0 ) {
-				return false;
+			if ( found !== undefined ) {
+				// Scroll to photo
+				this.scroll_to_photo(photoid);
+				this.show_thumb_popup(found.id);				
+				return true;
 			}
 
-			if ( this.photos[photoid].type === 'media' ) {
-				var prevm = jQuery('div.tn img[data-photoid="' + photoid + '"]');
-
-				if (prevm.length > 0) {
-					prevm.trigger('click'); 
-					return true;
-				} else {
-					return false;
-				}
+			if ( photoid === 0 ) {
+				return false;
 			}
 		}
 	}
@@ -700,14 +725,18 @@ Fastback = class Fastback {
 	}
 
 
-	scroll_to_photo(id) {
-		// If we don't find one, go all the way to the end
-		if ( id === undefined || id === -1 ) {
-			id = this.photos.length - 1;
+	/**
+	 * For a given photo ID, scroll to it if it is in the current photos.
+	 */
+	scroll_to_photo(photoid) {
+		var photo_idx = this.photos.findIndex(function(p){return p.id == photoid && p.type == 'media';});
+
+		if ( photo_idx === -1 ) {
+			return false; // Couldn't find the requested photo
 		}
 
 		// Get the row number now
-		var rownum = parseInt(id / this.cols)
+		var rownum = parseInt(photo_idx / this.cols)
 
 		// Set the scrollTop
 		this.hyperlist_container.prop('scrollTop',(rownum * this.hyperlist_config.itemHeight));

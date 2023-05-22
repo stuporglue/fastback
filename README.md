@@ -161,7 +161,6 @@ Many thanks to the maintainers and developers of these projects for making this 
 TODO
 ----
 * Location search input 
-* Authentication and conditional flag tool
 * Fix fullscreen android
 * Better icon
 * Face tag support

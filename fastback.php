@@ -172,6 +172,13 @@ class FastbackOutput {
 			exit();
 		}
 
+		// PWA stuff doesn't need auth
+
+		if ( !empty($_GET['pwa']) ) {
+			$this->pwa();
+			exit();
+		}
+
 		// Handle auth
 		if ( isset($this->user) ) {
 			$this->handle_auth();
@@ -212,14 +219,15 @@ class FastbackOutput {
 			<meta charset="utf-8">
 			<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
 			<title>' . htmlspecialchars($this->sitetitle) . '</title>
+			<link rel="manifest" href="' . $_SERVER['SCRIPT_NAME'] . '?pwa=manifest">	
 			<link rel="shortcut icon" href="fastback/img/favicon.png"> 
 			<link rel="apple-touch-icon" href="fastback/img/favicon.png">
 			<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">';
 
 			$html .= '<link rel="stylesheet" href="fastback/css/jquery-ui.min.css">
-			<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-			<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.0.3/dist/MarkerCluster.Default.css"/>
-			<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>
+			<link rel="stylesheet" href="fastback/css/leaflet.css"/>
+			<link rel="stylesheet" href="fastback/css/MarkerCluster.Default.css"/>
+			<link rel="stylesheet" href="fastback/css/MarkerCluster.css"/>
 			<link rel="stylesheet" href="fastback/css/fastback.css">
 			</head>';
 
@@ -254,13 +262,13 @@ class FastbackOutput {
 
 		$html .= '<script src="fastback/js/jquery.min.js"></script>';
 		$html .= '<script src="fastback/js/hammer.js"></script>';
-		$html .= '<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>';
-		// $html .= '<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet-src.js" integrity="sha256-tPonvXioSHRQt1+4ztWR5mz/1KG1X3yHNzVXprP2gLo=" crossorigin=""></script>';
+		// $html .= '<script src="fastback/jsleaflet.js"></script>';
+		$html .= '<script src="fastback/js/leaflet-src.js"></script>';
 		$html .= '<script src="fastback/js/jquery-ui.min.js"></script>';
 		$html .= '<script src="fastback/js/hyperlist.js"></script>';
 		$html .= '<script src="fastback/js/papaparse.min.js"></script>';
 		$html .= '<script src="fastback/js/jquery.hammer.js"></script>';
-		$html .= '<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>';
+		$html .= '<script src="fastback/js/leaflet.markercluster.js"></script>';
 		$html .= '<script src="fastback/js/fastback.js"></script>';
 		$html .= '<script>
 			fastback = new Fastback({
@@ -1768,5 +1776,29 @@ class FastbackOutput {
 		}
 
 		return $file;
+	}
+
+	public function pwa() {
+		if ( $_GET['pwa'] == 'manifest' ) {
+			header("Content-Type: application/json");
+			$manifest = array(
+				'name' =>$this->sitetitle,
+				'short_name' => $this->sitetitle,
+				'theme_color' => '#eedfd1',
+				'background_color' => '#52a162',
+				'display' => 'stsandalone',
+				'scope' => '$this->photourl',
+				'start_url' => $this->photourl,
+				'description' => 'Fastback Photo Gallery for ' . $this->sitetitle,
+				'orientatin' => 'any',
+				'icons' => array(
+					array(
+						'src' => $this->photourl . '/fastback/img/favicon.png',
+						'sizes' => '512x512'
+					)
+				)
+			);
+			print json_encode($manifest);
+		}
 	}
 }
