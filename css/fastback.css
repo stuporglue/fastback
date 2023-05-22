@@ -202,8 +202,9 @@ body .up10 .tn {width: calc(100vw/10); height: calc(100vw/10); font-size: 2vw;  
 #exiticon {
 	background-image: url('../img/exit.png');
 }
-#exiticon.disabled {
-	display: none;
+
+.disabled {
+	display: none !important;
 }
 
 #calendaricon {

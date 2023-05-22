@@ -90,7 +90,7 @@ class FastbackOutput {
 
 	var $user;
 
-	var $canflag;
+	var $canflag = array();
 
 	function __construct(){
 		global $argv;
@@ -166,16 +166,18 @@ class FastbackOutput {
 	}
 
 	public function run() {
+		// CLI stuff doesn't need auth
 		if (php_sapi_name() === 'cli') {
 			$this->handle_cli();
 			exit();
 		}
 
-
+		// Handle auth
 		if ( isset($this->user) ) {
 			$this->handle_auth();
 		}
 
+		// Handle requests
 		if (!empty($_GET['proxy'])) {
 			$this->proxy();
 			exit();
@@ -192,7 +194,10 @@ class FastbackOutput {
 			$this->send_csv();
 			exit();
 		} else {
+
+			// Default case!
 			$this->make_html();
+			exit();
 		}
 	}
 
@@ -238,7 +243,7 @@ class FastbackOutput {
 			<div id="thumbcontrols">
 			<div id="thumbclose">🆇</div>
 			<div class="fakelink" id="thumbdownload" href="#">⬇️</div>
-			<div class="fakelink" id="thumbflag" data-file="#">🚩</div>
+			<div class="fakelink ' . (!empty($this->canflag) && !in_array($_SESSION['user'],$this->canflag) ? 'disabled' : '') . '" id="thumbflag" data-file="#">🚩</div>
 			<div class="fakelink" id="thumbgeo" data-coordinates="">🌐</div>
 			<div class="fakelink" id="sharefb"><img src="fastback/img/fb.png" /></div>
 			<div class="fakelink" id="sharewhatsapp"><img src="fastback/img/whatsapp.png" /></div>
@@ -287,19 +292,25 @@ class FastbackOutput {
 			session_destroy();
 			header("Location: " . $_SERVER['SCRIPT_URL']);
 			setcookie("fastback","", time() - 3600); // Clear cookie
-			session_write_close();
 			exit();
 		}
 
 		// Already active session
 		if ( $_SESSION['authed'] === true ) {
-			session_write_close();
+			if ( !array_key_exists($_SESSION['user'], $this->user ) ) {
+				session_destroy();
+				header("Location: " . $_SERVER['SCRIPT_URL']);
+				setcookie("fastback","", time() - 3600); // Clear cookie
+				exit();
+			}
+
 			return true;
 		}
 	
 		// User doing a new login
 		if ( isset($_POST['Username']) && isset($_POST['Password']) && isset($this->user[$_POST['Username']]) && $this->user[$_POST['Username']] == $_POST['Password'] ) {
 			$_SESSION['authed'] = true;
+			$_SESSION['user'] = $_POST['Username'];
 
 			if ( isset($_POST['remember']) && $_POST['remember'] == 1 ) {
 				// There will only ever be a small number of users (for fastback's intended use case) so we're just going to brute force finding this later.
@@ -309,7 +320,6 @@ class FastbackOutput {
 				setcookie("fastback",$cookie_val, array('expires' => time() + 30 * 24 * 60 * 60,'SameSite' => 'Strict')); // Cookie valid for 30 days
 			}
 
-			session_write_close();
 			return true;
 		}
 
@@ -322,7 +332,7 @@ class FastbackOutput {
 					// Refresh the cookie
 					setcookie("fastback",$cookie_val, array('expires' => time() + 30 * 24 * 60 * 60,'SameSite' => 'Strict')); // Cookie valid for 30 days
 					$_SESSION['authed'] = true;
-					session_write_close();
+					$_SESSION['user'] = $username;
 					return true;
 				}
 			}
