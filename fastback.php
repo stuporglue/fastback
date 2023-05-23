@@ -177,6 +177,9 @@ class FastbackOutput {
 		if ( !empty($_GET['pwa']) ) {
 			$this->pwa();
 			exit();
+		} else if ( !empty($_GET['share']) ) {
+			$this->share();
+			exit();
 		}
 
 		// Handle auth
@@ -271,6 +274,7 @@ class FastbackOutput {
 		$html .= '<script src="fastback/js/jquery.hammer.js"></script>';
 		$html .= '<script src="fastback/js/leaflet.markercluster.js"></script>';
 		$html .= '<script src="fastback/js/fastback.js"></script>';
+		$html .= '<script src="fastback/js/md5.js"></script>';
 		$html .= '<script>
 			fastback = new Fastback({
 				csvurl: "' . $_SERVER['SCRIPT_NAME'] . '?csv=get",
@@ -445,7 +449,8 @@ class FastbackOutput {
 			elev DECIMAL(15,10), 
 			nullgeom BOOL,
 			_util TEXT,
-			maybe_meme INT 
+			maybe_meme INT,
+			share_key VARCHAR(md5)
 		)";
 
 		$res = $this->sql->query($q_create_files);
@@ -676,7 +681,7 @@ class FastbackOutput {
 		$modified_files = array_filter($modified_files);
 
 		$today = date('Ymd');
-		$multi_insert = "INSERT INTO fastback (file,mtime,isvideo) VALUES ";
+		$multi_insert = "INSERT INTO fastback (file,mtime,isvideo,share_key) VALUES ";
 		$multi_insert_tail = " ON CONFLICT(file) DO UPDATE SET isvideo=";
 		$collect_photo = array();
 		$collect_video = array();
@@ -695,9 +700,9 @@ class FastbackOutput {
 			}
 
 			if ( in_array(strtolower($pathinfo['extension']),$this->supported_video_types) ) {
-				$collect_video[] = "('" .  SQLite3::escapeString($one_file) . "','" . SQLite3::escapeString($mtime) .  "',1)";
+				$collect_video[] = "('" .  SQLite3::escapeString($one_file) . "','" . SQLite3::escapeString($mtime) .  "',1," . md5($one_file) . ")";
 			} else if ( in_array(strtolower($pathinfo['extension']),$this->supported_photo_types) ) {
-				$collect_photo[] = "('" .  SQLite3::escapeString($one_file) . "','" .  SQLite3::escapeString($mtime) .  "',0)";
+				$collect_photo[] = "('" .  SQLite3::escapeString($one_file) . "','" .  SQLite3::escapeString($mtime) .  "',0," . md5($one_file) . ")";
 			} else {
 				$this->log("Don't know what to do with " . print_r($pathinfo,true));
 			}
@@ -1658,10 +1663,50 @@ class FastbackOutput {
 
 		ob_start("ob_gzhandler");
 		header("Content-type: text/csv");
-		header("Content-Disposition: inline; filename=\"fastback.csv\"");
+		header("Content-Disposition: inline; filename=\"" . basename($this->csvfile) . "\"");
 		header("Last-Modified: " . filemtime($this->csvfile));
 		readfile($this->csvfile);
 		ob_end_flush();
+		exit();
+	}
+
+	/**
+	 * Handle publicly sharable link
+	 */
+	public function share() {
+		if ( empty($_GET['share']) ) {
+			return false;
+		}
+		$this->sql_connect();
+		$stmt = $this->sql->prepare("SELECT file FROM fastback WHERE share_key=:share");
+		$stmt->bindValue(":share",strtoupper($_GET['share']));
+		$res = $stmt->execute();
+		$row = $res->fetchArray(SQLITE3_ASSOC);
+
+		if ( $row === FALSE ) {
+			http_response_code(404);
+			$this->log("Someone tried to access a shared file with parameters " . print_r($_GET,true));
+			die();
+		} else {
+			$file = $row['file'];
+		}
+
+		$this->sql_disconnect();
+
+		if ( !file_exists($this->photobase . $file) ) {
+			http_response_code(404);
+			$this->log("Someone tried to access $file, which doesn't exist");
+			die();
+		}
+
+		$file = $this->photobase . $file;
+
+		$mime = mime_content_type($file);
+		header("Content-Type: $mime");
+		header("Content-Transfer-Encoding: Binary");
+		header("Content-Length: ".filesize($file));
+		header("Content-Disposition: inline; filename=\"" . basename($file) . "\"");
+		readfile($file);
 		exit();
 	}
 
@@ -1688,16 +1733,20 @@ class FastbackOutput {
 			header("Content-Type: image/jpeg");
 			$cmd = 'convert ' . escapeshellarg($file) . ' JPG:-';
 			passthru($cmd);
+			exit();
 		} else if ($mime[0] == 'video' ) {
 			header("Content-Type: image/jpeg");
 			$cmd = "ffmpeg -ss 00:00:00 -i " . escapeshellarg($file) . " -frames:v 1 -f singlejpeg - ";
 			passthru($cmd);
+			exit();
 		} else {
 			$mime = mime_content_type($file);
 			header("Content-Type: $mime");
 			header("Content-Transfer-Encoding: Binary");
 			header("Content-Length: ".filesize($file));
+			header("Content-Disposition: inline; filename=\"" . basename($file) . "\"");
 			readfile($file);
+			exit();
 		}
 	}
 
@@ -1720,6 +1769,7 @@ class FastbackOutput {
 		header("Content-Length: ".filesize($file));
 		header("Content-disposition: attachment; filename=\"" . basename($file) . "\"");
 		readfile($file);
+		exit();
 	}
 
 	/**
@@ -1745,7 +1795,9 @@ class FastbackOutput {
 		header("Content-Type: $mime");
 		header("Content-Transfer-Encoding: Binary");
 		header("Content-Length: ".filesize($thumbnailfile));
+		header("Content-Disposition: inline; filename=\"" . basename($thumbnailfile) . "\"");
 		readfile($thumbnailfile);
+		exit();
 	}
 
 	/**

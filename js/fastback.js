@@ -217,7 +217,7 @@ Fastback = class Fastback {
 		var photoid = jQuery('#thumb').data('curphoto');
 		var fullsize = this.orig_photos[photoid]['file'];
 
-		var share_uri = this.fastbackurl + '?proxy=' + encodeURIComponent(fullsize);
+		var share_uri = this.fastbackurl + '?file=' + encodeURIComponent(fullsize).replaceAll('%2F','/') + '&share=' + md5(fullsize);
 		share_uri = new URL(share_uri,document.location).href;
 
 		var basename = fullsize.replace(/.*\//,'');
@@ -432,6 +432,7 @@ Fastback = class Fastback {
 		if ( !supported_type ) {
 			fullsize = this.fastbackurl + '?proxy=' + encodeURIComponent(imgsrc);	
 		}
+		var share_uri = this.fastbackurl + '?file=' + encodeURIComponent(imgsrc).replaceAll('%2F','/') + '&?share=' + md5(fullsize);
 
 		if (photo.isvideo && supported_type){
 			imghtml = '<video controls poster="' + encodeURI(this.cacheurl + imgsrc) + '"><source src="' + fullsize + '#t=0.0001">Your browser does not support this video format.</video>';
@@ -442,7 +443,7 @@ Fastback = class Fastback {
 		jQuery('#thumbinfo').html('<div id="infowrap">' + photo['file'] + '</div>');
 		jQuery('#thumbgeo').attr('data-coordinates',( photo.coordinates == null ? "" : photo.coordinates ));
 		jQuery('#thumbflag').css('opacity',1);
-		jQuery('#sharelink a').attr('href',fullsize);
+		jQuery('#sharelink a').attr('href',share_uri);
 		jQuery('#thumb').data('curphoto',photo.id);
 		jQuery('#thumb').show();
 
