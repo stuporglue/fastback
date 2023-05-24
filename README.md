@@ -161,3 +161,4 @@ TODO
 * Better icon
 * Face tag support
 * Make it a progressive web app
+* Make movies stop playing when closing thumb view

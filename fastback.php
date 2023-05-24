@@ -92,6 +92,8 @@ class FastbackOutput {
 
 	var $canflag = array();
 
+	var $ignore_flag = array('iMovie','FaceTime');
+
 	function __construct(){
 		global $argv;
 
@@ -122,7 +124,7 @@ class FastbackOutput {
 
 		if ( !is_dir($this->filecache) ) {
 			$this->log("Fastback cache directory {$this->filecache} doesn't exist");
-			die("Fastback setup error. See error log.");
+			die("Fastback setup error. See errors log.");
 		}
 
 		// Ensure single trailing slashes
@@ -450,7 +452,8 @@ class FastbackOutput {
 			nullgeom BOOL,
 			_util TEXT,
 			maybe_meme INT,
-			share_key VARCHAR(md5)
+			share_key VARCHAR(md5),
+			tags TEXT
 		)";
 
 		$res = $this->sql->query($q_create_files);
@@ -573,6 +576,9 @@ class FastbackOutput {
 				break;
 			case 'handle_new':
 				$tasks = array('load_cache','make_thumbs','get_exif','get_times','get_geo','flag_memes','make_csv');
+				break;
+			case 'find_tags':
+				$tasks = array('find_tags');
 				break;
 			default:
 				$tasks = array('help');
@@ -700,9 +706,9 @@ class FastbackOutput {
 			}
 
 			if ( in_array(strtolower($pathinfo['extension']),$this->supported_video_types) ) {
-				$collect_video[] = "('" .  SQLite3::escapeString($one_file) . "','" . SQLite3::escapeString($mtime) .  "',1," . md5($one_file) . ")";
+				$collect_video[] = "('" .  SQLite3::escapeString($one_file) . "','" . SQLite3::escapeString($mtime) .  "',1,'" . md5($one_file) . "')";
 			} else if ( in_array(strtolower($pathinfo['extension']),$this->supported_photo_types) ) {
-				$collect_photo[] = "('" .  SQLite3::escapeString($one_file) . "','" .  SQLite3::escapeString($mtime) .  "',0," . md5($one_file) . ")";
+				$collect_photo[] = "('" .  SQLite3::escapeString($one_file) . "','" .  SQLite3::escapeString($mtime) .  "',0,'" . md5($one_file) . "')";
 			} else {
 				$this->log("Don't know what to do with " . print_r($pathinfo,true));
 			}
@@ -864,7 +870,8 @@ class FastbackOutput {
 			isvideo,
 			CAST(STRFTIME('%s',sorttime) AS INTEGER) AS filemtime,
 			ROUND(lat,5) AS lat,
-			ROUND(lon,5) AS lon
+			ROUND(lon,5) AS lon,
+			tags
 			FROM fastback 
 			WHERE 
 			thumbnail IS NOT NULL 
@@ -1662,7 +1669,7 @@ class FastbackOutput {
 		}
 
 		ob_start("ob_gzhandler");
-		header("Content-type: text/csv");
+		header("Content-type: text/plain");
 		header("Content-Disposition: inline; filename=\"" . basename($this->csvfile) . "\"");
 		header("Last-Modified: " . filemtime($this->csvfile));
 		readfile($this->csvfile);
@@ -1857,5 +1864,126 @@ class FastbackOutput {
 			);
 			print json_encode($manifest);
 		}
+	}
+
+	/**
+	 * Tag people
+	 */
+	public function find_tags() {
+		$this->sql_connect();
+
+		$sql = "
+			UPDATE 
+			fastback 
+			SET tags = ''
+			WHERE 
+			tags IS NULL
+			AND exif NOT GLOB '*\"Subject\"*'
+            AND exif NOT GLOB '*\"XPKeywords\"*'
+            AND exif NOT GLOB '*\"Categories\"*'
+            AND exif NOT GLOB '*\"TagsList\"*'
+            AND exif NOT GLOB '*\"LastKeywordXMP\"*'
+            AND exif NOT GLOB '*\"HierarchicalSubject\"*'
+            AND exif NOT GLOB '*\"CatalogSets\"*'
+			AND exif NOT GLOB '*\"Keywords\"*'
+			";
+
+		$this->sql->query($sql);
+
+		$sql = "
+		 SELECT
+            file,
+			exif,
+            exif -> 'Subject' AS Subject,
+            exif -> 'XPKeywords' AS XPKeywords,
+            exif -> 'Categories' AS Categories,
+            exif -> 'TagsList' AS TagsList,
+            exif -> 'LastKeywordXMP' AS LastKeywordXMP,
+            exif -> 'HierarchicalSubject' AS HierarchicalSubject,
+            exif -> 'CatalogSets' AS CatalogSets,
+            exif -> 'Keywords' AS Keywords
+            FROM fastback WHERE
+			tags IS NULL
+			AND (
+               exif GLOB '*\"Subject\"*'
+            OR exif GLOB '*\"XPKeywords\"*'
+            OR exif GLOB '*\"Categories\"*'
+            OR exif GLOB '*\"TagsList\"*'
+            OR exif GLOB '*\"LastKeywordXMP\"*'
+            OR exif GLOB '*\"HierarchicalSubject\"*'
+            OR exif GLOB '*\"CatalogSets\"*'
+			OR exif GLOB '*\"Keywords\"*'
+			)";
+
+		$res = $this->sql->query($sql);
+		$stmt = $this->sql->prepare("UPDATE fastback SET tags=:tags WHERE file=:file");
+
+		while($row = $res->fetchArray(SQLITE3_ASSOC)){
+			$people_found = array();
+			$file = $row['file'];
+
+			/*
+			These all seem to be a comma-spaces eparated list of names. We will just split on comma and trim though, just in case. 
+			XPKeywords also has 'who' appended, so we take it off, if it exists
+			"Subject":"Benjamin Moore, Abbey Thornock"
+			Keywords":"Abbey Thornock, Benjamin Moore",
+			XPKeywords: Dad 'who';Calvin 'who';Mom 'who';Ryan 'who';HannaH 'who'
+			"RegionName":"Carolin Schreck, Hannah Moore, Michael Moore, Ryan Moore, Sophie Moore",
+			"RegionPersonDisplayName":"Carolin Schreck, Hannah Moore, Michael Moore, Ryan Moore, Sophie Moore",
+			"CatalogSets":"People|Ryan Moore, People|Michael Moore, People|Carolin Schreck, People|Sophie Moore, People|Hannah Moore",
+			"HierarchicalSubject":"People|Ryan Moore, People|Michael Moore, People|Carolin Schreck, People|Sophie Moore, People|Hannah Moore",
+			"LastKeywordXMP":"People\/Ryan Moore, People\/Michael Moore, People\/Carolin Schreck, People\/Sophie Moore, People\/Hannah Moore",
+			"TagsList":"People\/Ryan Moore, People\/Michael Moore, People\/Carolin Schreck, People\/Sophie Moore, People\/Hannah Moore",
+			 */
+
+
+			/*
+				* Categories is XML and I'm feeling lazy. I haven't seen any names in here that aren't also in other tags
+				"Categories":"<Categories><Category Assigned=\"0\">People<Category Assigned=\"1\">Hannah Moore<\/Category><Category Assigned=\"1\">Sophie Moore<\/Category><Category Assigned=\"1\">Carolin Schreck<\/Category><Category Assigned=\"1\">Michael Moore<\/Category><Category Assigned=\"1\">Ryan Moore<\/Category><\/Category><\/Categories>",
+			*/
+
+			$simple = array('Subject','XPKeywords','Keywords','RegionName','RegionPersonDisplayName','CatalogSets','HierarchicalSubject','LastKeywordXMP','TagsList');
+
+			// Check if all exifs are empty and hrow error if it is
+			$rc = $row;
+			$exif = $rc['exif'];
+			unset($rc['file']);
+			unset($rc['exif']);
+			$rc = array_filter($rc);
+			if ( empty($rc ) ) {
+				print_R($row);
+				die("Why is it empty!");
+			}
+
+
+			foreach($simple as $exif_keyword) {
+				if ( !empty($row[$exif_keyword]) ) {
+					$sub = str_replace(" 'who'",'',$row[$exif_keyword]);
+					$sub = str_replace("People|","",$sub);
+					$sub = str_replace("People/","",$sub);
+					$sub = str_replace('People\/',"",$sub);
+					$sub = str_replace('(none)',"",$sub);
+					$sub = str_replace('(people)',"",$sub);
+					$sub = str_replace(';',",",$sub);
+					$sub = str_replace('|',",",$sub);
+					$sub = str_replace('"',"",$sub);
+					$sub = str_replace("'","",$sub);
+					$subsplit = explode(",",$sub);
+					foreach($subsplit as $person) {
+						$people_found[] = trim($person);
+					}
+				}
+			}
+
+			$people_found = array_unique($people_found);
+			$people_found = array_filter($people_found);
+			$people_found = array_diff($people_found,$this->ignore_tag);
+
+			$stmt->bindValue(':file',$row['file']);
+			$stmt->bindValue(':tags',implode("|",$people_found));
+			$stmt->execute();
+
+		}
+		$this->sql_disconnect();
 	}
 }
