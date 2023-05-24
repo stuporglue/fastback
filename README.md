@@ -41,7 +41,7 @@ Prerequisites
 * vipsthumbnail installed
 * find
 * ffmpeg
-* jpegoptim
+* jpegoptim (optional, for smaller thumbs)
 
 CLI Commands
 --------

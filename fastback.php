@@ -1,58 +1,37 @@
 <?php
 
+error_reporting(E_ALL);
+ini_set('display_errors', 'on');
+
 declare(ticks = 1);
 
 class FastbackOutput {
 
+	/*
+	 * These are settings you can change in fastback.ini
+	 */ 
 	var $sitetitle = "Fastback Photo Gallery";
+	var $fastbackbase = __DIR__ . '/';	// Folder to fastback folder in install
+	var $filecache;						// Folder path to cache directory. sqlite and thumbnails will be stored here. Optional, will create a cache folder in the currend directory as the default
+	var $sqlitefile;					// Path to .sqlite file, Optional, will use $filecache/fastback.sqlite 
+	var $csvfile;						// Path to .csv file, Optional, will use $filecache/fastback.sqlite 
+	var $cacheurl;						// URL path to cache directory, Optional, will use current web path + cache as default
+	var $photobase;						// File path to full sized photos, Optional, will use current directory as default
+	var $photourl;						// URL path to full sized photos, Optional, will use current web path as default
+	var $process_limit = 100;			// Max number of thumbnails to reserve per child process for thumbnail processing
+	var $upsert_limit = 100000;			// Max number of SQL statements to do per upsert
+	var $nproc = 1;						// Max number of child processes
+	var $debug;							// Are we debugging
+	var $user;							// Dictionary of username => password pulled from fastback.ini
+	var $canflag = array();				// List of users who can flag photos.
+	var $ignore_tag  = array('iMovie','FaceTime'); // Tags to ignore from photos.
+	var $thumbsize = "120x120";			// Thumbnail size. Must be square.
 
-	// Folder to fastback folder in install
-	var $fastbackbase = __DIR__ . '/';
-
-	// Folder path to cache directory. sqlite and thumbnails will be stored here
-	// Optional, will create a cache folder in the currend directory as the default
-	var $filecache;
-
-	// Path to .sqlite file 
-	// Optional, will use $filecache/fastback.sqlite 
-	var $sqlitefile;
-
-	// Path to .csv file 
-	// Optional, will use $filecache/fastback.sqlite 
-	var $csvfile;
-
-	// URL path to cache directory. 
-	// Optional, will use current web path + cache as default
-	var $cacheurl;
-
-	// File path to full sized photos
-	// Optional, will use current directory as default
-	var $photobase;
-
-	// URL path to full sized photos
-	// Optional, will use current web path as default
-	var $photourl;
-
-	// Max number of thumbnails to reserve per child process for thumbnail processing
-	var $process_limit = 100;
-
-	// Max number of SQL statements to do per upsert
-	var $upsert_limit = 100000;
-
-	// Max number of child processes
-	var $nproc = 1;
-
-	// Are we debugging
-	var $debug;
-
-	// Is the db locked by us?
-	var $db_lock;
-
-	// Am I a child process?
-	var $is_a_child = false;
-
-	var $supported_photo_types = array(
-		// Photo formats
+	/*
+	 * These are internal variables you probably shouldn't try to change
+	 */
+	var $is_a_child = false;			// Am I a child process?
+	var $supported_photo_types = array( // Photo formats
 		'png',
 		'jpg',
 		'heic',
@@ -65,8 +44,7 @@ class FastbackOutput {
 		'webp',
 	);
 
-	var $supported_video_types = array(
-		// Video formats
+	var $supported_video_types = array( // Video formats
 		'dv',
 		'3gp',
 		'avi',
@@ -80,21 +58,21 @@ class FastbackOutput {
 		'webm',
 	);
 
-	var $meta =array();
+	var $meta = array();			// Data fastback needs that isn't photos
+	var $sql;						// The sqlite object
+	var $sortorder = 'DESC';		// Sort order of the photos for the csv
+	var $spindex = 0;				// Counter for the  spinner thing that shows up in the CLI when running update
+	var $filestructure;				// datebased or all - show only things in YYYY/MM/DD/XXY.JPG type format or all images
+	var $vipsthumbnail;				// Path to vips binary
+	var $ffmpeg;					// Path to ffmpeg binary
+	var $jpegoptim;					// Path to jpegoptim
 
-	var $sql;
-
-	var $sortorder = 'DESC';
-
-	var $spindex = 0;
-
-	var $user;
-
-	var $canflag = array();
-
-	var $ignore_flag = array('iMovie','FaceTime');
-
-	function __construct(){
+	/**
+	 * Configure all the settings.
+	 * 
+	 * Defaults should be sane. Other things can be overridden in fastback.ini
+	 */
+	function __construct() {
 		global $argv;
 
 		$this->filecache = $this->fastbackbase . '/cache/';
@@ -167,6 +145,11 @@ class FastbackOutput {
 		),TRUE));
 	}
 
+	/**
+	 * Do a normal run. Handle either the cli and its args, or the http request and its arguments.
+	 *
+	 * This function exits.
+	 */
 	public function run() {
 		// CLI stuff doesn't need auth
 		if (php_sapi_name() === 'cli') {
@@ -186,7 +169,9 @@ class FastbackOutput {
 
 		// Handle auth
 		if ( isset($this->user) ) {
-			$this->handle_auth();
+			if ( !$this->handle_auth() ) {
+				exit();
+			}
 		}
 
 		// Handle requests
@@ -217,7 +202,6 @@ class FastbackOutput {
 	 * Generate the HTML for the application
 	 */
 	public function make_html() {
-
 		$html = '<!doctype html>
 			<html lang="en">
 			<head>
@@ -229,7 +213,7 @@ class FastbackOutput {
 			<link rel="apple-touch-icon" href="fastback/img/favicon.png">
 			<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">';
 
-			$html .= '<link rel="stylesheet" href="fastback/css/jquery-ui.min.css">
+		$html .= '<link rel="stylesheet" href="fastback/css/jquery-ui.min.css">
 			<link rel="stylesheet" href="fastback/css/leaflet.css"/>
 			<link rel="stylesheet" href="fastback/css/MarkerCluster.Default.css"/>
 			<link rel="stylesheet" href="fastback/css/MarkerCluster.css"/>
@@ -280,11 +264,10 @@ class FastbackOutput {
 		$html .= '<script src="fastback/js/md5.js"></script>';
 		$html .= '<script>
 			fastback = new Fastback({
-				csvurl: "' . $_SERVER['SCRIPT_NAME'] . '?csv=get",
-				cacheurl:    "' . $this->cacheurl . '",
+			csvurl: "' . $_SERVER['SCRIPT_NAME'] . '?csv=get",
 				photourl:    "' . $this->photourl .'",
 				fastbackurl: "' . $_SERVER['SCRIPT_NAME'] . '"
-				});
+			});
 			</script>';
 		$html .= '</body></html>';
 
@@ -298,6 +281,8 @@ class FastbackOutput {
 	 * Handle auth and continue
 	 * Acknowledge session and continue
 	 * Handle log out
+	 *
+	 * Sets cookies and sends headers
 	 */
 	public function handle_auth() {
 		session_set_cookie_params(["SameSite" => "Strict"]); //none, lax, strict
@@ -308,21 +293,21 @@ class FastbackOutput {
 			session_destroy();
 			header("Location: " . $_SERVER['SCRIPT_URL']);
 			setcookie("fastback","", time() - 3600); // Clear cookie
-			exit();
+			return true;
 		}
 
 		// Already active session
-		if ( $_SESSION['authed'] === true ) {
+		if ( array_key_exists('authed',$_SESSION) && $_SESSION['authed'] === true ) {
 			if ( !array_key_exists($_SESSION['user'], $this->user ) ) {
 				session_destroy();
 				header("Location: " . $_SERVER['SCRIPT_URL']);
 				setcookie("fastback","", time() - 3600); // Clear cookie
-				exit();
+				return false;
 			}
 
 			return true;
 		}
-	
+
 		// User doing a new login
 		if ( isset($_POST['Username']) && isset($_POST['Password']) && isset($this->user[$_POST['Username']]) && $this->user[$_POST['Username']] == $_POST['Password'] ) {
 			$_SESSION['authed'] = true;
@@ -332,7 +317,7 @@ class FastbackOutput {
 				// There will only ever be a small number of users (for fastback's intended use case) so we're just going to brute force finding this later.
 				// Setting the username + hash of the ini file means that if the ini file changes, the user must log in again.
 				// This will cover the case of the user's password being changed or something.
-				$cookie_val = md5($_POST['Username'] . md5_file('fastback.ini'));
+				$cookie_val = md5($_POST['Username'] . md5_file($this->fastbackbase . 'fastback.ini'));
 				setcookie("fastback",$cookie_val, array('expires' => time() + 30 * 24 * 60 * 60,'SameSite' => 'Strict')); // Cookie valid for 30 days
 			}
 
@@ -341,7 +326,7 @@ class FastbackOutput {
 
 		// Returning user with a cookie
 		if ( !empty($_COOKIE['fastback']) ) {
-			$ini_md5 = md5_file('fastback.ini');
+			$ini_md5 = md5_file($this->fastbackbase . 'fastback.ini');
 			foreach($this->user as $username => $password) {
 				$cookie_val = md5($username . $ini_md5);
 				if ( $cookie_val == $_COOKIE['fastback'] ) {
@@ -381,9 +366,14 @@ class FastbackOutput {
 			</html>';
 
 		print $html;
-		exit();
+		return false;
 	}
 
+	/**
+	 * Set the flag field in the database to 1 for a specified file. 
+	 *
+	 * Flagged files are hidden the next time make_csv is run
+	 */
 	public function flag_photo(){
 		$this->sql_connect();
 		$stmt = $this->sql->prepare("UPDATE fastback SET flagged=1 WHERE file=:file");
@@ -401,6 +391,9 @@ class FastbackOutput {
 		print json_encode($row);
 	}
 
+	/**
+	 * Connect to sqlite, setting $this->sql
+	 */
 	public function sql_connect($try_no = 1){
 
 		if ( !file_exists($this->sqlitefile) ) {
@@ -417,7 +410,7 @@ class FastbackOutput {
 				throw new Exception("Couldn't lock db");
 			}
 		} else {
-			$this->sql = new SQLite3($this->sqlitefile);
+		 $this->sql = new SQLite3($this->sqlitefile);
 		}
 
 		if (empty($this->meta)){
@@ -425,6 +418,9 @@ class FastbackOutput {
 		}
 	}
 
+	/**
+	 * Run a single query and return the results
+	 */
 	public function query($sql){
 		$this->sql_connect();
 		$res = $this->sql->query($sql);
@@ -487,6 +483,11 @@ class FastbackOutput {
 		unset($this->sql);
 	}
 
+	/**
+	 * Pull the metadata from the database. 
+	 *
+	 * At the moment it's just the last time a scan was completed.
+	 */
 	private function load_meta() {
 		$q_getallmeta = "SELECT key,value FROM fastbackmeta";
 		$res = $this->sql->query($q_getallmeta);
@@ -502,6 +503,7 @@ class FastbackOutput {
 	 * Kill children, try to cleanup queue, then exit.
 	 */
 	private function signal_handler() {
+		$this->print_if_no_debug("\e[?25h"); // Show the cursor
 		$this->end_all_children = true;
 
 		if ( $this->is_a_child ) {
@@ -519,7 +521,9 @@ class FastbackOutput {
 		}
 	}
 
-
+	/**
+	 * Process args and run what we should
+	 */
 	private function handle_cli(){
 			global $argv;
 
@@ -570,13 +574,13 @@ class FastbackOutput {
 				$tasks = array('make_csv');
 				break;
 			case 'full_reset':
-				$tasks = array('reset_db','reset_cache','load_cache','make_thumbs','get_exif','get_times','get_geo','flag_memes','make_csv');
+				$tasks = array('reset_db','reset_cache','load_cache','make_thumbs','get_exif','get_times','get_geo','flag_memes','make_csv','find_tags');
 				break;
 			case 'help':
 				$tasks = array('help');
 				break;
 			case 'handle_new':
-				$tasks = array('load_cache','make_thumbs','get_exif','get_times','get_geo','flag_memes','make_csv');
+				$tasks = array('load_cache','make_thumbs','get_exif','get_times','get_geo','flag_memes','make_csv','find_tags');
 				break;
 			case 'find_tags':
 				$tasks = array('find_tags');
@@ -584,12 +588,6 @@ class FastbackOutput {
 			default:
 				$tasks = array('help');
 			}
-
-			pcntl_signal(SIGINT, function(){
-				$this->print_if_no_debug("\e[?25h"); // Show the cursor
-				exit();
-			});
-
 
 			$this->print_if_no_debug("\e[?25l"); // Hide the cursor
 
@@ -637,6 +635,9 @@ class FastbackOutput {
 		$this->sql_disconnect();
 	}
 
+	/**
+	 * Delete all thumbs, allowing for a rebuild
+	 */
 	public function clear_thumbs_db() {
 		$this->sql_connect();
 		$this->sql->query('UPDATE fastback SET thumbnail=NULL, flagged=NULL');
@@ -751,6 +752,11 @@ class FastbackOutput {
 		$this->sql_disconnect();
 	}
 
+	/**
+	 * This is the child function that gets forked to make thumbnails
+	 *
+	 * @param $childno - For debugging/loggin purposes the forking process sends the child number to every child process
+	 */
 	private function _make_thumbs($childno = "Unknown") {
 		do {
 
@@ -785,6 +791,18 @@ class FastbackOutput {
 	 */
 	public function make_a_thumb($file,$skip_db_write=false){
 
+		if ( !isset($this->vips) ) {
+			$this->vipsthumbnail = trim(`which vipsthumbnail`);
+		}
+
+		if ( !isset($this->ffmpeg) ) {
+			$this->ffmpeg = trim(`which ffmpeg`);
+		}
+
+		if ( !isset($this->jpegoptim) ) {
+			$this->jpegoptim = trim(`which jpegoptim`);
+		}
+
 		$file = $this->file_is_ok($file);
 
 		chdir($this->photobase);
@@ -806,31 +824,45 @@ class FastbackOutput {
 		$pathinfo = pathinfo($file);
 
 		if (in_array(strtolower($pathinfo['extension']),$this->supported_photo_types)){
-			$cmd = "vipsthumbnail --size=120x120 --output=$shellthumb --smartcrop=attention $shellfile";
-			$res = `$cmd`;
+			if ( empty($this->vipsthumbnail) ) {
+				$this->log("No vipsthumbnail. Can't make thumbs");
+				return false;
+			} else {
+				$cmd = "{$this->vipsthumbnail} --size={$this->thumbsize} --output=$shellthumb --smartcrop=attention $shellfile";
+				$res = `$cmd`;
+			}
 		} else if ( in_array(strtolower($pathinfo['extension']),$this->supported_video_types) ) {
 			if ( empty($childno) ) {
 				$childno = 0;
 			}
 
+			if ( empty($this->ffmpeg) ) {
+				$this->log("No ffmpeg . Can't make thumbs");
+				return false;
+			}
+
 			$tmpthumb = $this->filecache . 'tmpthumb_' . getmypid() . '.webp';
 			$tmpshellthumb = escapeshellarg($tmpthumb);
 
-			$cmd = "ffmpeg -y -ss 10 -i $shellfile -vframes 1 $tmpshellthumb 2>&1 > /tmp/fastback.ffmpeg.log.$childno";
+			$cmd = "{$this->ffmpeg} -y -ss 10 -i $shellfile -vframes 1 $tmpshellthumb 2>&1 > /tmp/fastback.ffmpeg.log.$childno";
 			$res = `$cmd`;
 
 			if ( !file_exists($tmpthumb)) {
-				$cmd = "ffmpeg -y -ss 2 -i $shellfile -vframes 1 $tmpshellthumb 2>&1 > /tmp/fastback.ffmpeg.log.$childno";
+				$cmd = "{$this->ffmpeg} -y -ss 2 -i $shellfile -vframes 1 $tmpshellthumb 2>&1 > /tmp/fastback.ffmpeg.log.$childno";
 				$res = `$cmd`;
 			}
 
 			if ( !file_exists($tmpthumb)) {
-				$cmd = "ffmpeg -y -ss 00:00:00 -i $shellfile -frames:v 1 $tmpshellthumb 2>&1 > /tmp/fastback.ffmpeg.log.$childno";
+				$cmd = "{$this->ffmpeg} -y -ss 00:00:00 -i $shellfile -frames:v 1 $tmpshellthumb 2>&1 > /tmp/fastback.ffmpeg.log.$childno";
 				$res = `$cmd`;
 			}
 
 			clearstatcache();
 			if ( file_exists($tmpthumb) && filesize($tmpthumb) !== 0) {
+				if ( empty($this->vipsthumbnail) ) {
+					$this->log("No vipsthumbnail. Can't make thumbs");
+					return false;
+				} 
 				$cmd = "vipsthumbnail --size=120x120 --output=$shellthumb --smartcrop=attention $tmpshellthumb";
 				$res = `$cmd`;
 				unlink($tmpthumb);
@@ -842,8 +874,10 @@ class FastbackOutput {
 		}
 
 		if ( file_exists( $thumbnailfile ) ) {
-			$cmd = "jpegoptim --strip-all --strip-exif --strip-iptc $shellthumb";
-			$res = `$cmd`;
+			if ( !empty($this->jpegoptim) ) {
+				$cmd = "jpegoptim --strip-all --strip-exif --strip-iptc $shellthumb";
+				$res = `$cmd`;
+			}
 		} 
 
 		if ( file_exists($thumbnailfile) ) {
@@ -861,7 +895,7 @@ class FastbackOutput {
 		return false;
 	}
 
-/**
+	/**
 	 * Make the csv cache file
 	 */
 	public function make_csv(){
@@ -895,7 +929,7 @@ class FastbackOutput {
 		$this->sql_disconnect();
 	}
 
-/**
+	/**
 	 * Build thumbnails in parallel
 	 *
 	 * This is the parent process
@@ -904,10 +938,16 @@ class FastbackOutput {
 		$this->_fork_em('_make_thumbs',"SELECT COUNT(*) FROM fastback WHERE thumbnail IS NULL AND flagged IS NOT TRUE");
 	}
 
+	/**
+	 * Fork off the exif processes
+	 */
 	public function get_exif() {
 		$this->_fork_em('_get_exif', "SELECT COUNT(*) FROM fastback WHERE exif IS NULL");
 	}
 
+	/**
+	 * Clear all exif info
+	 */
 	public function clear_exif() {
 		$clear_partials = 'UPDATE fastback SET exif=NULL';
 
@@ -916,6 +956,9 @@ class FastbackOutput {
 		$this->sql_disconnect();
 	}
 
+	/**
+	 * Get the geo info from
+	 */
 	public function get_geo() {
 		$clear_partials = 'UPDATE fastback SET lat=NULL,lon=NULL,elev=NULL WHERE (lat IS NULL OR lon IS NULL OR elev IS NULL) AND (lat IS NOT NULL OR lon IS NOT NULL OR elev IS NOT NULL) AND nullgeom IS NOT TRUE';
 
@@ -938,8 +981,10 @@ class FastbackOutput {
 		$this->_fork_em('_flag_memes', "SELECT COUNT(*) FROM fastback WHERE maybe_meme IS NULL");
 	}
 
+	/**
+	 * For a given function, fork it into as many children as we allow.
+	 */
 	private function _fork_em($childfunc,$statussql) {
-
 		$this->sql_connect();
 
 		# Cancel all reservations if we're starting fresh
@@ -1024,7 +1069,6 @@ class FastbackOutput {
 	}
 
 	private function _get_times($childno = "Unknown") {
-
 		$tags_to_consider = array(
 			"DateTimeOriginal",
 			"CreateDate",
@@ -1163,7 +1207,6 @@ class FastbackOutput {
 	}
 
 	private function _read_one_exif($file,$cmdargs,$proc,$pipes) {
-
 		$files_and_sidecars = array($file);
 
 		// For the requested file and any xmp sidecars...
@@ -1247,7 +1290,6 @@ class FastbackOutput {
 	}
 
 	private function _get_geo($childno = "Unknown") {
-
 		do {
 			$updated_geoms = array();
 			$no_geoms = array();
@@ -1377,144 +1419,144 @@ class FastbackOutput {
 
 			$batch = array();
 				foreach($queue as $file => $row) {
-						$maybe_meme = 0;
-						$exif = json_decode($row['exif'],true);
+					$maybe_meme = 0;
+					$exif = json_decode($row['exif'],true);
 
 
-						$this->log("======== MEME CHECK: $file =========\n");
-						$this->log(print_r($exif,TRUE));
+					$this->log("======== MEME CHECK: $file =========\n");
+					$this->log(print_r($exif,TRUE));
 
-						// Bad filetype  or Mimetype
-						// "FileType":"MacOS"
-						// FileType WEBP
-						// "MIMEType":"application\/unknown"
-						if ( in_array($exif['FileType'],$bad_filetypes) ) {
-							$this->log("MEME + 1: Bad file type: {$exif['FileType']}");
+					// Bad filetype  or Mimetype
+					// "FileType":"MacOS"
+					// FileType WEBP
+					// "MIMEType":"application\/unknown"
+					if ( in_array($exif['FileType'],$bad_filetypes) ) {
+						$this->log("MEME + 1: Bad file type: {$exif['FileType']}");
+						$maybe_meme += 1;
+					}
+
+					if ( in_array($exif['MIMEType'],$bad_mimetypes) ) {
+						$this->log("MEME + 1: Bad mime type: {$exif['MIMEType']}");
+						$maybe_meme += 1;
+					} else if ( preg_match('/video/',$exif['MIMEType']) ) {
+						// Most videos aren't memes
+						$this->log("MEME - 1: Most videos aren't memes");
+						$maybe_meme -= 1;
+					}
+
+					//  Error present
+					// "Error":"File format error"
+					if ( array_key_exists('Error',$exif) ) {
+						$this->log("MEME + 1: Has Error type: {$exif['Error']}");
+						$maybe_meme +=1 ;
+					}
+
+					// If there's no real exif info
+					// Unsure how to detect and how to account for scanned images
+
+					// IF the image is too small
+					// "ImageWidth":"2592",
+					// "ImageHeight":"1944",
+					if ( array_key_exists('ImageHeight',$exif) && array_key_exists('ImageWidth',$exif) ) {
+						if ( $exif['ImageHeight'] * $exif['ImageWidth'] <  804864 ) { // Less than 1024x768
+							$this->log("MEME + 1: Size too small: {$exif['ImageHeight']} * {$exif['ImageWidth']} = " . ($exif['ImageHeight'] * $exif['ImageWidth']));
 							$maybe_meme += 1;
 						}
+					}
 
-						if ( in_array($exif['MIMEType'],$bad_mimetypes) ) {
-							$this->log("MEME + 1: Bad mime type: {$exif['MIMEType']}");
-							$maybe_meme += 1;
-						} else if ( preg_match('/video/',$exif['MIMEType']) ) {
-							// Most videos aren't memes
-							$this->log("MEME - 1: Most videos aren't memes");
-							$maybe_meme -= 1;
-						}
+					$exif_keys = array_filter($exif,function($k){
+						return strpos($k,"Exif") === 0;
+					},ARRAY_FILTER_USE_KEY);
+					if ( count($exif_keys) <= 4 ) {
+						$this->log("MEME + 1: Minimal exif keys, maybe a meme or screenshot");
+						$maybe_meme += 1;
+					}
 
-						//  Error present
-						// "Error":"File format error"
-						if ( array_key_exists('Error',$exif) ) {
-							$this->log("MEME + 1: Has Error type: {$exif['Error']}");
-							$maybe_meme +=1 ;
-						}
+					if ( count($exif_keys) === 1 ) {
+						$this->log("MEME - 1: Absolutely no Exif. Maybe from Whatsapp or very old");
+						$maybe_meme -= 1;
 
-						// If there's no real exif info
-						// Unsure how to detect and how to account for scanned images
+					}
 
-						// IF the image is too small
-						// "ImageWidth":"2592",
-						// "ImageHeight":"1944",
-						if ( array_key_exists('ImageHeight',$exif) && array_key_exists('ImageWidth',$exif) ) {
-							if ( $exif['ImageHeight'] * $exif['ImageWidth'] <  804864 ) { // Less than 1024x768
-								$this->log("MEME + 1: Size too small: {$exif['ImageHeight']} * {$exif['ImageWidth']} = " . ($exif['ImageHeight'] * $exif['ImageWidth']));
-								$maybe_meme += 1;
-							}
-						}
+					// Having GPS is good
+					if ( array_key_exists('GPSLatitude',$exif) ) {
+						$this->log("MEME - 1: Has GPS");
+						$maybe_meme -= 1;
+					}
 
-						$exif_keys = array_filter($exif,function($k){
-							return strpos($k,"Exif") === 0;
-						},ARRAY_FILTER_USE_KEY);
-						if ( count($exif_keys) <= 4 ) {
-							$this->log("MEME + 1: Minimal exif keys, maybe a meme or screenshot");
-							$maybe_meme += 1;
-						}
+					// Having a camera name is good
+					if ( array_key_exists('Model',$exif) ) {
+						$this->log("MEME - 1: Has Camer Model Name");
+						$maybe_meme -= 1;
+					} else 
 
-						if ( count($exif_keys) === 1 ) {
-							$this->log("MEME - 1: Absolutely no Exif. Maybe from Whatsapp or very old");
-							$maybe_meme -= 1;
-							
-						}
+					// Not having a camera is extra bad in 2020s
+					if ( preg_match('/^202[0-9]:/',$exif['FileModifyDate']) && !array_key_exists('Model',$exif) ) {
+						$this->log("MEME + 1: Recent image and no Camera Model");
+						$maybe_meme += 1;
+					}
 
-						// Having GPS is good
-						if ( array_key_exists('GPSLatitude',$exif) ) {
-							$this->log("MEME - 1: Has GPS");
-							$maybe_meme -= 1;
-						}
+					// Scanners might put a comment in 
+					if ( array_key_exists('Comment',$exif) ) {
+						$this->log("MEME - 1: Has Comment");
+						$maybe_meme -= 1;
+					}
 
-						// Having a camera name is good
-						if ( array_key_exists('Model',$exif) ) {
-							$this->log("MEME - 1: Has Camer Model Name");
-							$maybe_meme -= 1;
-						} else 
+					// Scanners might put a comment in 
+					if ( array_key_exists('UserComment',$exif) && $exif['UserComment'] == 'Screenshot' ) {
+						$this->log("MEME + 2: Comment says screenshot");
+						$maybe_meme += 2;
+					}
 
-						// Not having a camera is extra bad in 2020s
-						if ( preg_match('/^202[0-9]:/',$exif['FileModifyDate']) && !array_key_exists('Model',$exif) ) {
-							$this->log("MEME + 1: Recent image and no Camera Model");
-							$maybe_meme += 1;
-						}
+					if ( array_key_exists('Software',$exif) && $exif['Software'] == 'Instagram' ) {
+						$this->log("MEME + 1: Software is Instagram");
+						$maybe_meme += 1;
+					}
 
-						// Scanners might put a comment in 
-						if ( array_key_exists('Comment',$exif) ) {
-							$this->log("MEME - 1: Has Comment");
-							$maybe_meme -= 1;
-						}
+					if ( array_key_exists('ThumbnailImage',$exif) ) {
+						$this->log("MEME - 1: Has Thumbnail");
+						$maybe_meme -= 1;
+					}
 
-						// Scanners might put a comment in 
-						if ( array_key_exists('UserComment',$exif) && $exif['UserComment'] == 'Screenshot' ) {
-							$this->log("MEME + 2: Comment says screenshot");
-							$maybe_meme += 2;
-						}
+					// if ( array_key_exists('IPTCDigest',$exif) ) {
+					// 	$this->log("MEME - 1: Has IPTC Digest");
+					// 	$maybe_meme -= 1;
+					// }
 
-						if ( array_key_exists('Software',$exif) && $exif['Software'] == 'Instagram' ) {
-							$this->log("MEME + 1: Software is Instagram");
-							$maybe_meme += 1;
-						}
+					if ( array_key_exists('ProfileDescriptionML',$exif) ) {
+						$this->log("MEME - 1: Has ProfileDescription");
+						$maybe_meme -= 1;
+					}
 
-						if ( array_key_exists('ThumbnailImage',$exif) ) {
-							$this->log("MEME - 1: Has Thumbnail");
-							$maybe_meme -= 1;
-						}
+					// Luminance seems to maybe be something in some of our photos that aren't memes?
+					if ( array_key_exists('Luminance',$exif) ) {
+						$this->log("MEME - 1: Has Luminance");
+						$maybe_meme -= 1;
+					}
 
-						// if ( array_key_exists('IPTCDigest',$exif) ) {
-						// 	$this->log("MEME - 1: Has IPTC Digest");
-						// 	$maybe_meme -= 1;
-						// }
+					if ( array_key_exists('TagsList',$exif) ) {
+						$this->log("MEME - 1: Has Tags List");
+						$maybe_meme -= 1;
+					}
 
-						if ( array_key_exists('ProfileDescriptionML',$exif) ) {
-							$this->log("MEME - 1: Has ProfileDescription");
-							$maybe_meme -= 1;
-						}
+					if ( array_key_exists('Subject',$exif) ) {
+						$this->log("MEME - 1: Has Subject");
+						$maybe_meme -= 1;
+					}
 
-						// Luminance seems to maybe be something in some of our photos that aren't memes?
-						if ( array_key_exists('Luminance',$exif) ) {
-							$this->log("MEME - 1: Has Luminance");
-							$maybe_meme -= 1;
-						}
+					if ( array_key_exists('DeviceMfgDesc',$exif) ) {
+						$this->log("MEME - 1: Has ICC DeviceMfgDesc "); // eg value Gimp
+						$maybe_meme -= 1;
+					}
 
-						if ( array_key_exists('TagsList',$exif) ) {
-							$this->log("MEME - 1: Has Tags List");
-							$maybe_meme -= 1;
-						}
+					$this->log("MEME SCORE $maybe_meme for $file");
 
-						if ( array_key_exists('Subject',$exif) ) {
-							$this->log("MEME - 1: Has Subject");
-							$maybe_meme -= 1;
-						}
+					$batch[$file] = $maybe_meme;
+			}
 
-						if ( array_key_exists('DeviceMfgDesc',$exif) ) {
-							$this->log("MEME - 1: Has ICC DeviceMfgDesc "); // eg value Gimp
-							$maybe_meme -= 1;
-						}
-
-						$this->log("MEME SCORE $maybe_meme for $file");
-
-						$batch[$file] = $maybe_meme;
-				}
-
-				$this->update_case_when("UPDATE fastback SET _util=NULL,maybe_meme=CASE",$batch," ELSE maybe_meme END");
-			} while (count($batch) > 0);
-		}
+			$this->update_case_when("UPDATE fastback SET _util=NULL,maybe_meme=CASE",$batch," ELSE maybe_meme END");
+		} while (count($batch) > 0);
+	}
 
 	public function help() {
 		print "\n";
@@ -1544,9 +1586,12 @@ class FastbackOutput {
 		* full_reset - Runs reset_cache and reset_db first and then runs handle_new
 
 			All commands can have the word debug after them, which will disable the pretty print, and be more verbose.
-";
+		";
 	}
 
+	/**
+	 * Print a status message
+	 */
 	public function print_status_line($msg,$skip_spinner = false) {
 		$spinners = array('\\','|','/','-');
 
@@ -1569,18 +1614,28 @@ class FastbackOutput {
 		$this->print_if_no_debug("\e[1000D"); // Go to start of line
 	}
 
+	/**
+	 * Log a message through print if debug is not true.
+	 */
 	public function print_if_no_debug($msg) {
 		if ( !$this->debug ) {
 			print($msg);
 		}
 	}
 
+	/**
+	 * Log a message through error_log if debug is true
+	 */
 	public function log($msg) {
 		if ( $this->debug ) {
 			error_log($msg);
 		}
 	}
 
+	/**
+	 * Do an upsert to reserve some items from the queue in a consistant way. 
+	 * The queue is used on the cli when forking multiple processes to process a request.
+	 */
 	private function get_queue($where,$multiplier = 1, $exit_on_empty = TRUE) {
 		$this->sql_connect();
 
@@ -1604,14 +1659,19 @@ class FastbackOutput {
 		return $queue;
 	}
 
+	/**
+	 * Give up on all my reserved work items.
+	 */
 	private function release_my_queue() {
 		$this->sql_connect();
 		$query = "UPDATE fastabck SET _util=NULL WHERE _util='RESERVED-" . getmypid() . "'";
 		$this->sql_disconnect();
 	}
 
+	/*
+	 * Update a bunch of rows at once using a CASE WHEN statement
+	 */
 	public function update_case_when($update_q,$ar,$else,$escape_val = False) {
-
 		if ( empty($ar) ) {
 			return;
 		}
@@ -1658,7 +1718,6 @@ class FastbackOutput {
 	 * Send, creating if needed, the CSV file of all the photos
 	 */
 	public function send_csv() {
-
 		if ( !file_exists($this->csvfile) ) {
 			$this->make_csv();
 		}
@@ -1722,7 +1781,6 @@ class FastbackOutput {
 	 * Proxy a file type which is not supported by the browser.
 	 */
 	public function proxy() {
-
 		if ( !$file = $this->file_is_ok($_GET['proxy']) ) {
 			die();
 		}
@@ -1764,7 +1822,6 @@ class FastbackOutput {
 	 * Dies if file not in database or not on disk
 	 */
 	public function download() {
-
 		if ( !$file = $this->file_is_ok($_GET['download']) ) {
 			die();
 		}
@@ -1817,7 +1874,7 @@ class FastbackOutput {
 	 *
 	 * Dies on file not exist or not in database.
 	 */
-	private function file_is_ok($file) {
+	private function file_is_ok($file) {	
 		$this->sql_connect();
 		$stmt = $this->sql->prepare("SELECT file FROM fastback WHERE file=:file");
 		$stmt->bindValue(":file",$file);
@@ -1880,12 +1937,12 @@ class FastbackOutput {
 			WHERE 
 			tags IS NULL
 			AND exif NOT GLOB '*\"Subject\"*'
-            AND exif NOT GLOB '*\"XPKeywords\"*'
-            AND exif NOT GLOB '*\"Categories\"*'
-            AND exif NOT GLOB '*\"TagsList\"*'
-            AND exif NOT GLOB '*\"LastKeywordXMP\"*'
-            AND exif NOT GLOB '*\"HierarchicalSubject\"*'
-            AND exif NOT GLOB '*\"CatalogSets\"*'
+			AND exif NOT GLOB '*\"XPKeywords\"*'
+			AND exif NOT GLOB '*\"Categories\"*'
+			AND exif NOT GLOB '*\"TagsList\"*'
+			AND exif NOT GLOB '*\"LastKeywordXMP\"*'
+			AND exif NOT GLOB '*\"HierarchicalSubject\"*'
+			AND exif NOT GLOB '*\"CatalogSets\"*'
 			AND exif NOT GLOB '*\"Keywords\"*'
 			";
 
@@ -1893,26 +1950,26 @@ class FastbackOutput {
 
 		$sql = "
 		 SELECT
-            file,
+			file,
 			exif,
-            exif -> 'Subject' AS Subject,
-            exif -> 'XPKeywords' AS XPKeywords,
-            exif -> 'Categories' AS Categories,
-            exif -> 'TagsList' AS TagsList,
-            exif -> 'LastKeywordXMP' AS LastKeywordXMP,
-            exif -> 'HierarchicalSubject' AS HierarchicalSubject,
-            exif -> 'CatalogSets' AS CatalogSets,
-            exif -> 'Keywords' AS Keywords
-            FROM fastback WHERE
+			exif -> 'Subject' AS Subject,
+			exif -> 'XPKeywords' AS XPKeywords,
+			exif -> 'Categories' AS Categories,
+			exif -> 'TagsList' AS TagsList,
+			exif -> 'LastKeywordXMP' AS LastKeywordXMP,
+			exif -> 'HierarchicalSubject' AS HierarchicalSubject,
+			exif -> 'CatalogSets' AS CatalogSets,
+			exif -> 'Keywords' AS Keywords
+			FROM fastback WHERE
 			tags IS NULL
 			AND (
-               exif GLOB '*\"Subject\"*'
-            OR exif GLOB '*\"XPKeywords\"*'
-            OR exif GLOB '*\"Categories\"*'
-            OR exif GLOB '*\"TagsList\"*'
-            OR exif GLOB '*\"LastKeywordXMP\"*'
-            OR exif GLOB '*\"HierarchicalSubject\"*'
-            OR exif GLOB '*\"CatalogSets\"*'
+			   exif GLOB '*\"Subject\"*'
+			OR exif GLOB '*\"XPKeywords\"*'
+			OR exif GLOB '*\"Categories\"*'
+			OR exif GLOB '*\"TagsList\"*'
+			OR exif GLOB '*\"LastKeywordXMP\"*'
+			OR exif GLOB '*\"HierarchicalSubject\"*'
+			OR exif GLOB '*\"CatalogSets\"*'
 			OR exif GLOB '*\"Keywords\"*'
 			)";
 

@@ -90,9 +90,9 @@ Fastback = class Fastback {
 	 * Our default properties.
 	 */
 	setProps() {
-		this.cacheurl = "./";
 		this.photourl = "./";
 		this.fastbackurl = "./";
+
 		this.photos = [];
 		this.cols = 5;
 		this.palette = [ '#eedfd1', '#52a162', '#23403b', '#f3a14b', '#ec6c3e', '#d0464e', '#963755' ];
@@ -452,7 +452,7 @@ Fastback = class Fastback {
 		var share_uri = this.fastbackurl + '?file=' + encodeURIComponent(imgsrc).replaceAll('%2F','/') + '&?share=' + md5(fullsize);
 
 		if (photo.isvideo && supported_type){
-			imghtml = '<video controls poster="' + encodeURI(this.cacheurl + imgsrc) + '"><source src="' + fullsize + '#t=0.0001">Your browser does not support this video format.</video>';
+			imghtml = '<video controls poster="' + encodeURI(this.fastbackurl + '?thumbnail=' +  imgsrc) + '"><source src="' + fullsize + '#t=0.0001">Your browser does not support this video format.</video>';
 		} else {
 			imghtml = '<img src="' + fullsize +'"/>';
 		}
