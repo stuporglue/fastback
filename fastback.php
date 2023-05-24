@@ -251,6 +251,31 @@ class FastbackOutput {
 			</div>';
 		$html .= '</div>';
 
+		$html .= '<div id="tagwindow">
+			<div id="and_or_toggle">
+
+    <div class="toggle" id="and_or_or">
+        <input type="checkbox" name="toggle" class="toggle-checkbox" id="and_or_or_toggle" tabindex="0" checked>
+        <label class="toggle-label" for="and_or_or_toggle">
+            <span class="toggle-inner"></span>
+            <span class="toggle-switch"></span>
+        </label>
+    </div>
+
+
+    <div class="toggle" id="tags_filter">
+		
+        <input type="checkbox" name="toggle" class="toggle-checkbox" id="tags_filter_toggle" tabindex="0" checked>
+        <label class="toggle-label" for="tags_filter_toggle">
+            <span class="toggle-inner"></span>
+            <span class="toggle-switch"></span>
+        </label>
+    </div>
+
+			</div>
+			<div id="thetags"></div>
+			</div>';
+
 		$html .= '<script src="fastback/js/jquery.min.js"></script>';
 		$html .= '<script src="fastback/js/hammer.js"></script>';
 		// $html .= '<script src="fastback/jsleaflet.js"></script>';

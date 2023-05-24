@@ -49,8 +49,8 @@ body #photos .photorow {
 	flex-basis: 0;
 	position: relative;
 	cursor: pointer;
-	border: 2px outset #ddd;
-	border-radius: 2px;
+	border: calc(100vw/250) outset #ddd;
+	border-radius: max(1.5vw,8px);
 	overflow: hidden;
 }
 
@@ -223,7 +223,7 @@ body .up10 .tn {width: calc(100vw/10); height: calc(100vw/10); font-size: 2vw;  
 }
 
 /** Thumbnail controls **/
-#thumb {
+#thumb, #tagwindow {
 	position: absolute;
 	box-sizing: border-box;
 	bottom: 0;
@@ -242,7 +242,7 @@ body .up10 .tn {width: calc(100vw/10); height: calc(100vw/10); font-size: 2vw;  
 	z-index: 10;
 }
 
-body.map #thumb {
+body.map #thumb, body.map #tagwindow {
 	width: 50%;
 }
 
@@ -425,7 +425,7 @@ only screen and (min-device-pixel-ratio : 1.5) {
 		width: 100%;
 		height: 50%;
 	}
-	body.map #thumb {
+	body.map #thumb, body.map #tagwindow {
 		height: calc(50% - 30px);
 		width: 100%;
 	}
@@ -472,4 +472,86 @@ only screen and (min-device-pixel-ratio : 1.5) {
 	padding: 6px;
 }
 
+#thetags {
+	border: 1px solid black;
+	overflow: auto;
+	max-height: calc(100% - 50px);
+}
 
+
+.onetag {
+	border: 1px solid black;
+	display: inline-block;
+	border-radius: 15px;
+	padding: 3px 15px;
+	margin: 3px;
+	background-color: white;
+	cursor: pointer;
+}
+
+.onetag:hover, .onetag.active:hover {
+	border-style: outset;
+	background-color: #ffe08a;
+}
+
+.onetag.active {
+	background-color: #ffbc03
+}
+
+
+
+
+
+    .toggle {
+        position: relative; width: 90px;
+        -webkit-user-select:none; -moz-user-select:none; -ms-user-select: none;
+    }
+    .toggle-checkbox {
+        position: absolute;
+        opacity: 0;
+        pointer-events: none;
+    }
+    .toggle-label {
+        display: block; overflow: hidden; cursor: pointer;
+        border: 2px solid #999999; border-radius: 20px;
+    }
+    .toggle-inner {
+        display: block; width: 200%; margin-left: -100%;
+        transition: margin 0.3s ease-in 0s;
+    }
+    .toggle-inner:before, .toggle-inner:after {
+        display: block; float: left; width: 50%; height: 30px; padding: 0; line-height: 30px;
+        font-size: 14px; color: white; font-family: Trebuchet, Arial, sans-serif; font-weight: bold;
+        box-sizing: border-box;
+    }
+    .toggle-inner:before {
+        content: "ON";
+        padding-left: 10px;
+        background-color: #34A7C1; color: #FFFFFF;
+    }
+    .toggle-inner:after {
+        content: "OFF";
+        padding-right: 10px;
+        background-color: #EEEEEE; color: #999999;
+        text-align: right;
+    }
+    .toggle-switch {
+        display: block; width: 18px; margin: 6px;
+        background: #FFFFFF;
+        position: absolute; top: 0; bottom: 0;
+        right: 56px;
+        border: 2px solid #999999; border-radius: 20px;
+        transition: all 0.3s ease-in 0s;
+    }
+    .toggle-checkbox:checked + .toggle-label .toggle-inner {
+        margin-left: 0;
+    }
+    .toggle-checkbox:checked + .toggle-label .toggle-switch {
+        right: 0px;
+    }
+
+#and_or_or .toggle-inner:before { content: "AND"; }
+#and_or_or .toggle-inner:after { content: "OR"; }
+
+#tags_filter .toggle-inner:before { content: "Tag Filter is Inactive"; }
+#tags_filter .toggle-inner:after { content: "Tag Filter is Active"; }

@@ -55,6 +55,7 @@ Fastback = class Fastback {
 
 				self.hyperlist_init();
 				self.load_nav();
+				self.make_tags();
 			}
 		});
 
@@ -869,10 +870,32 @@ Fastback = class Fastback {
 	}
 
 	/**
+	 * Make the tags interface.
+	 */
+	make_tags() {
+		var thetags = $('#thetags');
+		var htmltag,t;
+		var tagnames = [];
+
+		for(t in this.tags) {
+			tagnames.push(t);
+		}
+
+		tagnames.sort();
+
+		for(var t = 0; t < tagnames.length; t++ ) {
+			htmltag = tagnames[t].replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+			thetags.append('<div class="onetag" data-tag="' + tagnames[t] + '">' + htmltag + ' (' + this.tags[tagnames[t]] + ')</div>');
+		}
+	}
+
+	/**
 	 * Handle tag click
 	 */
 	handle_tag_click() {
 		var icon = jQuery('#tagicon');
+
+		$('#tagwindow').show();
 
 		if ( icon.hasClass('active') ) {
 			delete this.active_filters.tags;
