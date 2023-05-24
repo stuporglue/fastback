@@ -260,9 +260,9 @@ class FastbackOutput {
 			<div class="fakelink" id="sharelink"><a href="#">🔗<form id="sharelinkcopy">><input/></form></a></div>
 			<div class="fakelink ' . (!empty($this->canflag) && !in_array($_SESSION['user'],$this->canflag) ? 'disabled' : '') . '" id="thumbflag" data-file="#">🚩</div>
 			<div class="fakelink" id="thumbgeo" data-coordinates="">🌐</div>
-			<div class="fakelink" id="sharefb"><img src="fastback/img/fb.png" /></div>
+			<!-- div class="fakelink" id="sharefb"><img src="fastback/img/fb.png" /></div>
 			<div class="fakelink" id="sharewhatsapp"><img src="fastback/img/whatsapp.png" /></div>
-			<div class="fakelink" id="shareemail">✉️</div>
+			<div class="fakelink" id="shareemail">✉️</div -->
 			<div id="thumbinfo"></div>
 			</div>';
 		$html .= '</div>';

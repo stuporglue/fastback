@@ -19,7 +19,7 @@ Fastback = class Fastback {
 						'date': new Date(r[2] * 1000),
 						'type': 'media',
 						'coordinates': (isNaN(parseFloat(r[3])) ? null : [parseFloat(r[3]),parseFloat(r[4])]),
-						'tags': r[5]
+						'tags': r[5].split('|')
 					};
 				});
 
@@ -36,10 +36,10 @@ Fastback = class Fastback {
 				self.tags = {};
 				for(i = 0; i < self.orig_photos.length; i++){
 					if (self.orig_photos[i].type == 'media' && self.orig_photos[i].tags != '') {
-						tmptags = self.orig_photos[i].tags.split('|');
+						tmptags = self.orig_photos[i].tags;
 						for(j = 0;j < tmptags.length; j++){
-							self.tags[tmptags[j]] = self.tags[tmptags[j]] || [];
-							self.tags[tmptags[j]].push(i);
+							self.tags[tmptags[j]] = self.tags[tmptags[j]] || 0;
+							self.tags[tmptags[j]]++;
 						}
 					}
 				}
@@ -80,9 +80,9 @@ Fastback = class Fastback {
 		jQuery('#thumbdownload').on('click',this.senddownload.bind(this));
 		jQuery('#thumbflag').on('click',this.flagphoto.bind(this));
 		jQuery('#thumbgeo').on('click',this.geoclick.bind(this));
-		jQuery('#sharefb').on('click',this.shareclick.bind(this));
-		jQuery('#shareemail').on('click',this.shareclick.bind(this));
-		jQuery('#sharewhatsapp').on('click',this.shareclick.bind(this));
+//		jQuery('#sharefb').on('click',this.shareclick.bind(this));
+//		jQuery('#shareemail').on('click',this.shareclick.bind(this));
+//		jQuery('#sharewhatsapp').on('click',this.shareclick.bind(this));
 		jQuery('#sharelink').on('click',this.shareclick.bind(this));
 	}
 
@@ -188,6 +188,7 @@ Fastback = class Fastback {
 
 		jQuery('#calendaricon').on('click',this.handle_datepicker_toggle.bind(this));
 		jQuery('#rewindicon').on('click',this.handle_rewind_click.bind(this));
+		jQuery('#tagicon').on('click',this.handle_tag_click.bind(this));
 		jQuery('#globeicon').on('click',this.handle_globe_click.bind(this));
 		jQuery('#exiticon').on('click',this.handle_exit_click.bind(this));
 	}
@@ -244,6 +245,7 @@ Fastback = class Fastback {
 		var basename = fullsize.replace(/.*\//,'');
 
 		switch ( e.target.closest('.fakelink').id ) {
+				/*
 			case 'sharefb':
 				share_uri = 'https://facebook.com/sharer/sharer.php?u=' + encodeURIComponent(share_uri);
 				window.open(share_uri, 'fb').focus();
@@ -260,6 +262,7 @@ Fastback = class Fastback {
 				}
 				window.open(share_uri, 'whatsapp').focus();
 				break;
+				*/
 			case 'sharelink':
 				jQuery('#sharelinkcopy input').val(share_uri);
 				$('#sharelinkcopy input').select();
@@ -524,6 +527,9 @@ Fastback = class Fastback {
 
 	hide_thumb() {
 		jQuery('#thumb').hide();
+		if ( jQuery('#thumb video').length > 0 ) {
+			jQuery('#thumb video')[0].pause();
+		}
 	}
 
 	keydown_handler(e) {
@@ -860,6 +866,56 @@ Fastback = class Fastback {
 	 */
 	handle_exit_click() {
 		window.location = this.fastbackurl + '?logout=true';
+	}
+
+	/**
+	 * Handle tag click
+	 */
+	handle_tag_click() {
+		var icon = jQuery('#tagicon');
+
+		if ( icon.hasClass('active') ) {
+			delete this.active_filters.tags;
+			icon.removeClass('active');
+		} else {
+
+			icon.addClass('active');
+
+			// TODO: Show or hide the UI
+			//
+
+			// Array of tag names
+			this.active_tags = this.active_tags || ["Michael Moore","Caroline Moore"];
+			this.tag_and_or = 'and';
+
+			var self = this;
+
+			this.active_filters.tags = function(){
+				self.photos = self.photos.filter(function(p){
+					
+					// Count matches
+					var matches = p.tags.reduce(function(total,tag){
+						if ( self.active_tags.indexOf(tag) === -1 ) {
+							return total;
+						} else {
+							return total + 1;
+						}
+					},0);
+
+					// See if we have enough matches
+					if ( matches == self.active_tags.length && self.tag_and_or == 'and' ) {
+						return true;
+					} else if ( matches > 0 && self.tag_and_or == 'or' ) {
+						return true;
+					} else {
+						return false;
+					}
+				});
+			}
+		}
+
+		this.dirty_filters = true;
+		this.refresh_layout();
 	}
 
 	/**

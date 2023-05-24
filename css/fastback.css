@@ -49,6 +49,9 @@ body #photos .photorow {
 	flex-basis: 0;
 	position: relative;
 	cursor: pointer;
+	border: 2px outset #ddd;
+	border-radius: 2px;
+	overflow: hidden;
 }
 
 .photorow > .tn.nolink {
