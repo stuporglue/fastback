@@ -245,6 +245,7 @@ class FastbackOutput {
 		$html .= '<div id="resizer">';
 		$html .= '<input type="range" min="1" max="10" value="5" class="slider" id="zoom">';
 		$html .= '<div id="globeicon"></div>';
+		$html .= '<div id="tagicon"></div>';
 		$html .= '<div id="rewindicon"></div>';
 		$html .= '<div id="calendaricon"><input readonly id="datepicker" type="text"></div>';
 		$html .= '<div id="exiticon" class="' . (isset($this->user) ? '' : 'disabled') . '"></div>';

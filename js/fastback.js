@@ -18,11 +18,31 @@ Fastback = class Fastback {
 						'isvideo': r[1] == 1,
 						'date': new Date(r[2] * 1000),
 						'type': 'media',
-						'coordinates': (isNaN(parseFloat(r[3])) ? null : [parseFloat(r[3]),parseFloat(r[4])])
+						'coordinates': (isNaN(parseFloat(r[3])) ? null : [parseFloat(r[3]),parseFloat(r[4])]),
+						'tags': r[5]
 					};
 				});
 
-				self.orig_photos = self.photos = self.add_date_blocks(self.photos);
+				var tmptags,j,i;
+
+				self.orig_photos = self.add_date_blocks(self.photos);
+
+				for(i = 0;i<self.orig_photos.length;i++){
+					self.orig_photos[i].id = i;
+				}
+
+				self.photos = self.orig_photos;
+
+				self.tags = {};
+				for(i = 0; i < self.orig_photos.length; i++){
+					if (self.orig_photos[i].type == 'media' && self.orig_photos[i].tags != '') {
+						tmptags = self.orig_photos[i].tags.split('|');
+						for(j = 0;j < tmptags.length; j++){
+							self.tags[tmptags[j]] = self.tags[tmptags[j]] || [];
+							self.tags[tmptags[j]].push(i);
+						}
+					}
+				}
 
 				// Browsers can only support an object so big, so we can only use so many rows.
 				// Calculate the new max zoom
@@ -166,6 +186,7 @@ Fastback = class Fastback {
 			onSelect: this.handle_datepicker_change.bind(this) 
 		});
 
+		jQuery('#calendaricon').on('click',this.handle_datepicker_toggle.bind(this));
 		jQuery('#rewindicon').on('click',this.handle_rewind_click.bind(this));
 		jQuery('#globeicon').on('click',this.handle_globe_click.bind(this));
 		jQuery('#exiticon').on('click',this.handle_exit_click.bind(this));
@@ -274,9 +295,6 @@ Fastback = class Fastback {
 					'date': photos[i]['date']
 				});
 			}
-
-			photos[i].id = i;
-
 			prev_date = cur_date;
 		}
 
@@ -296,10 +314,7 @@ Fastback = class Fastback {
 		var slice_to = (row * this.cols) + this.cols;
 		var vidclass = '';
 		var date;
-		var html = this
-			.photos
-			.slice(slice_from,slice_to)
-			.map(function(p){
+		var html = this.photos.slice(slice_from,slice_to).map(function(p){
 
 				if ( p['type'] == 'media' ) {
 					if ( p['isvideo'] ) {
@@ -320,8 +335,7 @@ Fastback = class Fastback {
 					cellhtml += '</div>';
 					return cellhtml;
 				}
-			})
-			.join("");
+			}).join("");
 		var e = jQuery.parseHTML('<div class="photorow">' + html + '</div>');
 		return e[0];
 	}
@@ -750,6 +764,18 @@ Fastback = class Fastback {
 		this.hyperlist_container.prop('scrollTop',(rownum * this.hyperlist_config.itemHeight));
 	}
 
+	/**
+	 * Show or hide the calendar
+	 */
+	handle_datepicker_toggle(){
+
+		if ( $('#ui-datepicker-div').is(':visible') ) {
+			$('#datepicker').datepicker('hide');
+		} else {
+			$('#datepicker').datepicker('show');
+		}
+
+	}
 
 	/**
 	 * Handle the datepicker change
@@ -794,7 +820,7 @@ Fastback = class Fastback {
 	}
 
 	/**
-	 * Handle the rewind icon click
+	 * Handle the rewind / memories icon click
 	 */
 	handle_rewind_click() {
 		var icon = jQuery('#rewindicon');
