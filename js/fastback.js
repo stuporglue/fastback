@@ -85,10 +85,12 @@ Fastback = class Fastback {
 		jQuery('#thumbdownload').on('click',this.senddownload.bind(this));
 		jQuery('#thumbflag').on('click',this.flagphoto.bind(this));
 		jQuery('#thumbgeo').on('click',this.geoclick.bind(this));
-		//		jQuery('#sharefb').on('click',this.shareclick.bind(this));
-		//		jQuery('#shareemail').on('click',this.shareclick.bind(this));
-		//		jQuery('#sharewhatsapp').on('click',this.shareclick.bind(this));
 		jQuery('#sharelink').on('click',this.shareclick.bind(this));
+		jQuery('#webshare').on('click',this.shareclick.bind(this));
+
+		if (typeof navigator.share === 'function') {
+			jQuery('#webshare').removeClass('disabled');
+		}
 	}
 
 	/**
@@ -243,42 +245,39 @@ Fastback = class Fastback {
 
 	shareclick(e) {
 		var photoid = jQuery('#thumb').data('curphoto');
-		var fullsize = this.orig_photos[photoid]['file'];
+		var orig = this.orig_photos[photoid];
+		var fullsize = orig.file;
 
 		var share_uri = this.fastbackurl + '?file=' + encodeURIComponent(fullsize).replaceAll('%2F','/') + '&share=' + md5(fullsize);
 		share_uri = new URL(share_uri,document.location).href;
 
+		if ( !orig.isvideo ) {
+			var supported_type = (this.browser_supported_file_types.indexOf(fullsize.replace(/.*\./,'').toLowerCase()) != -1);
+			if ( !supported_type ) {
+				share_uri += '&proxy=true';
+			}
+		}
+
 		var basename = fullsize.replace(/.*\//,'');
 
 			switch ( e.target.closest('.fakelink').id ) {
-					/*
-			case 'sharefb':
-				share_uri = 'https://facebook.com/sharer/sharer.php?u=' + encodeURIComponent(share_uri);
-				window.open(share_uri, 'fb').focus();
-				break;
-			case 'shareemail':
-				share_uri = 'mailto:?subject=' + encodeURIComponent(basename) + '&body=' + encodeURIComponent(share_uri);
-				window.open(share_uri, '_blank').focus();
-				break;
-			case 'sharewhatsapp':
-				if ( this.is_mobile_browser ) {
-					share_uri = 'whatsapp://send?text=' + encodeURIComponent(basename) + '%20' + encodeURIComponent(share_uri);
-				} else {
-					share_uri = 'https://web.whatsapp.com/send?text=' + encodeURIComponent(basename) + '%20' + encodeURIComponent(share_uri);
-				}
-				window.open(share_uri, 'whatsapp').focus();
-				break;
-				*/
 				case 'sharelink':
-				jQuery('#sharelinkcopy input').val(share_uri);
-				$('#sharelinkcopy input').select();
-				var res = document.execCommand('copy');
-				window.getSelection().removeAllRanges();
-				$('#thumb').focus();
-				$('#thumb').select();
-				$('#sharelinkcopy input').blur();
-				$('#sharelink').effect('highlight');
-				return false;
+					jQuery('#sharelinkcopy input').val(share_uri);
+					$('#sharelinkcopy input').select();
+					var res = document.execCommand('copy');
+					window.getSelection().removeAllRanges();
+					$('#thumb').focus();
+					$('#thumb').select();
+					$('#sharelinkcopy input').blur();
+					$('#sharelink').effect('highlight');
+					return false;
+				case 'webshare':
+					//		https://web.dev/web-share/
+					navigator.share({
+						title: 'See this ' + (orig.isvideo ? 'video' : 'picture')  + ' from ' + document.title,
+						text: 'Someone is sharing a ' + basename + ' from ' + document.title + ' with you',
+						url: share_uri
+					});
 				break;
 			}
 	}
@@ -904,6 +903,7 @@ Fastback = class Fastback {
 	 * Handle tag click
 	 */
 	handle_tag_click() {
+		this.hide_thumb();
 		if ( $('#tagwindow').hasClass('disabled') ) {
 
 			this.tag_state = JSON.stringify({

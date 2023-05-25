@@ -242,6 +242,7 @@ class FastbackOutput {
 			<div id="thumbclose">🆇</div>
 			<div class="fakelink" id="thumbdownload" href="#">⬇️</div>
 			<div class="fakelink" id="sharelink"><a href="#">🔗<form id="sharelinkcopy">><input/></form></a></div>
+			<div class="fakelink disabled" id="webshare"><img src="fastback/img/share.png"></div>
 			<div class="fakelink ' . (!empty($this->canflag) && !in_array($_SESSION['user'],$this->canflag) ? 'disabled' : '') . '" id="thumbflag" data-file="#">🚩</div>
 			<div class="fakelink" id="thumbgeo" data-coordinates="">🌐</div>
 			<!-- div class="fakelink" id="sharefb"><img src="fastback/img/fb.png" /></div>
@@ -1779,6 +1780,11 @@ class FastbackOutput {
 			die();
 		}
 
+		if ( !empty($_GET['proxy']) ) {
+			$_GET['proxy'] = $file;
+			return $this->proxy();
+		}
+
 		$file = $this->photobase . $file;
 
 		$mime = mime_content_type($file);
@@ -1810,11 +1816,13 @@ class FastbackOutput {
 
 		if ( $mime[0] == 'image' ) {
 			header("Content-Type: image/jpeg");
+			header("Content-Disposition: inline; filename=\"" . basename($file) . ".jpg\"");
 			$cmd = 'convert ' . escapeshellarg($file) . ' JPG:-';
 			passthru($cmd);
 			exit();
 		} else if ($mime[0] == 'video' ) {
 			header("Content-Type: image/jpeg");
+			header("Content-Disposition: inline; filename=\"" . basename($file) . ".jpg\"");
 			$cmd = "ffmpeg -ss 00:00:00 -i " . escapeshellarg($file) . " -frames:v 1 -f singlejpeg - ";
 			passthru($cmd);
 			exit();
@@ -1915,26 +1923,58 @@ class FastbackOutput {
 
 	public function pwa() {
 		if ( $_GET['pwa'] == 'manifest' ) {
-			header("Content-Type: application/json");
+			$base_url = $this->baseurl();
+			header("Content-Type: application/manifest+json");
+			header("Content-Disposition: inline; filename=\"manifest.json\"");
 			$manifest = array(
-				'name' =>$this->sitetitle,
+				'id' => $base_url,
+				'name' => $this->sitetitle,
 				'short_name' => $this->sitetitle,
-				'theme_color' => '#eedfd1',
-				'background_color' => '#52a162',
-				'display' => 'stsandalone',
-				'scope' => '$this->photourl',
-				'start_url' => $this->photourl,
 				'description' => 'Fastback Photo Gallery for ' . $this->sitetitle,
-				'orientatin' => 'any',
 				'icons' => array(
 					array(
-						'src' => $this->photourl . '/fastback/img/favicon.png',
+						'src' => $base_url . $this->photourl . '/fastback/img/favicon.png',
 						'sizes' => '512x512'
 					)
-				)
+				),
+				'start_url' => $base_url . $this->photourl,
+				'display' => 'stsandalone',
+				'theme_color' => '#eedfd1',
+				'background_color' => '#52a162',
+				'scope' => $base_url . $this->photourl,
+				'orientatin' => 'any',
 			);
 			print json_encode($manifest);
 		}
+	}
+
+	/**
+	* Check whether URL is HTTPS/HTTP
+	* @return boolean [description]
+	*
+	* https://stackoverflow.com/questions/5100189/use-php-to-check-if-page-was-accessed-with-ssl
+	*/
+	public function baseurl() {
+		$url = '';
+		if (
+			( ! empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+			|| ( ! empty($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] == 'https')
+			|| ( ! empty($_SERVER['HTTP_X_FORWARDED_SSL']) && $_SERVER['HTTP_X_FORWARDED_SSL'] == 'on')
+			|| (isset($_SERVER['SERVER_PORT']) && $_SERVER['SERVER_PORT'] == 443)
+			|| (isset($_SERVER['HTTP_X_FORWARDED_PORT']) && $_SERVER['HTTP_X_FORWARDED_PORT'] == 443)
+			|| (isset($_SERVER['REQUEST_SCHEME']) && $_SERVER['REQUEST_SCHEME'] == 'https')
+		) {
+			$url .= 'https://';
+		} else {
+			$url .= 'http://';
+		}
+
+		$url .= $_SERVER['HTTP_HOST'];
+		$url .= dirname(preg_replace('/\?.*/','',$_SERVER['REQUEST_URI'])) . '/';
+		$url = str_replace('//','/',$url);
+		$url = rtrim($url,'/');
+
+		return $url;
 	}
 
 	/**
