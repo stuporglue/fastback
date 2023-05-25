@@ -238,8 +238,9 @@ body .up10 .tn {width: calc(100vw/10); height: calc(100vw/10); font-size: 2vw;  
 	-ms-transition: opacity 5s ease-in-out;
 	-o-transition: opacity 5s ease-in-out;
 	padding: 10px;
-	display: none;
+	display: flex;
 	z-index: 10;
+	overflow: hidden;
 }
 
 body.map #thumb, body.map #tagwindow {
@@ -500,58 +501,58 @@ only screen and (min-device-pixel-ratio : 1.5) {
 
 
 
+.tagtooltoggle {
+	display: inline-block;
+	margin: 4px;
+}
+
+.tagtooltoggle span {
+	border: 5px outset orange;
+	padding: 5px 8px;
+	background-color: #ffe08a;
+	color: #666;
+	cursor: pointer;
+	box-sizing: border-box;
+ display: inline-block;
+}
+
+.tagtooltoggle span.active {
+	background-color: #ffbc03;
+	color: #000;
+	border-style: inset;
+}
 
 
-    .toggle {
-        position: relative; width: 90px;
-        -webkit-user-select:none; -moz-user-select:none; -ms-user-select: none;
-    }
-    .toggle-checkbox {
-        position: absolute;
-        opacity: 0;
-        pointer-events: none;
-    }
-    .toggle-label {
-        display: block; overflow: hidden; cursor: pointer;
-        border: 2px solid #999999; border-radius: 20px;
-    }
-    .toggle-inner {
-        display: block; width: 200%; margin-left: -100%;
-        transition: margin 0.3s ease-in 0s;
-    }
-    .toggle-inner:before, .toggle-inner:after {
-        display: block; float: left; width: 50%; height: 30px; padding: 0; line-height: 30px;
-        font-size: 14px; color: white; font-family: Trebuchet, Arial, sans-serif; font-weight: bold;
-        box-sizing: border-box;
-    }
-    .toggle-inner:before {
-        content: "ON";
-        padding-left: 10px;
-        background-color: #34A7C1; color: #FFFFFF;
-    }
-    .toggle-inner:after {
-        content: "OFF";
-        padding-right: 10px;
-        background-color: #EEEEEE; color: #999999;
-        text-align: right;
-    }
-    .toggle-switch {
-        display: block; width: 18px; margin: 6px;
-        background: #FFFFFF;
-        position: absolute; top: 0; bottom: 0;
-        right: 56px;
-        border: 2px solid #999999; border-radius: 20px;
-        transition: all 0.3s ease-in 0s;
-    }
-    .toggle-checkbox:checked + .toggle-label .toggle-inner {
-        margin-left: 0;
-    }
-    .toggle-checkbox:checked + .toggle-label .toggle-switch {
-        right: 0px;
-    }
 
-#and_or_or .toggle-inner:before { content: "AND"; }
-#and_or_or .toggle-inner:after { content: "OR"; }
+#tagwindow {
+	flex-direction: column;
+}
 
-#tags_filter .toggle-inner:before { content: "Tag Filter is Inactive"; }
-#tags_filter .toggle-inner:after { content: "Tag Filter is Active"; }
+#thetags {
+	border: 1px solid black;
+	overflow: auto;
+	flex-grow: 1;
+}
+
+#and_or_toggle {
+	background-color: rgba(100,100,255,.8);
+	margin-bottom: 4px;
+}
+
+#tagwindowclose {
+	display: inline-block;
+	margin: 10px;
+	cursor: pointer;
+}
+
+.nowrap {
+	display: inline-block;
+}
+
+#tagon.active {
+	background-color: #c0ff96;
+}
+
+#tagoff.active {
+	background-color: #fc9590;
+}

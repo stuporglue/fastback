@@ -234,7 +234,7 @@ class FastbackOutput {
 		$html .= '<div id="calendaricon"><input readonly id="datepicker" type="text"></div>';
 		$html .= '<div id="exiticon" class="' . (isset($this->user) ? '' : 'disabled') . '"></div>';
 		$html .= '</div>';
-		$html .= '<div id="thumb">
+		$html .= '<div id="thumb" class="disabled">
 			<div id="thumbcontent"></div>
 			<div id="thumbleft" class="thumbctrl">LEFT</div>
 			<div id="thumbright" class="thumbctrl">RIGHT</div>
@@ -251,27 +251,15 @@ class FastbackOutput {
 			</div>';
 		$html .= '</div>';
 
-		$html .= '<div id="tagwindow">
+		$html .= '<div id="tagwindow" class="disabled">
 			<div id="and_or_toggle">
-
-    <div class="toggle" id="and_or_or">
-        <input type="checkbox" name="toggle" class="toggle-checkbox" id="and_or_or_toggle" tabindex="0" checked>
-        <label class="toggle-label" for="and_or_or_toggle">
-            <span class="toggle-inner"></span>
-            <span class="toggle-switch"></span>
-        </label>
-    </div>
-
-
-    <div class="toggle" id="tags_filter">
-		
-        <input type="checkbox" name="toggle" class="toggle-checkbox" id="tags_filter_toggle" tabindex="0" checked>
-        <label class="toggle-label" for="tags_filter_toggle">
-            <span class="toggle-inner"></span>
-            <span class="toggle-switch"></span>
-        </label>
-    </div>
-
+				<div id="tagwindowclose">🆇</div>
+				<div class="tagtooltoggle"><label>Tag Filter Status:</label>
+					<div class="nowrap"><span class="" id="tagon">On</span><span class="active" id="tagoff">Off</span></div>
+				</div>
+				<div class="tagtooltoggle"><label>Show photos that match:</label>
+					<div class="nowrap"><span class="active" id="tagor">ANY tag</span><span id="tagand">ALL tags</span></div>
+				</div>
 			</div>
 			<div id="thetags"></div>
 			</div>';

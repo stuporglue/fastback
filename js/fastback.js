@@ -67,6 +67,10 @@ Fastback = class Fastback {
 		jQuery('#thumbright').on('click',this.handle_thumb_next.bind(this));
 		jQuery('#thumbleft').on('click',this.handle_thumb_prev.bind(this));
 		jQuery('#thumbclose').on('click',this.hide_thumb.bind(this));
+		jQuery('#tagon,#tagoff').on('click',this.handle_tag_state.bind(this));
+		jQuery('#tagor,#tagand').on('click',this.handle_tag_state.bind(this));
+		jQuery('#thetags').on('click','.onetag',this.handle_onetag_click.bind(this));
+
 		jQuery(document).on('keydown',this.keydown_handler.bind(this));
 		// Touch stuff
 		jQuery('#thumb').hammer({recognizers: [ 
@@ -81,9 +85,9 @@ Fastback = class Fastback {
 		jQuery('#thumbdownload').on('click',this.senddownload.bind(this));
 		jQuery('#thumbflag').on('click',this.flagphoto.bind(this));
 		jQuery('#thumbgeo').on('click',this.geoclick.bind(this));
-//		jQuery('#sharefb').on('click',this.shareclick.bind(this));
-//		jQuery('#shareemail').on('click',this.shareclick.bind(this));
-//		jQuery('#sharewhatsapp').on('click',this.shareclick.bind(this));
+		//		jQuery('#sharefb').on('click',this.shareclick.bind(this));
+		//		jQuery('#shareemail').on('click',this.shareclick.bind(this));
+		//		jQuery('#sharewhatsapp').on('click',this.shareclick.bind(this));
 		jQuery('#sharelink').on('click',this.shareclick.bind(this));
 	}
 
@@ -100,6 +104,7 @@ Fastback = class Fastback {
 		this.hyperlist_container = jQuery('#photos');
 		this.active_filters = {};
 		this.dirty_filters = false;
+		this.active_tags = [];
 
 		// Browser type
 		this.isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
@@ -189,7 +194,7 @@ Fastback = class Fastback {
 
 		jQuery('#calendaricon').on('click',this.handle_datepicker_toggle.bind(this));
 		jQuery('#rewindicon').on('click',this.handle_rewind_click.bind(this));
-		jQuery('#tagicon').on('click',this.handle_tag_click.bind(this));
+		jQuery('#tagicon,#tagwindowclose').on('click',this.handle_tag_click.bind(this));
 		jQuery('#globeicon').on('click',this.handle_globe_click.bind(this));
 		jQuery('#exiticon').on('click',this.handle_exit_click.bind(this));
 	}
@@ -245,8 +250,8 @@ Fastback = class Fastback {
 
 		var basename = fullsize.replace(/.*\//,'');
 
-		switch ( e.target.closest('.fakelink').id ) {
-				/*
+			switch ( e.target.closest('.fakelink').id ) {
+					/*
 			case 'sharefb':
 				share_uri = 'https://facebook.com/sharer/sharer.php?u=' + encodeURIComponent(share_uri);
 				window.open(share_uri, 'fb').focus();
@@ -264,7 +269,7 @@ Fastback = class Fastback {
 				window.open(share_uri, 'whatsapp').focus();
 				break;
 				*/
-			case 'sharelink':
+				case 'sharelink':
 				jQuery('#sharelinkcopy input').val(share_uri);
 				$('#sharelinkcopy input').select();
 				var res = document.execCommand('copy');
@@ -275,7 +280,7 @@ Fastback = class Fastback {
 				$('#sharelink').effect('highlight');
 				return false;
 				break;
-		}
+			}
 	}
 
 	/**
@@ -320,26 +325,26 @@ Fastback = class Fastback {
 		var date;
 		var html = this.photos.slice(slice_from,slice_to).map(function(p){
 
-				if ( p['type'] == 'media' ) {
-					if ( p['isvideo'] ) {
-						vidclass = ' vid';
-					} else {
-						vidclass = '';
-					}
-					return '<div class="tn' + vidclass + '"><img data-photoid="' + p['id'] + '" src="' + encodeURI(self.fastbackurl + '?thumbnail=' + p['file']) + '"/></div>';
-				} else if ( p['type'] == 'dateblock' ) {
-					date = p['date'];
-					// I feel like this is kind of clever. I take the Year-Month, eg. 2021-12, parse it to an int like 202112 and then take the mod of the palette length to get a fixed random color for each date.
-					var cellhtml = '<div class="tn nolink" style="background-color: ' + self.palette[parseInt(p['printdate'].replace('-','')) % self.palette.length] + ';">';
-					cellhtml += '<div class="faketable">';
-					cellhtml += '<div class="faketablecell">' + date.getDate() +  '</div>';
-					cellhtml += '<div class="faketablecell">' + date.toLocaleDateString(navigator.languages[0],{month:'long'}) + '</div>';
-					cellhtml += '<div class="faketablecell">' + date.getFullYear()  + '</div>';
-					cellhtml += '</div>';
-					cellhtml += '</div>';
-					return cellhtml;
+			if ( p['type'] == 'media' ) {
+				if ( p['isvideo'] ) {
+					vidclass = ' vid';
+				} else {
+					vidclass = '';
 				}
-			}).join("");
+				return '<div class="tn' + vidclass + '"><img data-photoid="' + p['id'] + '" src="' + encodeURI(self.fastbackurl + '?thumbnail=' + p['file']) + '"/></div>';
+			} else if ( p['type'] == 'dateblock' ) {
+				date = p['date'];
+				// I feel like this is kind of clever. I take the Year-Month, eg. 2021-12, parse it to an int like 202112 and then take the mod of the palette length to get a fixed random color for each date.
+				var cellhtml = '<div class="tn nolink" style="background-color: ' + self.palette[parseInt(p['printdate'].replace('-','')) % self.palette.length] + ';">';
+				cellhtml += '<div class="faketable">';
+				cellhtml += '<div class="faketablecell">' + date.getDate() +  '</div>';
+				cellhtml += '<div class="faketablecell">' + date.toLocaleDateString(navigator.languages[0],{month:'long'}) + '</div>';
+				cellhtml += '<div class="faketablecell">' + date.getFullYear()  + '</div>';
+				cellhtml += '</div>';
+				cellhtml += '</div>';
+				return cellhtml;
+			}
+		}).join("");
 		var e = jQuery.parseHTML('<div class="photorow">' + html + '</div>');
 		return e[0];
 	}
@@ -413,11 +418,11 @@ Fastback = class Fastback {
 
 		var self = this;
 
-		// Refresh the map highlight layer
+		// Refresh the map flash layer
 		var rows = jQuery('.photorow:visible').toArray().filter(function(r){return jQuery(r).position().top < window.innerHeight;})
 		var tnsar =	rows.map(function(f){ return jQuery(f).find('.tn img').toArray(); });
 		var tns = jQuery.map(tnsar,function(f){return f;});
-		var photos = tns.map(function(f){return self.photos[jQuery(f).data('photoid')];})
+		var photos = tns.map(function(f){return self.photos.find(function(p){return p.id == $(f).data('photoid');})});
 		var geojson = this.build_geojson(photos);
 		this.fmap.flashlayer.clearLayers();
 		this.fmap.flashlayer.addData(geojson);
@@ -443,27 +448,27 @@ Fastback = class Fastback {
 		}
 		var imgsrc = photo.file;
 		var basename = imgsrc.replace(/.*\//,'');
-		var fullsize = this.photourl + imgsrc;
+			var fullsize = this.photourl + imgsrc;
 
-		// File type not found, proxy a jpg instead
-		var supported_type = (this.browser_supported_file_types.indexOf(fullsize.replace(/.*\./,'').toLowerCase()) != -1);
-		if ( !supported_type ) {
-			fullsize = this.fastbackurl + '?proxy=' + encodeURIComponent(imgsrc);	
-		}
-		var share_uri = this.fastbackurl + '?file=' + encodeURIComponent(imgsrc).replaceAll('%2F','/') + '&?share=' + md5(fullsize);
+			// File type not found, proxy a jpg instead
+			var supported_type = (this.browser_supported_file_types.indexOf(fullsize.replace(/.*\./,'').toLowerCase()) != -1);
+			if ( !supported_type ) {
+				fullsize = this.fastbackurl + '?proxy=' + encodeURIComponent(imgsrc);	
+			}
+			var share_uri = this.fastbackurl + '?file=' + encodeURIComponent(imgsrc).replaceAll('%2F','/') + '&?share=' + md5(fullsize);
 
-		if (photo.isvideo && supported_type){
-			imghtml = '<video controls poster="' + encodeURI(this.fastbackurl + '?thumbnail=' +  imgsrc) + '"><source src="' + fullsize + '#t=0.0001">Your browser does not support this video format.</video>';
-		} else {
-			imghtml = '<img src="' + fullsize +'"/>';
-		}
+			if (photo.isvideo && supported_type){
+				imghtml = '<video controls poster="' + encodeURI(this.fastbackurl + '?thumbnail=' +  imgsrc) + '"><source src="' + fullsize + '#t=0.0001">Your browser does not support this video format.</video>';
+			} else {
+				imghtml = '<img src="' + fullsize +'"/>';
+			}
 		jQuery('#thumbcontent').html(imghtml);
 		jQuery('#thumbinfo').html('<div id="infowrap">' + photo['file'] + '</div>');
 		jQuery('#thumbgeo').attr('data-coordinates',( photo.coordinates == null ? "" : photo.coordinates ));
 		jQuery('#thumbflag').css('opacity',1);
 		jQuery('#sharelink a').attr('href',share_uri);
 		jQuery('#thumb').data('curphoto',photo.id);
-		jQuery('#thumb').show();
+		jQuery('#thumb').removeClass('disabled');
 
 		return true;
 	}
@@ -496,7 +501,7 @@ Fastback = class Fastback {
 			}
 		}
 	}
-	
+
 	handle_thumb_prev(e) {
 		var photoid = jQuery('#thumb').data('curphoto');
 
@@ -527,7 +532,7 @@ Fastback = class Fastback {
 	}
 
 	hide_thumb() {
-		jQuery('#thumb').hide();
+		jQuery('#thumb').addClass('disabled');
 		if ( jQuery('#thumb video').length > 0 ) {
 			jQuery('#thumb video')[0].pause();
 		}
@@ -537,6 +542,7 @@ Fastback = class Fastback {
 		switch(e.key){
 			case 'Escape':
 				this.hide_thumb();
+				this.hide_tags();
 				break;
 			case 'ArrowRight':
 				this.handle_thumb_next();
@@ -557,6 +563,7 @@ Fastback = class Fastback {
 			this.handle_thumb_prev();
 		} else if ( e.type == 'swipeup' ) {
 			this.hide_thumb();
+			this.hide_tags();
 		}
 	}
 
@@ -699,7 +706,11 @@ Fastback = class Fastback {
 
 		// If we're handling a user inited map move we don't want to update zoom. Let the user go where they want.
 		if ( this.handling_map_move_end === undefined ) {
-			this.fmap.lmap.fitBounds(this.fmap.clusterlayer.getBounds());
+			if ( this.fmap.clusterlayer.getBounds().isValid() ) {
+				this.fmap.lmap.fitBounds(this.fmap.clusterlayer.getBounds());
+			} else {
+				this.fmap.lmap.setView([0,0],1);
+			}
 		}
 	}
 
@@ -730,7 +741,7 @@ Fastback = class Fastback {
 						'coordinates' : photos[i].coordinates,
 					},
 					'properties': {
-						'id': i,
+						'id': photos[i].id,
 						'file': photos[i].file,
 						'date': photos[i].date,
 						'isvideo': photos[i].isvideo
@@ -885,37 +896,58 @@ Fastback = class Fastback {
 
 		for(var t = 0; t < tagnames.length; t++ ) {
 			htmltag = tagnames[t].replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-			thetags.append('<div class="onetag" data-tag="' + tagnames[t] + '">' + htmltag + ' (' + this.tags[tagnames[t]] + ')</div>');
-		}
+				thetags.append('<div class="onetag" data-tag="' + tagnames[t] + '">' + htmltag + ' (' + this.tags[tagnames[t]] + ')</div>');
+			}
 	}
 
 	/**
 	 * Handle tag click
 	 */
 	handle_tag_click() {
-		var icon = jQuery('#tagicon');
+		if ( $('#tagwindow').hasClass('disabled') ) {
 
-		$('#tagwindow').show();
+			this.tag_state = JSON.stringify({
+				'tags' : this.active_tags,
+				'andor': $('#tagand').hasClass('active'),
+				'tagson': $('#tagon').hasClass('active')
+			});
 
-		if ( icon.hasClass('active') ) {
+			$('#tagwindow').removeClass('disabled');
+			return;
+		} else {
+			this.hide_tags();
+		}
+	}
+
+	/**
+	 * Close tags interface, applying filter, if needed
+	 */
+	hide_tags() {
+		$('#tagwindow').addClass('disabled');
+
+		var tagstate = JSON.stringify({
+			'tags' : this.active_tags,
+			'andor': $('#tagand').hasClass('active'),
+			'tagson': $('#tagon').hasClass('active')
+		});
+
+		if ( $('#tagoff').hasClass('active') ) {
 			delete this.active_filters.tags;
-			icon.removeClass('active');
+		} else if (tagstate === this.tag_state) {
+			return; // no changed state, no dirty filters!
 		} else {
 
-			icon.addClass('active');
-
-			// TODO: Show or hide the UI
-			//
-
-			// Array of tag names
-			this.active_tags = this.active_tags || ["Michael Moore","Caroline Moore"];
-			this.tag_and_or = 'and';
+			this.tag_and_or = $('#tagand').hasClass('active') ? 'and' : 'or';
 
 			var self = this;
 
 			this.active_filters.tags = function(){
+
+				if ( self.active_tags.length == 0 ) {
+					return;
+				}
+
 				self.photos = self.photos.filter(function(p){
-					
 					// Count matches
 					var matches = p.tags.reduce(function(total,tag){
 						if ( self.active_tags.indexOf(tag) === -1 ) {
@@ -934,7 +966,7 @@ Fastback = class Fastback {
 						return false;
 					}
 				});
-			}
+			};
 		}
 
 		this.dirty_filters = true;
@@ -958,7 +990,11 @@ Fastback = class Fastback {
 				this.map_init();
 			} else {
 				this.fmap.lmap.invalidateSize();
-				this.fmap.lmap.fitBounds(this.fmap.clusterlayer.getBounds());
+				if ( this.fmap.clusterlayer.getBounds().isValid() ) {
+					this.fmap.lmap.fitBounds(this.fmap.clusterlayer.getBounds());
+				} else {
+					this.fmap.lmap.setView([0,0],1);
+				}
 			}
 		}
 		this.refresh_layout();
@@ -1041,5 +1077,35 @@ Fastback = class Fastback {
 
 		this.dirty_filters = true;
 		this.refresh_layout();
+	}
+
+	handle_tag_state(e) {
+		if ( e.target.id == 'tagoff' ) {
+			$('#tagon').removeClass('active');
+			$('#tagoff').addClass('active');
+			$('#tagicon').removeClass('active');
+		} else if ( e.target.id == 'tagon' ) {
+			$('#tagon').addClass('active');
+			$('#tagoff').removeClass('active');
+			$('#tagicon').addClass('active');
+		} else if ( e.target.id == 'tagand' ) {
+			$('#tagand').addClass('active');
+			$('#tagor').removeClass('active');
+		} else if ( e.target.id == 'tagor' ) {
+			$('#tagor').addClass('active');
+			$('#tagand').removeClass('active');
+		}
+	}
+
+	handle_onetag_click(e) {
+		var tag = $(e.target).data('tag');
+		var idx = this.active_tags.indexOf(tag);
+		if (  idx === -1 ) {
+			this.active_tags.push(tag);
+			$(e.target).addClass('active');
+		} else {
+			this.active_tags.splice(idx,1);
+			$(e.target).removeClass('active');
+		}
 	}
 }
