@@ -507,13 +507,13 @@ only screen and (min-device-pixel-ratio : 1.5) {
 }
 
 .tagtooltoggle span {
-	border: 5px outset orange;
-	padding: 5px 8px;
+	border: 2px outset orange;
+	padding: 3px 6px;
 	background-color: #ffe08a;
 	color: #666;
 	cursor: pointer;
 	box-sizing: border-box;
- display: inline-block;
+	display: inline-block;
 }
 
 .tagtooltoggle span.active {
@@ -543,6 +543,7 @@ only screen and (min-device-pixel-ratio : 1.5) {
 	display: inline-block;
 	margin: 10px;
 	cursor: pointer;
+	vertical-align: top;
 }
 
 .nowrap {
@@ -555,4 +556,13 @@ only screen and (min-device-pixel-ratio : 1.5) {
 
 #tagoff.active {
 	background-color: #fc9590;
+}
+
+.nowrap span:first-child {
+	border-top-left-radius: 20px;
+	border-bottom-left-radius: 20px;
+}
+.nowrap span:last-child {
+	border-top-right-radius: 20px;
+	border-bottom-right-radius: 20px;
 }
