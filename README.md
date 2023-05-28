@@ -162,3 +162,5 @@ TODO
 * Face tag support
 * Make it a progressive web app
 * Make movies stop playing when closing thumb view
+* Detect deleted files during processing
+* Don't collapse exif tags

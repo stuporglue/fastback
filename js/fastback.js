@@ -18,7 +18,7 @@ Fastback = class Fastback {
 						'isvideo': r[1] == 1,
 						'date': new Date(r[2] * 1000),
 						'type': 'media',
-						'coordinates': (isNaN(parseFloat(r[3])) ? null : [parseFloat(r[3]),parseFloat(r[4])]),
+						'coordinates': (isNaN(parseFloat(r[4])) ? null : [parseFloat(r[4]),parseFloat(r[3])]),
 						'tags': r[5].split('|')
 					};
 				});
@@ -294,7 +294,8 @@ Fastback = class Fastback {
 				continue;
 			}
 
-			cur_date = photos[i].date.getFullYear() + '-' + (photos[i].date.getMonth() + 1);
+			// cur_date = photos[i].date.getFullYear() + '-' + (photos[i].date.getMonth() + 1);
+			cur_date = photos[i].date.getFullYear() + '-' + (photos[i].date.getMonth() + 1) + '-' + (photos[i].date.getDate());
 
 			if ( cur_date != prev_date ) {
 				photos.splice(i,0,{
@@ -334,7 +335,7 @@ Fastback = class Fastback {
 			} else if ( p['type'] == 'dateblock' ) {
 				date = p['date'];
 				// I feel like this is kind of clever. I take the Year-Month, eg. 2021-12, parse it to an int like 202112 and then take the mod of the palette length to get a fixed random color for each date.
-				var cellhtml = '<div class="tn nolink" style="background-color: ' + self.palette[parseInt(p['printdate'].replace('-','')) % self.palette.length] + ';">';
+				var cellhtml = '<div class="tn nolink" style="background-color: ' + self.palette[parseInt(p['printdate'].replaceAll('-','')) % self.palette.length] + ';">';
 				cellhtml += '<div class="faketable">';
 				cellhtml += '<div class="faketablecell">' + date.getDate() +  '</div>';
 				cellhtml += '<div class="faketablecell">' + date.toLocaleDateString(navigator.languages[0],{month:'long'}) + '</div>';

@@ -1,8 +1,4 @@
 <?php
-
-error_reporting(E_ALL);
-ini_set('display_errors', 'on');
-
 declare(ticks = 1);
 
 class FastbackOutput {
@@ -66,6 +62,10 @@ class FastbackOutput {
 	var $vipsthumbnail;				// Path to vips binary
 	var $ffmpeg;					// Path to ffmpeg binary
 	var $jpegoptim;					// Path to jpegoptim
+	var $end_all_children;			// Set by signal
+	var $children;					// List of children when forking
+	var $db_lock;					// Lock file handle
+
 
 	/**
 	 * Configure all the settings.
@@ -348,6 +348,7 @@ class FastbackOutput {
 					setcookie("fastback",$cookie_val, array('expires' => time() + 30 * 24 * 60 * 60,'SameSite' => 'Strict')); // Cookie valid for 30 days
 					$_SESSION['authed'] = true;
 					$_SESSION['user'] = $username;
+
 					return true;
 				}
 			}
@@ -430,16 +431,6 @@ class FastbackOutput {
 		if (empty($this->meta)){
 			$this->load_meta();
 		}
-	}
-
-	/**
-	 * Run a single query and return the results
-	 */
-	public function query($sql){
-		$this->sql_connect();
-		$res = $this->sql->query($sql);
-		$this->sql_disconnect();
-		return $res;
 	}
 
 	/**
@@ -568,6 +559,9 @@ class FastbackOutput {
 				break;
 			case 'make_thumbs':
 				$tasks = array('make_thumbs');
+				break;
+			case 'remove_deleted':
+				$tasks = array('remove_deleted');
 				break;
 			case 'get_exif':
 				$tasks = array('get_exif');
@@ -763,6 +757,53 @@ class FastbackOutput {
 		}
 
 		$this->sql->query("INSERT INTO fastbackmeta (key,value) values ('lastmod',".date('Ymd').") ON CONFLICT(key) DO UPDATE SET value=".date('Ymd'));
+		$this->sql_disconnect();
+	}
+
+	public function remove_deleted() {
+		$filetypes = implode('\|',array_merge($this->supported_photo_types, $this->supported_video_types));
+		$this->log("Changing to " . $this->photobase);
+		chdir($this->photobase);
+		if ( $this->filestructure === 'datebased' ) {
+			$cmd = 'find . -type f -regextype sed -iregex  "./[0-9]\{4\}/[0-9]\{2\}/[0-9]\{2\}/.*\(' . $filetypes . '\)$" ';
+		} else if ( $this->filestructure === 'all' ) {
+			$cmd = 'find . -type f -regextype sed -iregex  ".*\(' . $filetypes . '\)$" ';
+		} else {
+			die("I don't know what kind of file structure to look for");
+		}
+
+		$all_files = `$cmd`;
+		$all_files = explode("\n",$all_files);
+		$all_files = array_filter($all_files);
+
+		$this->log("Checking for missing files: Found " . count($all_files) . " files on disk");
+
+		$this->sql_connect();
+
+		$res = $this->sql->query("SELECT COUNT(*) AS c FROM fastback");
+		$row = $res->fetchArray(SQLITE3_ASSOC);
+		$this->log("Checking for missing files: Found {$row['c']} files in the database");
+		
+		$q = "SELECT file FROM fastback";
+		$res = $this->sql->query($q);
+		$not_found = array();
+		while($row = $res->fetchArray(SQLITE3_ASSOC)){
+			if ( !in_array($row['file'],$all_files) ) {
+				$not_found[] = $row['file'];
+			}
+		}
+
+		$this->log("Checking for missing files: Removing " . count($not_found) . " files from the database which don't exist on disk");
+
+		if ( count($not_found) === 0 ) {
+			$this->sql_disconnect();
+			return;
+		}
+
+		$not_found = array_map('SQLite3::escapeString',$not_found);
+		$q = 'DELETE FROM fastback WHERE file IN ("' . implode('","',$not_found) . '")';
+		$this->sql->query($q);
+
 		$this->sql_disconnect();
 	}
 
@@ -980,7 +1021,7 @@ class FastbackOutput {
 		$this->sql->query($clear_partials);
 		$this->sql_disconnect();
 
-		$this->_fork_em('_get_geo', "SELECT COUNT(*) FROM fastback WHERE lat IS NULL AND nullgeom IS NOT TRUE AND exif IS NOT NULL");
+		$this->_fork_em('_get_geo', "SELECT COUNT(*) FROM fastback WHERE lat IS NULL AND nullgeom IS NOT TRUE AND (exif->'GPSPosition' IS NOT NULL OR exif->'GPSLatitude' IS NOT NULL)");
 
 		$this->sql_connect();
 		$this->sql->query($clear_partials);
@@ -1178,7 +1219,7 @@ class FastbackOutput {
 		$cmdargs[] = "-a"; // Allow duplicate tags
 		$cmdargs[] = "-s"; // Tag names instead of descriptions
 		$cmdargs[] = "-c"; // Set format for GPS numbers
-		$cmdargs[] = "'%.5f'"; // Set format for GPS numbers
+		$cmdargs[] = "%.5f"; // Set format for GPS numbers
 		$cmdargs[] = "-extractEmbedded"; // get embedded data like geo data
 		$cmdargs[] = "-e"; // Don't generate composite tags
 		// TODO: Extract with -G1 and -json formats to capture everything?
@@ -1308,7 +1349,14 @@ class FastbackOutput {
 			$updated_geoms = array();
 			$no_geoms = array();
 
-			$queue = $this->get_queue("lat IS NULL AND lon IS NULL and elev IS NULL AND _util IS NULL AND file != \"\" AND nullgeom IS NOT TRUE AND exif IS NOT NULL",100);
+			$queue = $this->get_queue("
+				lat IS NULL 
+				AND lon IS NULL 
+				AND elev IS NULL 
+				AND _util IS NULL 
+				AND file != \"\" 
+				AND nullgeom IS NOT TRUE 
+				AND (exif->'GPSPosition' IS NOT NULL OR exif->'GPSLatitude' IS NOT NULL)",100);
 
 			foreach($queue as $file => $row){
 				$found = false;
@@ -1330,25 +1378,20 @@ class FastbackOutput {
 					$xyz = $this->parse_gps_line($exif['GPSCoordinates']);	
 				}
 
-				if ( count($xyz) === 0 && 
-					array_key_exists('GPSLatitudeRef',$exif) && 
-					array_key_exists('GPSLatitude',$exif) && 
-					array_key_exists('GPSLongitude',$exif) && 
-					array_key_exists('GPSLongitudeRef',$exif) &&
-					floatval($exif['GPSLongitude']) == $exif['GPSLongitude'] && 
-					floatval($exif['GPSLatitude']) == $exif['GPSLatitude'] 
-				) {
+				if ( count($xyz) === 0 && array_key_exists('GPSLatitude',$exif) && array_key_exists('GPSLongitude',$exif)) {
+					$lonval = floatval($exif['GPSLongitude']);
+					$latval = floatval($exif['GPSLatitude']);
 
-					if ( $exif['GPSLatitudeRef'] == 'South' ) {
-						$exif['GPSLongitude'] = $exif['GPSLongitude'] * -1;
+					if ( preg_match("/^['.0-9]+\s+S/",$exif['GPSLatitude']) ||  $exif['GPSLatitudeRef'] == 'South' || $exif['GPSLatitudeRef'] == 'S') {
+						$latval = $latval * -1;
+			 		}
+
+					if ( preg_match("/^['.0-9]+\s+W/",$exif['GPSLongitude']) ||  $exif['GPSLongitudeRef'] == 'West' || $exif['GPSLongitudeRef'] == 'W') {
+						$lonval = $lonval * -1;
 					}
 
-					if ( $exif['GPSLongitudeRef'] == 'West' ) {
-						$exif['GPSLongitude'] = $exif['GPSLongitude'] * -1;
-					}
-
-					$xyz[0] = $exif['GPSLongitude'];
-					$xyz[1] = $exif['GPSLatitude'];
+					$xyz[0] = $lonval;
+					$xyz[1] = $latval;
 				}
 
 				if ( count($xyz) === 2 && array_key_exists('GPSAltitude',$exif) ) { //  && floatval($exif['GPSAltitude']) == $exif['GPSAltitude']) 
@@ -1415,8 +1458,8 @@ class FastbackOutput {
 					$matches[3] = $matches[3] * 1;
 				}
 
-				$xyz[0] = $matches[1];
-				$xyz[1] = $matches[3];
+				$xyz[0] = $matches[3];
+				$xyz[1] = $matches[1];
 			}
 		} else {
 			$this->log("Couldn't parse >>$line<<");
@@ -1924,27 +1967,35 @@ class FastbackOutput {
 	public function pwa() {
 		if ( $_GET['pwa'] == 'manifest' ) {
 			$base_url = $this->baseurl();
-			header("Content-Type: application/manifest+json");
-			header("Content-Disposition: inline; filename=\"manifest.json\"");
 			$manifest = array(
 				'id' => $base_url,
 				'name' => $this->sitetitle,
 				'short_name' => $this->sitetitle,
 				'description' => 'Fastback Photo Gallery for ' . $this->sitetitle,
-				'icons' => array(
-					array(
-						'src' => $base_url . $this->photourl . '/fastback/img/favicon.png',
-						'sizes' => '512x512'
-					)
-				),
-				'start_url' => $base_url . $this->photourl,
-				'display' => 'stsandalone',
+				'icons' => array(),
+				'start_url' => $base_url,
+				'display' => 'standalone',
 				'theme_color' => '#eedfd1',
 				'background_color' => '#52a162',
-				'scope' => $base_url . $this->photourl,
+				'scope' => $base_url,
 				'orientatin' => 'any',
 			);
-			print json_encode($manifest);
+
+
+			$sizes = array( '48', '72', '96', '144', '168', '192', '256', '512');
+
+			foreach($sizes as $size){
+				$manifest['icons'][] = array(
+						'src' => $base_url . "/fastback/img/icons/$sizes.png",
+						'sizes' => "{$size}x{$size}",
+						'type' => 'image/png',
+						'purpose' => 'any maskable'
+					);
+			}
+
+			header("Content-Type: application/manifest+json");
+			header("Content-Disposition: inline; filename=\"manifest.json\"");
+			print json_encode($manifest,JSON_UNESCAPED_SLASHES);
 		}
 	}
 
@@ -1955,7 +2006,7 @@ class FastbackOutput {
 	* https://stackoverflow.com/questions/5100189/use-php-to-check-if-page-was-accessed-with-ssl
 	*/
 	public function baseurl() {
-		$url = '';
+		$http = '';
 		if (
 			( ! empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
 			|| ( ! empty($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] == 'https')
@@ -1964,17 +2015,20 @@ class FastbackOutput {
 			|| (isset($_SERVER['HTTP_X_FORWARDED_PORT']) && $_SERVER['HTTP_X_FORWARDED_PORT'] == 443)
 			|| (isset($_SERVER['REQUEST_SCHEME']) && $_SERVER['REQUEST_SCHEME'] == 'https')
 		) {
-			$url .= 'https://';
+			$http .= 'https://';
 		} else {
-			$url .= 'http://';
+			$http .= 'http://';
 		}
 
-		$url .= $_SERVER['HTTP_HOST'];
-		$url .= dirname(preg_replace('/\?.*/','',$_SERVER['REQUEST_URI'])) . '/';
-		$url = str_replace('//','/',$url);
-		$url = rtrim($url,'/');
+		$therest = $_SERVER['HTTP_HOST'];
+		$therest .= preg_replace('/\?.*/','',$_SERVER['REQUEST_URI']);
+		if ( preg_match('/\.php$/',$therest) ) {
+			$therest = dirname($therest);
+		}
+		$therest = str_replace('//','/',$therest);
+		$therest = rtrim($therest,'/');
 
-		return $url;
+		return $http . $therest;
 	}
 
 	/**
@@ -2066,7 +2120,6 @@ class FastbackOutput {
 				die("Why is it empty!");
 			}
 
-
 			foreach($simple as $exif_keyword) {
 				if ( !empty($row[$exif_keyword]) ) {
 					$sub = str_replace(" 'who'",'',$row[$exif_keyword]);
@@ -2093,7 +2146,6 @@ class FastbackOutput {
 			$stmt->bindValue(':file',$row['file']);
 			$stmt->bindValue(':tags',implode("|",$people_found));
 			$stmt->execute();
-
 		}
 		$this->sql_disconnect();
 	}
