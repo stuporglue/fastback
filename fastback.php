@@ -78,7 +78,7 @@ class FastbackOutput {
 		$this->filecache = $this->fastbackbase . '/cache/';
 		$this->cacheurl = dirname($_SERVER['SCRIPT_NAME']) . '/cache/';
 		$this->photobase = $this->fastbackbase . '/../';
-		$this->photourl = dirname($_SERVER['SCRIPT_NAME']) . '/';
+		$this->photourl = $this->baseurl();
 		$this->sitetitle = "Fastback Photo Gallery";
 		$this->sortorder = ($this->sortorder == 'ASC' ? 'ASC' : 'DESC');
 		$this->filestructure = 'datebased'; // Or all
@@ -128,6 +128,13 @@ class FastbackOutput {
 		if ( $this->debug ) {
 			$this->nproc = 1;
 			$this->log("Debug enabled");
+		}
+
+		/** 
+		 * Assume domain URL and fix it.
+		 */
+		if ( filter_var($this->photourl, FILTER_VALIDATE_URL) === FALSE ) {
+			$this->photourl = $this->baseurl($this->photourl);
 		}
 
 		$this->log("Using $this->nproc processes for forks");
@@ -278,10 +285,13 @@ class FastbackOutput {
 		$html .= '<script src="fastback/js/md5.js"></script>';
 		$html .= '<script>
 			fastback = new Fastback({
-			csvurl: "' . $_SERVER['SCRIPT_NAME'] . '?csv=get",
+			csvurl: "' . $this->baseurl() . $this->base_script_name() . '?csv=get",
 				photourl:    "' . $this->photourl .'",
-				fastbackurl: "' . $_SERVER['SCRIPT_NAME'] . '"
+				fastbackurl: "' . $this->baseurl() . $this->base_script_name() . '"
 			});
+			if("serviceWorker" in navigator) {
+				navigator.serviceWorker.register("' . $this->baseurl() . '?pwa=sw", { scope: "' . $this->baseurl() . '" });
+			}
 			</script>';
 		$html .= '</body></html>';
 
@@ -1969,14 +1979,14 @@ class FastbackOutput {
 			$base_url = $this->baseurl();
 			$manifest = array(
 				'id' => $base_url,
-				'name' => $this->sitetitle,
+				'name' => 'Fastback',
 				'short_name' => $this->sitetitle,
 				'description' => 'Fastback Photo Gallery for ' . $this->sitetitle,
 				'icons' => array(),
 				'start_url' => $base_url,
 				'display' => 'standalone',
-				'theme_color' => '#eedfd1',
-				'background_color' => '#52a162',
+				'theme_color' => '#8888ff',
+				'background_color' => '#8888ff',
 				'scope' => $base_url,
 				'orientatin' => 'any',
 			);
@@ -1986,7 +1996,7 @@ class FastbackOutput {
 
 			foreach($sizes as $size){
 				$manifest['icons'][] = array(
-						'src' => $base_url . "/fastback/img/icons/$sizes.png",
+						'src' => $base_url . "/fastback/img/icons/$size.png",
 						'sizes' => "{$size}x{$size}",
 						'type' => 'image/png',
 						'purpose' => 'any maskable'
@@ -1996,6 +2006,14 @@ class FastbackOutput {
 			header("Content-Type: application/manifest+json");
 			header("Content-Disposition: inline; filename=\"manifest.json\"");
 			print json_encode($manifest,JSON_UNESCAPED_SLASHES);
+			exit();
+		} else if ( $_GET['pwa'] == 'sw' ) {
+			header("Content-Type: application/javascript; charset=UTF-8");
+			header("Content-Transfer-Encoding: Binary");
+			header("Content-Length: ".filesize(__DIR__ . '/js/fastback-sw.js'));
+			header("Content-Disposition: inline; filename=\"fastback-sw.js\"");
+			readfile(__DIR__ . '/js/fastback-sw.js');
+			exit();
 		}
 	}
 
@@ -2005,7 +2023,7 @@ class FastbackOutput {
 	*
 	* https://stackoverflow.com/questions/5100189/use-php-to-check-if-page-was-accessed-with-ssl
 	*/
-	public function baseurl() {
+	public function baseurl($path = FALSE) {
 		$http = '';
 		if (
 			( ! empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
@@ -2021,14 +2039,23 @@ class FastbackOutput {
 		}
 
 		$therest = $_SERVER['HTTP_HOST'];
-		$therest .= preg_replace('/\?.*/','',$_SERVER['REQUEST_URI']);
+
+		if ( $path === FALSE ) {
+			$therest .= preg_replace('/\?.*/','',$_SERVER['REQUEST_URI']);
+		} else {
+			$therest .= $path;
+		}
 		if ( preg_match('/\.php$/',$therest) ) {
 			$therest = dirname($therest);
 		}
 		$therest = str_replace('//','/',$therest);
-		$therest = rtrim($therest,'/');
+		// $therest = rtrim($therest,'/');
 
 		return $http . $therest;
+	}
+
+	public function base_script_name() {
+		return preg_replace('/.*\//','',$_SERVER['SCRIPT_NAME']);
 	}
 
 	/**

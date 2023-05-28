@@ -397,9 +397,11 @@ Fastback = class Fastback {
 		// Set the slider size
 		var zoomval = jQuery('#zoom').val();
 		jQuery('#resizer input').prop('min',this.maxzoom);
-		if ( !first_run && zoomval != jQuery('#zoom').val() ) {
-			jQuery('#zoom').trigger('change');
-		}
+		// if ( zoomval != jQuery('#zoom').val() ) {
+		// 	setTimeout(function() {
+		// 		jQuery('#zoom').trigger('change');
+		// 	}, 500);
+		// }
 
 		// Update hyperlist config
 		this.hyperlist_config.height = this.hyperlist_container.parent().height();
