@@ -164,7 +164,7 @@ Fastback = class Fastback {
 
 		this.hyperlist_container.addClass("container");
 
-		this.refresh_layout(true);
+		this.refresh_layout();
 	}
 
 	/**
@@ -212,8 +212,8 @@ Fastback = class Fastback {
 	/*
 	 * Handle the slider changes.
 	 */
-	zoom_change(val) {
-		val = val || jQuery('#zoom').val();
+	zoom_change() {
+		var val = jQuery('#zoom').val();
 		this.cols = Math.max(this.maxzoom, parseInt(val));
 
 		this.hyperlist_container.removeClass('up1 up2 up3 up4 up5 up6 up7 up8 up9 up10'.replace('up' + this.cols,' '));
@@ -381,9 +381,7 @@ Fastback = class Fastback {
 	 *
 	 * Called manually and by hyperlist
 	 */
-	refresh_layout(first_run) {
-
-		first_run = first_run || false;
+	refresh_layout() {
 
 		this.apply_filters();
 
@@ -397,11 +395,6 @@ Fastback = class Fastback {
 		// Set the slider size
 		var zoomval = jQuery('#zoom').val();
 		jQuery('#resizer input').prop('min',this.maxzoom);
-		// if ( zoomval != jQuery('#zoom').val() ) {
-		// 	setTimeout(function() {
-		// 		jQuery('#zoom').trigger('change');
-		// 	}, 500);
-		// }
 
 		// Update hyperlist config
 		this.hyperlist_config.height = this.hyperlist_container.parent().height();
