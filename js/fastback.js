@@ -161,6 +161,7 @@ Fastback = class Fastback {
 		this.hyperlist = HyperList.create(this.hyperlist_container[0], this.hyperlist_config);
 
 		window.onresize = this.refresh_layout.bind(this);
+		window.ontouchmove = this.refresh_layout.bind(this);
 
 		this.hyperlist_container.addClass("container");
 
@@ -382,6 +383,8 @@ Fastback = class Fastback {
 	 * Called manually and by hyperlist
 	 */
 	refresh_layout() {
+
+		jQuery('body').css('height',window.innerHeight);
 
 		this.apply_filters();
 

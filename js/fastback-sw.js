@@ -1,9 +1,9 @@
 const CACHE_NAME = 'fastback';
+const OFFLINE_URL = '?pwa=down';
 
 self.addEventListener('install', event => {
 	event.waitUntil((async () => {
 		const cache = await caches.open(CACHE_NAME);
-		console.log("Caching all");
 		cache.addAll([
 			'/',
 			'fastback/js/jquery.min.js',
@@ -22,7 +22,8 @@ self.addEventListener('install', event => {
 			'fastback/css/leaflet.css',
 			'fastback/css/MarkerCluster.Default.css',
 			'fastback/css/MarkerCluster.css',
-			'fastback/css/fastback.css'
+			OFFLINE_URL,
+			'?pwa=sw'
 		]);
 	})());
 });
@@ -36,7 +37,6 @@ self.addEventListener('fetch', event => {
     if (cachedResponse) {
       return cachedResponse;
     } else {
-		console.log("Trying to cache");
         try {
           // If the resource was not in the cache, try the network.
           const fetchResponse = await fetch(event.request);
@@ -46,6 +46,11 @@ self.addEventListener('fetch', event => {
           return fetchResponse;
         } catch (e) {
           // The network failed.
+		  console.log("Fetch failed; returning offline page instead.", e);
+
+          const cache = await caches.open(CACHE_NAME);
+          const cachedResponse = await cache.match(OFFLINE_URL);
+          return cachedResponse;
         }
     }
   })());

@@ -2014,6 +2014,38 @@ class FastbackOutput {
 			header("Content-Disposition: inline; filename=\"fastback-sw.js\"");
 			readfile(__DIR__ . '/js/fastback-sw.js');
 			exit();
+		} else if ( $_GET['pwa'] == 'down' ) {
+			$html = '<!doctype html>
+			<html lang="en">
+			<head>
+			<meta charset="utf-8">
+			<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+			<title>' . htmlspecialchars($this->sitetitle) . '</title>
+			<link rel="manifest" href="' . $_SERVER['SCRIPT_NAME'] . '?pwa=manifest">	
+			<link rel="shortcut icon" href="fastback/img/favicon.png"> 
+			<link rel="apple-touch-icon" href="fastback/img/favicon.png">
+			<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">';
+
+		$html .= '<link rel="stylesheet" href="fastback/css/jquery-ui.min.css">
+			<link rel="stylesheet" href="fastback/css/leaflet.css"/>
+			<link rel="stylesheet" href="fastback/css/MarkerCluster.Default.css"/>
+			<link rel="stylesheet" href="fastback/css/MarkerCluster.css"/>
+			<link rel="stylesheet" href="fastback/css/fastback.css">
+			</head>';
+
+			$html .= '<body>Couldn\'t access ' . $this->baseurl() . '. Maybe it\'s down?';
+
+			$html .= '<script>
+			if("serviceWorker" in navigator) {
+				navigator.serviceWorker.register("' . $this->baseurl() . '?pwa=sw", { scope: "' . $this->baseurl() . '" });
+			}
+			</script>';
+			$html .= '</body</html>';
+			print($html);
+		} else if ( $_GET['pwa'] == 'test' ) {
+			header("Content-Type: application/json");
+			header("Cache-Control: no-cache");
+			print(json_encode(array('status' => 'OK')));
 		}
 	}
 
