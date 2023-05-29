@@ -21,7 +21,7 @@ class FastbackOutput {
 	var $user;							// Dictionary of username => password pulled from fastback.ini
 	var $canflag = array();				// List of users who can flag photos.
 	var $ignore_tag  = array('iMovie','FaceTime'); // Tags to ignore from photos.
-	var $thumbsize = "120x120";			// Thumbnail size. Must be square.
+	var $thumbsize = "256x256";			// Thumbnail size. Must be square.
 
 	/*
 	 * These are internal variables you probably shouldn't try to change
@@ -345,6 +345,8 @@ class FastbackOutput {
 				setcookie("fastback",$cookie_val, array('expires' => time() + 30 * 24 * 60 * 60,'SameSite' => 'Strict')); // Cookie valid for 30 days
 			}
 
+			print(__FILE__ . ":" . __LINE__ . "\n");
+			die();
 			return true;
 		}
 

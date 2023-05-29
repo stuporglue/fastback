@@ -216,9 +216,6 @@ Fastback = class Fastback {
 	zoom_change() {
 		var val = jQuery('#zoom').val();
 		this.cols = Math.max(this.maxzoom, parseInt(val));
-
-		this.hyperlist_container.removeClass('up1 up2 up3 up4 up5 up6 up7 up8 up9 up10'.replace('up' + this.cols,' '));
-		this.hyperlist_container.addClass('up' + this.cols);
 		this.refresh_layout();
 	}
 
@@ -395,6 +392,11 @@ Fastback = class Fastback {
 		// Make sure our new cols doesn't go over the max zoom
 		this.cols = Math.max(this.maxzoom, this.cols);
 
+		if ( !this.hyperlist_container.hasClass('up' + this.cols) ) {
+			this.hyperlist_container.removeClass('up1 up2 up3 up4 up5 up6 up7 up8 up9 up10'.replace('up' + this.cols,' '));
+			this.hyperlist_container.addClass('up' + this.cols);
+		}
+
 		// Set the slider size
 		var zoomval = jQuery('#zoom').val();
 		jQuery('#resizer input').prop('min',this.maxzoom);
@@ -403,6 +405,7 @@ Fastback = class Fastback {
 		this.hyperlist_config.height = this.hyperlist_container.parent().height();
 		this.hyperlist_config.itemHeight = (this.hyperlist_container.width() / this.cols);
 		this.hyperlist_config.total = Math.ceil(this.photos.length / this.cols);
+
 
 		// propagate changes
 		this.hyperlist.refresh(this.hyperlist_container[0], this.hyperlist_config);
