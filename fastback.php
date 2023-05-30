@@ -360,15 +360,10 @@ class FastbackOutput {
 					$_SESSION['user'] = $username;
 					return true;
 				}
-				print("$cookie_val not a match<br>\n");
-				var_dump($cookie_val);
 			}
-			var_dump($_COOKIE['fastback']);
 			// Cookie doesn't match. Delete it.
 			setcookie("fastback","", time() - 3600); // Clear cookie
 			// Don't return, fall through to form.
-		} else {
-			var_dump($_COOKIE);
 		}
 
 		$html = '<!doctype html>
