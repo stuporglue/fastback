@@ -78,11 +78,11 @@ class FastbackOutput {
 		$this->filecache = $this->fastbackbase . '/cache/';
 		$this->cacheurl = dirname($_SERVER['SCRIPT_NAME']) . '/cache/';
 		$this->photobase = $this->fastbackbase . '/../';
-		$this->photourl = $this->baseurl();
 		$this->sitetitle = "Fastback Photo Gallery";
 		$this->sortorder = ($this->sortorder == 'ASC' ? 'ASC' : 'DESC');
 		$this->filestructure = 'datebased'; // Or all
 		$this->nproc = `nproc`;
+		$this->photourl = $this->baseurl();
 
 		if ( file_exists($this->fastbackbase . '/fastback.ini') ) {
 			$settings = parse_ini_file($this->fastbackbase . '/fastback.ini');
@@ -215,7 +215,7 @@ class FastbackOutput {
 			<meta charset="utf-8">
 			<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
 			<title>' . htmlspecialchars($this->sitetitle) . '</title>
-			<link rel="manifest" href="' . $_SERVER['SCRIPT_NAME'] . '?pwa=manifest">	
+			<link rel="manifest" href="?pwa=manifest">	
 			<link rel="shortcut icon" href="fastback/img/favicon.png"> 
 			<link rel="apple-touch-icon" href="fastback/img/favicon.png">
 			<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">';
@@ -274,23 +274,23 @@ class FastbackOutput {
 
 		$html .= '<script src="fastback/js/jquery.min.js"></script>';
 		$html .= '<script src="fastback/js/hammer.js"></script>';
-		// $html .= '<script src="fastback/jsleaflet.js"></script>';
+		// $html .= '<script src="fastback/js/leaflet.js"></script>';
 		$html .= '<script src="fastback/js/leaflet-src.js"></script>';
 		$html .= '<script src="fastback/js/jquery-ui.min.js"></script>';
 		$html .= '<script src="fastback/js/hyperlist.js"></script>';
 		$html .= '<script src="fastback/js/papaparse.min.js"></script>';
 		$html .= '<script src="fastback/js/jquery.hammer.js"></script>';
 		$html .= '<script src="fastback/js/leaflet.markercluster.js"></script>';
-		$html .= '<script src="fastback/js/fastback.js"></script>';
+		$html .= '<script src="fastback/js/fastback.js?ts=' . filemtime(__DIR__ . '/js/fastback.js') . '"></script>';
 		$html .= '<script src="fastback/js/md5.js"></script>';
 		$html .= '<script>
 			fastback = new Fastback({
-			csvurl: "' . $this->baseurl() . $this->base_script_name() . '?csv=get",
+				csvurl: "' . $this->baseurl() . '?csv=get&ts=' . filemtime($this->csvfile) . '",
 				photourl:    "' . $this->photourl .'",
-				fastbackurl: "' . $this->baseurl() . $this->base_script_name() . '"
+				fastbackurl: "' . $this->baseurl() . $this->base_script_name() . '",
 			});
 			if("serviceWorker" in navigator) {
-				navigator.serviceWorker.register("' . $this->baseurl() . '?pwa=sw", { scope: "' . $this->baseurl() . '" });
+				navigator.serviceWorker.register("?pwa=sw", { scope: "' . $this->baseurl() . '" });
 			}
 			</script>';
 		$html .= '</body></html>';
@@ -345,8 +345,6 @@ class FastbackOutput {
 				setcookie("fastback",$cookie_val, array('expires' => time() + 30 * 24 * 60 * 60,'SameSite' => 'Strict')); // Cookie valid for 30 days
 			}
 
-			print(__FILE__ . ":" . __LINE__ . "\n");
-			die();
 			return true;
 		}
 
@@ -360,13 +358,17 @@ class FastbackOutput {
 					setcookie("fastback",$cookie_val, array('expires' => time() + 30 * 24 * 60 * 60,'SameSite' => 'Strict')); // Cookie valid for 30 days
 					$_SESSION['authed'] = true;
 					$_SESSION['user'] = $username;
-
 					return true;
 				}
+				print("$cookie_val not a match<br>\n");
+				var_dump($cookie_val);
 			}
+			var_dump($_COOKIE['fastback']);
 			// Cookie doesn't match. Delete it.
 			setcookie("fastback","", time() - 3600); // Clear cookie
 			// Don't return, fall through to form.
+		} else {
+			var_dump($_COOKIE);
 		}
 
 		$html = '<!doctype html>
@@ -378,7 +380,7 @@ class FastbackOutput {
 			<link rel="shortcut icon" href="fastback/img/favicon.png"> 
 			<link rel="apple-touch-icon" href="fastback/img/favicon.png">
 			<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
-			<link rel="stylesheet" href="fastback/css/fastback.css">
+			<link rel="stylesheet" href="fastback/css/fastback.css?ts=' . filemtime(__DIR__ . '/css/fastback.css') . '">
 			</head>';
 
 		$html .= '<body><div id="loginform"><h1>Log in to ' . htmlspecialchars($this->sitetitle) . '</h1>
@@ -600,7 +602,7 @@ class FastbackOutput {
 				$tasks = array('help');
 				break;
 			case 'handle_new':
-				$tasks = array('load_cache','make_thumbs','get_exif','get_times','get_geo','flag_memes','make_csv','find_tags');
+				$tasks = array('load_cache','make_thumbs','get_exif','get_times','get_geo','flag_memes','find_tags');
 				break;
 			case 'find_tags':
 				$tasks = array('find_tags');
@@ -1787,7 +1789,9 @@ class FastbackOutput {
 	 * Send, creating if needed, the CSV file of all the photos
 	 */
 	public function send_csv() {
-		if ( !file_exists($this->csvfile) ) {
+
+		// Auto detect if CSV has gotten stale
+		if ( !file_exists($this->csvfile) || filemtime($this->sqlitefile) > filemtime($this->csvfile) ) {
 			$this->make_csv();
 		}
 
@@ -1998,7 +2002,7 @@ class FastbackOutput {
 
 			foreach($sizes as $size){
 				$manifest['icons'][] = array(
-						'src' => $base_url . "/fastback/img/icons/$size.png",
+						'src' => "fastback/img/icons/$size.png",
 						'sizes' => "{$size}x{$size}",
 						'type' => 'image/png',
 						'purpose' => 'any maskable'
@@ -2014,7 +2018,11 @@ class FastbackOutput {
 			header("Content-Transfer-Encoding: Binary");
 			header("Content-Length: ".filesize(__DIR__ . '/js/fastback-sw.js'));
 			header("Content-Disposition: inline; filename=\"fastback-sw.js\"");
-			readfile(__DIR__ . '/js/fastback-sw.js');
+			$sw = file_get_contents(__DIR__ . '/js/fastback-sw.js');
+			$sw = str_replace('SW_FASTBACK_BASEURL',$this->baseurl(),$sw);
+			$sw = str_replace('SW_FASTBACK_PHOTOURL',$this->photourl,$sw);
+			$sw = str_replace('SW_FASTBACK_TS',filemtime(__DIR__ . '/js/fastback-sw.js'),$sw);
+			print($sw);
 			exit();
 		} else if ( $_GET['pwa'] == 'down' ) {
 			$html = '<!doctype html>
@@ -2023,7 +2031,7 @@ class FastbackOutput {
 			<meta charset="utf-8">
 			<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
 			<title>' . htmlspecialchars($this->sitetitle) . '</title>
-			<link rel="manifest" href="' . $_SERVER['SCRIPT_NAME'] . '?pwa=manifest">	
+			<link rel="manifest" href="?pwa=manifest">	
 			<link rel="shortcut icon" href="fastback/img/favicon.png"> 
 			<link rel="apple-touch-icon" href="fastback/img/favicon.png">
 			<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">';
@@ -2032,10 +2040,10 @@ class FastbackOutput {
 			<link rel="stylesheet" href="fastback/css/leaflet.css"/>
 			<link rel="stylesheet" href="fastback/css/MarkerCluster.Default.css"/>
 			<link rel="stylesheet" href="fastback/css/MarkerCluster.css"/>
-			<link rel="stylesheet" href="fastback/css/fastback.css">
+			<link rel="stylesheet" href="fastback/css/fastback.css?ts=' . filemtime(__DIR__ . '/css/fastback.css') . '">
 			</head>';
 
-			$html .= '<body>Couldn\'t access ' . $this->baseurl() . '. Maybe it\'s down?';
+			$html .= '<body>If you\'re seeing this, then ' . $this->baseurl() . ' is in accessable. Maybe it\'s down? You could also be offline, or the site could be an IPV6 site and you\'re on an IPV4 only network.';
 
 			$html .= '<script>
 			if("serviceWorker" in navigator) {
@@ -2058,6 +2066,12 @@ class FastbackOutput {
 	* https://stackoverflow.com/questions/5100189/use-php-to-check-if-page-was-accessed-with-ssl
 	*/
 	public function baseurl($path = FALSE) {
+
+		// Probably from a CLI context
+		if ( empty($_SERVER['HTTP_HOST']) ) {
+			return FALSE;
+		}
+
 		$http = '';
 		if (
 			( ! empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
@@ -2082,14 +2096,15 @@ class FastbackOutput {
 		if ( preg_match('/\.php$/',$therest) ) {
 			$therest = dirname($therest);
 		}
-		$therest = str_replace('//','/',$therest);
-		// $therest = rtrim($therest,'/');
 
-		return $http . $therest;
+		$ret = str_replace('//','/',$therest . '/');
+		return $http . $ret;
 	}
 
 	public function base_script_name() {
-		return preg_replace('/.*\//','',$_SERVER['SCRIPT_NAME']);
+		$tmp = preg_replace('/.*\//','',$_SERVER['REQUEST_URI']);
+		$tmp = preg_replace('/\?.*/','',$tmp);
+		return $tmp;
 	}
 
 	/**
