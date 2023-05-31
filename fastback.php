@@ -13,11 +13,13 @@ class FastbackOutput {
 	var $csvfile;						// Path to .csv file, Optional, will use $filecache/fastback.sqlite 
 	var $cacheurl;						// URL path to cache directory, Optional, will use current web path + cache as default
 	var $photobase;						// File path to full sized photos, Optional, will use current directory as default
+	// var $photodirregex = './[0-9]\{4\}/[0-9]\{2\}/[0-9]\{2\}/'; // Use '' (empty string) for all photos, regardless of structure.
+	var $photodirregex = '';			// Use '' (empty string) for all photos, regardless of structure.
 	var $photourl;						// URL path to full sized photos, Optional, will use current web path as default
 	var $process_limit = 100;			// Max number of thumbnails to reserve per child process for thumbnail processing
 	var $upsert_limit = 100000;			// Max number of SQL statements to do per upsert
 	var $nproc = 1;						// Max number of child processes
-	var $debug;							// Are we debugging
+	var $debug = 1;							// Are we debugging
 	var $user;							// Dictionary of username => password pulled from fastback.ini
 	var $canflag = array();				// List of users who can flag photos.
 	var $ignore_tag  = array('iMovie','FaceTime'); // Tags to ignore from photos.
@@ -58,7 +60,6 @@ class FastbackOutput {
 	var $sql;						// The sqlite object
 	var $sortorder = 'DESC';		// Sort order of the photos for the csv
 	var $spindex = 0;				// Counter for the  spinner thing that shows up in the CLI when running update
-	var $filestructure;				// datebased or all - show only things in YYYY/MM/DD/XXY.JPG type format or all images
 	var $vipsthumbnail;				// Path to vips binary
 	var $ffmpeg;					// Path to ffmpeg binary
 	var $jpegoptim;					// Path to jpegoptim
@@ -80,7 +81,6 @@ class FastbackOutput {
 		$this->photobase = $this->fastbackbase . '/../';
 		$this->sitetitle = "Fastback Photo Gallery";
 		$this->sortorder = ($this->sortorder == 'ASC' ? 'ASC' : 'DESC');
-		$this->filestructure = 'datebased'; // Or all
 		$this->nproc = `nproc`;
 		$this->photourl = $this->baseurl();
 
@@ -113,6 +113,9 @@ class FastbackOutput {
 
 		if ( !isset($this->sqlitefile) ){
 			$this->sqlitefile = $this->fastbackbase . 'fastback.sqlite';
+			if ( !file_exists($this->sqlitefile) ) {
+				$this->sql_connect();
+			}
 		}
 
 		if ( !isset($this->csvfile) ){
@@ -144,7 +147,6 @@ class FastbackOutput {
 			'photobase' => $this->photobase,
 			'sitetitle' => $this->sitetitle,
 			'sortorder' => $this->sortorder,
-			'filestructure' => $this->filestructure,
 			'nproc' => $this->nproc,
 			'sqlitefile' => $this->sqlitefile,
 			'csvfile' => $this->csvfile,
@@ -197,8 +199,10 @@ class FastbackOutput {
 		} else if (!empty($_GET['csv'])) {
 			$this->send_csv();
 			exit();
+		} else if (!empty($_GET['cron'])){
+			$this->cron();
+			exit();
 		} else {
-
 			// Default case!
 			$this->make_html();
 			exit();
@@ -423,7 +427,7 @@ class FastbackOutput {
 		if ( !file_exists($this->sqlitefile) ) {
 			$this->sql = new SQLite3($this->sqlitefile);
 			$this->setup_db();
-			$this->sql->close();
+			$this->sql_disconnect();
 		}
 
 		if (php_sapi_name() === 'cli') {
@@ -463,7 +467,7 @@ class FastbackOutput {
 			nullgeom BOOL,
 			_util TEXT,
 			maybe_meme INT,
-			share_key VARCHAR(md5),
+			share_key VARCHAR(32),
 			tags TEXT
 		)";
 
@@ -560,8 +564,8 @@ class FastbackOutput {
 			case 'reset_db':
 				$tasks = array('reset_db');
 				break;
-			case 'load_cache':
-				$tasks = array('load_cache');
+			case 'find_new_files':
+				$tasks = array('find_new_files');
 				break;
 			case 'clear_thumbs_db':
 				$tasks = array('clear_thumbs_db');
@@ -591,13 +595,13 @@ class FastbackOutput {
 				$tasks = array('make_csv');
 				break;
 			case 'full_reset':
-				$tasks = array('reset_db','reset_cache','load_cache','make_thumbs','get_exif','get_times','get_geo','flag_memes','make_csv','find_tags');
+				$tasks = array('reset_db','reset_cache','find_new_files','make_thumbs','get_exif','get_times','get_geo','flag_memes','make_csv','find_tags');
 				break;
 			case 'help':
 				$tasks = array('help');
 				break;
 			case 'handle_new':
-				$tasks = array('load_cache','make_thumbs','get_exif','get_times','get_geo','flag_memes','find_tags');
+				$tasks = array('find_new_files','make_thumbs','get_exif','get_times','get_geo','flag_memes','find_tags');
 				break;
 			case 'find_tags':
 				$tasks = array('find_tags');
@@ -672,29 +676,23 @@ class FastbackOutput {
 
 	/**
 	 * Get all modified files into the db cache
+	 *
+	 * Because we are reading from the file system this must complete 100% or not at all. We don't have a good way to crawl only part of the fs at the moment.
 	 */
-	public function load_cache() {
-		if ( !file_exists($this->filecache) ) {
-			mkdir($this->filecache,0700,TRUE);
-		}
+	public function find_new_files() {
 
 		$this->sql_connect();
 
-		$lastmod = '19000101';
+		$lastmod = '19000102';
 		if ( !empty($this->meta['lastmod']) ){
 			$lastmod = $this->meta['lastmod'];
 		}
 
 		$this->log("Changing to " . $this->photobase);
+		$origdir = getcwd();
 		chdir($this->photobase);
 		$filetypes = implode('\|',array_merge($this->supported_photo_types, $this->supported_video_types));
-		if ( $this->filestructure === 'datebased' ) {
-			$cmd = 'find . -type f -regextype sed -iregex  "./[0-9]\{4\}/[0-9]\{2\}/[0-9]\{2\}/.*\(' . $filetypes . '\)$" -newerat ' . $lastmod;
-		} else if ( $this->filestructure === 'all' ) {
-			$cmd = 'find . -type f -regextype sed -iregex  ".*\(' . $filetypes . '\)$" -newerat ' . $lastmod;
-		} else {
-			die("I don't know what kind of file structure to look for");
-		}
+		$cmd = 'find -L . -type f -regextype sed -iregex  "' . $this->photodirregex . '.*\(' . $filetypes . '\)$" -newerat ' . $lastmod . ' | grep -v "./fastback/"';
 
 		$modified_files_str = `$cmd`;
 
@@ -719,8 +717,6 @@ class FastbackOutput {
 
 			if ( empty($pathinfo['extension']) ) {
 				$this->log(print_r($pathinfo,TRUE));
-				var_dump($one_file);
-				die("No file extension. Weird.");
 				continue;
 			}
 
@@ -767,6 +763,9 @@ class FastbackOutput {
 
 		$this->sql->query("INSERT INTO fastbackmeta (key,value) values ('lastmod',".date('Ymd').") ON CONFLICT(key) DO UPDATE SET value=".date('Ymd'));
 		$this->sql_disconnect();
+
+		chdir($origdir);
+		return true;
 	}
 
 	public function remove_deleted() {
@@ -851,50 +850,79 @@ class FastbackOutput {
 	/**
 	 * For a given file, make a thumbnail
 	 *
+	 * @param $print_if_not_write If we can't open the cache file, then send the csv directly.
+	 *
+	 * @note Using $print_if_not_write will cause this function to exit() after sending.
+	 *
 	 * @return the thumbnail file name or false
 	 */
-	public function make_a_thumb($file,$skip_db_write=false){
-
-		if ( !isset($this->vips) ) {
-			$this->vipsthumbnail = trim(`which vipsthumbnail`);
-		}
-
-		if ( !isset($this->ffmpeg) ) {
-			$this->ffmpeg = trim(`which ffmpeg`);
-		}
-
-		if ( !isset($this->jpegoptim) ) {
-			$this->jpegoptim = trim(`which jpegoptim`);
-		}
-
+	public function make_a_thumb($file,$skip_db_write=false,$print_if_not_write = false){
+		// Find original file
 		$file = $this->file_is_ok($file);
+		$print_to_stdout = false;
 
+		$origdir = getcwd();
 		chdir($this->photobase);
 
 		$thumbnailfile = $this->filecache . '/' . ltrim($file,'./') . '.webp';
 
+		// Quick exit if thumb exists. Should be the default case
 		if ( file_exists($thumbnailfile) ) {
 			$this->log("Thumb $thumbnailfile already exists");
+			chdir($origdir);
 			return $thumbnailfile;
 		}
 
+		// Quick exit if cachedir doesn't exist. That means we can't cache.
+		if ( !file_exists($this->filecache) ) {
+			mkdir($this->filecache,0700,TRUE);
+			if ( !is_dir($this->filecache) ) {
+				$this->log("Cache dir doesn't exist and can't create it");
+
+				if ( $print_if_not_write ) {
+					$print_to_stdout = true;
+				} else {
+					chdir($origdir);
+					return false;
+				}
+			}
+		}
+
+		// Cachedir might exist, but not be wriatable. 
 		$dirname = dirname($thumbnailfile);
 		if (!file_exists($dirname) ){
 			@mkdir($dirname,0700,TRUE);
+			if ( !is_dir($dirname) ) {
+				$this->log("Cache sub-dir doesn't exist and can't create it");
+				if ( $print_if_not_write ) {
+					$print_to_stdout = true;
+				} else {
+					chdir($origdir);
+					return false;
+				}
+			}
 		}
+
+		// The cache directory exists but the file does not. 
+
+		// Find our tools
+		if ( !isset($this->vipsthumbnail) ) { $this->vipsthumbnail = trim(`which vipsthumbnail`); }
+		if ( !isset($this->ffmpeg) ) { $this->ffmpeg = trim(`which ffmpeg`); }
+		if ( !isset($this->jpegoptim) ) { $this->jpegoptim = trim(`which jpegoptim`); }
 
 		$shellfile = escapeshellarg($file);
 		$shellthumb = escapeshellarg($thumbnailfile);
 		$pathinfo = pathinfo($file);
 
 		if (in_array(strtolower($pathinfo['extension']),$this->supported_photo_types)){
-			if ( empty($this->vipsthumbnail) ) {
-				$this->log("No vipsthumbnail. Can't make thumbs");
+			$res = $this->_make_image_thumb($file,$thumbnailfile,$print_to_stdout);
+
+			if ( $res === false ) {
+				$this->log("Unable to make a thumbnail for $file");
+				chdir($origdir);
 				return false;
-			} else {
-				$cmd = "{$this->vipsthumbnail} --size={$this->thumbsize} --output=$shellthumb --smartcrop=attention $shellfile";
-				$res = `$cmd`;
 			}
+
 		} else if ( in_array(strtolower($pathinfo['extension']),$this->supported_video_types) ) {
 			if ( empty($childno) ) {
 				$childno = 0;
@@ -908,16 +936,16 @@ class FastbackOutput {
 			$tmpthumb = $this->filecache . 'tmpthumb_' . getmypid() . '.webp';
 			$tmpshellthumb = escapeshellarg($tmpthumb);
 
-			$cmd = "{$this->ffmpeg} -y -ss 10 -i $shellfile -vframes 1 $tmpshellthumb 2>&1 > /tmp/fastback.ffmpeg.log.$childno";
+			$cmd = "{$this->ffmpeg} -y -ss 10 -i $shellfile -vframes 1 $tmpshellthumb 2> /dev/null";
 			$res = `$cmd`;
 
-			if ( !file_exists($tmpthumb)) {
-				$cmd = "{$this->ffmpeg} -y -ss 2 -i $shellfile -vframes 1 $tmpshellthumb 2>&1 > /tmp/fastback.ffmpeg.log.$childno";
+			if ( !file_exists($tmpthumb) || filesize($tmpthumb) == 0 ) {
+				$cmd = "{$this->ffmpeg} -y -ss 2 -i $shellfile -vframes 1 $tmpshellthumb 2> /dev/null";
 				$res = `$cmd`;
 			}
 
-			if ( !file_exists($tmpthumb)) {
-				$cmd = "{$this->ffmpeg} -y -ss 00:00:00 -i $shellfile -frames:v 1 $tmpshellthumb 2>&1 > /tmp/fastback.ffmpeg.log.$childno";
+			if ( !file_exists($tmpthumb) || filesize($tmpthumb) == 0 ) {
+				$cmd = "{$this->ffmpeg} -y -ss 00:00:00 -i $shellfile -frames:v 1 $tmpshellthumb  2> /dev/null";
 				$res = `$cmd`;
 			}
 
@@ -925,9 +953,10 @@ class FastbackOutput {
 			if ( file_exists($tmpthumb) && filesize($tmpthumb) !== 0) {
 				if ( empty($this->vipsthumbnail) ) {
 					$this->log("No vipsthumbnail. Can't make thumbs");
+					unlink($tmpthumb);
 					return false;
 				} 
-				$cmd = "vipsthumbnail --size=120x120 --output=$shellthumb --smartcrop=attention $tmpshellthumb";
+				$cmd = "$this->vipsthumbnail --size=120x120 --output=$shellthumb --smartcrop=attention $tmpshellthumb";
 				$res = `$cmd`;
 				unlink($tmpthumb);
 			}
@@ -935,54 +964,69 @@ class FastbackOutput {
 		} else {
 			$this->log("What do I do with ");
 			$this->log(print_r($pathinfo,TRUE));
+			chdir($origdir);
+			return false;
 		}
 
-		if ( file_exists( $thumbnailfile ) ) {
-			if ( !empty($this->jpegoptim) ) {
-				$cmd = "jpegoptim --strip-all --strip-exif --strip-iptc $shellthumb";
-				$res = `$cmd`;
-			}
-		} 
-
-		if ( file_exists($thumbnailfile) ) {
-
-			if ( !$skip_db_write ) {
-				$this->sql_connect();
-				$made_thumbs[$file] = $thumbnailfile;
-				$this->update_case_when("UPDATE fastback SET _util=NULL, thumbnail=CASE", $made_thumbs, "ELSE thumbnail END", TRUE);
-				$this->sql_disconnect();
-			}
-
-			return $thumbnailfile;
+		if ( !file_exists( $thumbnailfile ) ) {
+			chdir($origdir);
+			return false;
 		}
 
-		return false;
+		if ( !empty($this->jpegoptim) ) {
+			$cmd = "jpegoptim --strip-all --strip-exif --strip-iptc $shellthumb";
+			$res = `$cmd`;
+		}
+
+		if ( !$skip_db_write ) {
+			$this->sql_connect();
+			$made_thumbs[$file] = $thumbnailfile;
+			$this->update_case_when("UPDATE fastback SET _util=NULL, thumbnail=CASE", $made_thumbs, "ELSE thumbnail END", TRUE);
+			$this->sql_disconnect();
+		}
+
+		chdir($origdir);
+		return $thumbnailfile;
 	}
 
 	/**
 	 * Make the csv cache file
+	 *
+	 * @param $print_if_not_write If we can't open the cache file, then send the csv directly.
+	 *
+	 * @note Using $print_if_not_write will cause this function to exit() after sending.
 	 */
-	public function make_csv(){
+	public function make_csv($print_if_not_write = false){
+		if ( !file_exists($this->filecache) ) {
+			@mkdir($this->filecache,0700,TRUE);
+		}
+
 		$this->sql_connect();
 		$q = "SELECT 
 			file,
 			isvideo,
-			CAST(STRFTIME('%s',sorttime) AS INTEGER) AS filemtime,
+			COALESCE(CAST(STRFTIME('%s',sorttime) AS INTEGER),mtime) AS filemtime,
 			ROUND(lat,5) AS lat,
 			ROUND(lon,5) AS lon,
 			tags
 			FROM fastback 
 			WHERE 
-			thumbnail IS NOT NULL 
-			AND thumbnail NOT LIKE 'RESERVE%' 
-			AND flagged IS NOT TRUE 
-			AND sorttime IS NOT NULL 
-			AND DATETIME(sorttime) IS NOT NULL 
-			AND (maybe_meme <= 1) -- Only display non-memes. Threshold of 1 seems pretty ok
+			flagged IS NOT TRUE 
+			AND (maybe_meme <= 1 OR maybe_meme IS NULL) -- Only display non-memes. Threshold of 1 seems pretty ok
 			ORDER BY filemtime " . $this->sortorder . ",file " . $this->sortorder;
+		$this->log($q);
 		$res = $this->sql->query($q);
 
+		$printed = false;
 		$fh = fopen($this->csvfile,'w');
+		if ( $fh === false  && $print_if_not_write) {
+			$printed = true;
+			header("Content-type: text/plain");
+			header("Content-Disposition: inline; filename=\"" . basename($this->csvfile) . "\"");
+			header("Last-Modified: " . gmdate("D, d M Y H:i:s"));
+			$fh = fopen('php://output', 'w');
+		}
+
 		while($row = $res->fetchArray(SQLITE3_ASSOC)){
 			if ( $row['isvideo'] == 0 ) {
 				$row['isvideo'] = NULL;
@@ -991,6 +1035,11 @@ class FastbackOutput {
 		}
 		fclose($fh);
 		$this->sql_disconnect();
+
+		if ( $printed ) {
+			exit();
+		}
+		return true;
 	}
 
 	/**
@@ -1630,7 +1679,7 @@ class FastbackOutput {
 
 			Commands:
 		* handle_new (default) - Brings the database from whatever state it is in, up to date. This is the command you usually want to run. It will run the following steps, in order:
-			- load_cache
+			- find_new_files
 			- make_thumbs
 			- get_exif
 			- get_time
@@ -1641,7 +1690,7 @@ class FastbackOutput {
 		* reset_cache – Clears the lastmod timestamp from the fastbackmeta database, causing all files to be reconsidered
 		* reset_db – Truncate the database. It will need to be repopulated. Does not touch files.
 		* clear_thumbs_db – Makes the database think there are no thumbnails generated. If files exist they will not be re-created. Useful if you delete some thumbnails and want to regenerate them.
-		* load_cache – Finds all new files in the library and make cache entries for them. Does not generate new thumbnails.
+		* find_new_files – Finds all new files in the library and make cache entries for them. Does not generate new thumbnails.
 		* make_thumbs – Generates thumbnails for all entries found in the cache.
 		* clear_exif – Sets exif field for all files to NULL
 		* get_exif – Read needed exif info into the database. Must happen before gettime or getgeo
@@ -1659,6 +1708,10 @@ class FastbackOutput {
 	 * Print a status message
 	 */
 	public function print_status_line($msg,$skip_spinner = false) {
+		if (php_sapi_name() !== 'cli') {
+			return;
+		}
+
 		$spinners = array('\\','|','/','-');
 
 		$this->print_if_no_debug("\e[1B"); // Go down a line
@@ -1786,14 +1839,14 @@ class FastbackOutput {
 	public function send_csv() {
 
 		// Auto detect if CSV has gotten stale
-		if ( !file_exists($this->csvfile) || filemtime($this->sqlitefile) > filemtime($this->csvfile) ) {
-			$this->make_csv();
-		}
+		if ( !file_exists($this->csvfile) || filemtime($this->sqlitefile) > filemtime($this->csvfile) || filemtime(__FILE__) > filemtime($this->csvfile) ) {
+			$wrote = $this->make_csv(true);
 
-		if ( !file_exists($this->csvfile) ) {
-			header("HTTP/1.0 404 Not Found");
-			print("CSV file not found");
-			exit();
+			if ( !$wrote ) {
+				header("HTTP/1.0 404 Not Found");
+				print("CSV file not found");
+				exit();
+			}
 		}
 
 		ob_start("ob_gzhandler");
@@ -1918,17 +1971,13 @@ class FastbackOutput {
 	 * Dies if file not in database or not on disk
 	 */
 	public function thumbnail() {
-		if ( !$file = $this->file_is_ok($_GET['thumbnail']) ) {
-			$this->log("No thumb found for {$_GET['thumbnail']}");
-			die();
-		}
-
-		$thumbnailfile = $this->make_a_thumb($file);
+		$thumbnailfile = $this->make_a_thumb($_GET['thumbnail'],false,true);
 
 		if ( $thumbnailfile === false ) {
-			http_response_code(404);
-			$this->log("Couldn't find thumbnail for '''$file'''");
-			die();
+			$this->log("Couldn't find thumbnail for '''{$_GET['thumbnail']}''', sending full sized!!!");
+			// I know this breaks video thumbs, but if a user is just getting set up I want something to still work for them
+			// This at least gets them images for now
+			$thumbnailfile = $this->file_is_ok($_GET['thumbnail']);
 		}
 
 		$mime = mime_content_type($thumbnailfile);
@@ -2219,5 +2268,145 @@ class FastbackOutput {
 			$stmt->execute();
 		}
 		$this->sql_disconnect();
+	}
+
+	/**
+	 * Cron should do all the maintenance work as needed. 
+	 * It should send JSON with the status so that a JS loop will know when to stop
+	 *
+	 * This should be called service worker.
+	 *
+	 * It could also be run from the command line.
+	 */
+	public function cron() {
+		$this->find_new_files();
+		print(__FILE__ . ":" . __LINE__ . "\n"); 
+	}
+
+	/**
+	 * Make an image thumbnail
+	 *
+	 * @file The source file
+	 * @thumbnailfile The destination file
+	 * @print_to_stdout If true then we print headers and image and exit
+	 */
+	public function _make_image_thumb($file,$thumbnailfile,$print_to_stdout = false) {
+
+		if ( file_exists($thumbnailfile) ) {
+
+			if ( $print_to_stdout ) {
+				header("Content-Type: image/webp");
+				readfile($thumbnailfile);
+				exit();
+			}
+			return $thumbnailfile;
+		}
+
+		$shellfile = escapeshellarg($file);
+		$shellthumb = escapeshellarg($thumbnailfile);
+
+		if ( !isset($this->vipsthumbnail) ) { $this->vipsthumbnail = trim(`which vipsthumbnail`); }
+		if (!empty($this->vipsthumbnail) ) {
+
+			if ( $print_to_stdout ) {
+				$shellthumb = '.webp';
+			}
+
+			$cmd = "{$this->vipsthumbnail} --size={$this->thumbsize} --output=$shellthumb --smartcrop=attention $shellfile 2>/dev/null";
+			$res = `$cmd`;
+
+			if ( $print_to_stdout ) {
+				header("Content-Type: image/webp");
+				print $res;
+				exit();
+			}
+
+			if ( file_exists($thumbnailfile) ) {
+				return $thumbnailfile;
+			}
+		}
+
+		if ( !isset($this->convert) ) { $this->convert = trim(`which convert`); }
+		if ( !empty($this->convert) ) {
+
+			if ( $print_to_stdout ) {
+				$shellthumb = 'webp:-';
+			}
+
+			$cmd = "{$this->convert} -define jpeg:size={$this->thumbsize} $shellfile  -thumbnail {$this->thumbsize}^ -gravity center -extent $this->thumbsize $shellthumb 2>/dev/null";
+			$res = `$cmd`;
+
+			if ( $print_to_stdout ) {
+				header("Content-Type: image/webp");
+				print $res;
+				exit();
+			}
+
+			if ( file_exists($thumbnailfile) ) {
+				return $thumbnailfile;
+			}
+		}
+
+		// looks like vips didn't work
+		if (extension_loaded('gd') || function_exists('gd_info')) {
+			try {
+					$image_info = getimagesize($file);
+					switch($image_info[2]){
+					case IMAGETYPE_JPEG:
+						$img = imagecreatefromjpeg($file);
+						break;
+					case IMAGETYPE_GIF:
+						$img = imagecreatefromgif($file);
+						break;
+					case IMAGETYPE_PNG:
+						$img = imagecreatefrompng($file);
+						break;
+					default:
+						$img = FALSE;
+					}   
+
+					if ( $img ) {
+						$thumbsize = preg_replace('/x.*/','',$this->thumbsize);
+
+						$width = $image_info[0];
+						$height = $image_info[1];
+
+						if ( $height > $width ) {
+							$newwidth = $thumbsize;
+							$newheight = floor($height / ($width / $thumbsize));
+						} else if ( $width > $height ) {
+							$newheight = $thumbsize;
+							$newwidth = floor($width / ($height / $thumbsize));
+						} else {
+							$newwidth = $thumbsize;
+							$newheight = $thumbsize;
+						}
+
+						$srcy = max(0,($height / 2 - $width / 2));
+						$srcx = max(0,($width / 2 - $height / 2));
+
+						$tmpimg = imagecreatetruecolor($thumbsize, $thumbsize);
+						imagecopyresampled($tmpimg, $img, 0, 0, $srcx, $srcy, $newwidth, $newheight, $width, $height );
+						if ( $print_to_stdout ) {
+							header("Content-Type: image/webp");
+							imagewebp($tmpimg);
+						} else {
+							imagewebp($tmpimg, $thumbnailfile);
+						}
+					} else {
+						$this->log("Tried GD, but image was not png/jpg/gif");
+					}
+					
+					if(file_exists($thumbnailfile)){
+						return $thumbnailfile;
+					}   
+				} catch (Exception $e){
+					$this->log("Caught exception while using GD to make thumbnail");
+				}
+		} else {
+			$this->log("No GD here");
+		}
+
+		return false;
 	}
 }

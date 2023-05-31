@@ -177,8 +177,14 @@ Fastback = class Fastback {
 	load_nav() {
 		var self = this;
 		// first date (in tags list) -- The default is Descending view, so this should be the greatest date
-		var fd = this.photos[0]['date'];
-		var ld = this.photos[this.photos.length - 1]['date'];
+		var fd,ld;
+		if ( this.photos.length > 0 ) {
+			fd = this.photos[0]['date'];
+			ld = this.photos[this.photos.length - 1]['date'];
+		} else {
+			fd = new Date();
+			ld = new Date();
+		}
 
 		// If fd is not the greatest date, swap 'em
 		if ( fd > ld ) {
