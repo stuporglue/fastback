@@ -101,8 +101,11 @@ class FastbackOutput {
 		}
 
 		if ( !is_dir($this->filecache) ) {
-			$this->log("Fastback cache directory {$this->filecache} doesn't exist");
-			die("Fastback setup error. See errors log.");
+			@mkdir($this->filecache,0700,TRUE);
+			if ( !is_dir($this->filecache) ) {
+				$this->log("Fastback cache directory {$this->filecache} doesn't exist");
+				die("Fastback setup error. See errors log.");
+			}
 		}
 
 		// Ensure single trailing slashes
@@ -910,8 +913,6 @@ class FastbackOutput {
 		if ( !isset($this->ffmpeg) ) { $this->ffmpeg = trim(`which ffmpeg`); }
 		if ( !isset($this->jpegoptim) ) { $this->jpegoptim = trim(`which jpegoptim`); }
 
-		$shellfile = escapeshellarg($file);
-		$shellthumb = escapeshellarg($thumbnailfile);
 		$pathinfo = pathinfo($file);
 
 		if (in_array(strtolower($pathinfo['extension']),$this->supported_photo_types)){
@@ -924,43 +925,14 @@ class FastbackOutput {
 			}
 
 		} else if ( in_array(strtolower($pathinfo['extension']),$this->supported_video_types) ) {
-			if ( empty($childno) ) {
-				$childno = 0;
-			}
 
-			if ( empty($this->ffmpeg) ) {
-				$this->log("No ffmpeg . Can't make thumbs");
+			$res = $this->_make_video_thumb($file,$thumbnailfile,$print_to_stdout);
+
+			if ( $res === false ) {
+				$this->log("Unable to make a thumbnail for $file");
+				chdir($origdir);
 				return false;
 			}
-
-			$tmpthumb = $this->filecache . 'tmpthumb_' . getmypid() . '.webp';
-			$tmpshellthumb = escapeshellarg($tmpthumb);
-
-			$cmd = "{$this->ffmpeg} -y -ss 10 -i $shellfile -vframes 1 $tmpshellthumb 2> /dev/null";
-			$res = `$cmd`;
-
-			if ( !file_exists($tmpthumb) || filesize($tmpthumb) == 0 ) {
-				$cmd = "{$this->ffmpeg} -y -ss 2 -i $shellfile -vframes 1 $tmpshellthumb 2> /dev/null";
-				$res = `$cmd`;
-			}
-
-			if ( !file_exists($tmpthumb) || filesize($tmpthumb) == 0 ) {
-				$cmd = "{$this->ffmpeg} -y -ss 00:00:00 -i $shellfile -frames:v 1 $tmpshellthumb  2> /dev/null";
-				$res = `$cmd`;
-			}
-
-			clearstatcache();
-			if ( file_exists($tmpthumb) && filesize($tmpthumb) !== 0) {
-				if ( empty($this->vipsthumbnail) ) {
-					$this->log("No vipsthumbnail. Can't make thumbs");
-					unlink($tmpthumb);
-					return false;
-				} 
-				$cmd = "$this->vipsthumbnail --size=120x120 --output=$shellthumb --smartcrop=attention $tmpshellthumb";
-				$res = `$cmd`;
-				unlink($tmpthumb);
-			}
-
 		} else {
 			$this->log("What do I do with ");
 			$this->log(print_r($pathinfo,TRUE));
@@ -2293,7 +2265,6 @@ class FastbackOutput {
 	public function _make_image_thumb($file,$thumbnailfile,$print_to_stdout = false) {
 
 		if ( file_exists($thumbnailfile) ) {
-
 			if ( $print_to_stdout ) {
 				header("Content-Type: image/webp");
 				readfile($thumbnailfile);
@@ -2408,5 +2379,105 @@ class FastbackOutput {
 		}
 
 		return false;
+	}
+
+	/**
+	 * Make a video thumbnail
+	 *
+	 * @file The source file
+	 * @thumbnailfile The destination file
+	 * @print_to_stdout If true then we print headers and image and exit
+	 */
+	public function _make_video_thumb($file,$thumbnailfile,$print_to_stdout) {
+
+			if ( file_exists($thumbnailfile) ) {
+				if ( $print_to_stdout ) {
+					header("Content-Type: image/webp");
+					readfile($thumbnailfile);
+					exit();
+				}
+				return $thumbnailfile;
+			}
+
+			if ( !isset($this->ffmpeg) ) { $this->ffmpeg = trim(`which ffmpeg`); }
+
+			$shellfile = escapeshellarg($file);
+			$shellthumb = escapeshellarg($thumbnailfile);
+			$tmpthumb = $this->filecache . 'tmpthumb_' . getmypid() . '.webp';
+			$tmpshellthumb = escapeshellarg($tmpthumb);
+
+			if ( !empty($this->ffmpeg) ) {
+
+				if ( $print_to_stdout ) {
+					$tmpshellthumb = '-';
+					$formatflags = ' -f image2 -c png ';
+				}
+
+				$cmd = "{$this->ffmpeg} -y -ss 10 -i $shellfile -vframes 1 $formatflags $tmpshellthumb 2> /dev/null";
+				$res = `$cmd`;
+
+				if ( $print_to_stdout && $res !== NULL) {
+					header("Content-Type: image/webp");
+					print($res);
+					exit();
+				}
+
+				if ( !file_exists($tmpthumb) || filesize($tmpthumb) == 0 ) {
+					$cmd = "{$this->ffmpeg} -y -ss 2 -i $shellfile -vframes 1 $formatflags $tmpshellthumb 2> /dev/null";
+					$res = `$cmd`;
+
+					if ( $print_to_stdout && $res !== NULL) {
+						header("Content-Type: image/webp");
+						print($res);
+						exit();
+					}
+				}
+
+				if ( !file_exists($tmpthumb) || filesize($tmpthumb) == 0 ) {
+					$cmd = "{$this->ffmpeg} -y -ss 00:00:00 -i $shellfile -frames:v 1 $formatflags $tmpshellthumb";
+					$res = `$cmd`;
+					if ( $print_to_stdout && $res !== NULL) {
+						header("Content-Type: image/png");
+						print($res);
+						exit();
+					} 
+				}
+
+				clearstatcache();
+
+				if ( file_exists($tmpthumb) && filesize($tmpthumb) !== 0) {
+
+					if ( !isset($this->vipsthumbnail) ) { $this->vipsthumbnail = trim(`which vipsthumbnail`); }
+
+					if ( !empty($this->vipsthumbnail) ) {
+						$cmd = "$this->vipsthumbnail --size=120x120 --output=$shellthumb --smartcrop=attention $tmpshellthumb";
+						$res = `$cmd`;
+						unlink($tmpthumb);
+					} else {
+						@rename($tmpthumb,$thumbnailfile);
+					}
+				}
+				if ( file_exists($thumbnailfile) ) {
+					return $thumbnailfile;
+				}
+			}
+
+			@copy(__DIR__ . '/image/movie.webp',$thumbnailfile);
+
+			if ( file_exists($thumbnailfile) ) {
+				if ( $print_to_stdout ) {
+					header('Content-Type: image/webp');
+					readfile($thumbnailfile);
+					exit();
+				} 
+
+				return $thumbnailfile;
+			}
+
+			if ( $print_to_stdout ) {
+				header('Content-Type: image/webp');
+				readfile(__DIR__ . '/img/movie.webp');
+				exit();
+			}
 	}
 }
