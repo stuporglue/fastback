@@ -12,7 +12,18 @@ Fastback = class Fastback {
 			skipEmptyLines: true,
 			complete: function(res){
 
+				var has_geo = false;
+				var has_tag = false;
+
 				self.photos = res.data.map(function(r){
+
+					if ( r[4] !== '' ) {
+						has_geo = true;
+					}
+					if ( r[5] !== '' ) {
+						has_tag = true;
+					}
+
 					return {
 						'file': r[0],
 						'isvideo': r[1] == 1,
@@ -22,6 +33,14 @@ Fastback = class Fastback {
 						'tags': r[5].split('|')
 					};
 				});
+
+				if ( has_tag ) {
+					jQuery('#tagicon').show();
+				}
+
+				if ( has_geo ) {
+					jQuery('#globeicon').show();
+				}
 
 				var tmptags,j,i;
 
@@ -203,9 +222,9 @@ Fastback = class Fastback {
 
 		jQuery('#calendaricon').on('click',this.handle_datepicker_toggle.bind(this));
 		jQuery('#rewindicon').on('click',this.handle_rewind_click.bind(this));
-		jQuery('#tagicon,#tagwindowclose').on('click',this.handle_tag_click.bind(this));
 		jQuery('#globeicon').on('click',this.handle_globe_click.bind(this));
 		jQuery('#exiticon').on('click',this.handle_exit_click.bind(this));
+		jQuery('#tagicon,#tagwindowclose').on('click',this.handle_tag_click.bind(this));
 	}
 
 	/*
@@ -910,8 +929,8 @@ Fastback = class Fastback {
 
 		for(var t = 0; t < tagnames.length; t++ ) {
 			htmltag = tagnames[t].replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-				thetags.append('<div class="onetag" data-tag="' + tagnames[t] + '">' + htmltag + ' (' + this.tags[tagnames[t]] + ')</div>');
-			}
+			thetags.append('<div class="onetag" data-tag="' + tagnames[t] + '">' + htmltag + ' (' + this.tags[tagnames[t]] + ')</div>');
+		}
 	}
 
 	/**
