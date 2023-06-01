@@ -19,15 +19,15 @@ class Fastback {
 	// Advanced usage
 	var $photobase = __DIR__ . '/../';				// File path to full sized photos, Optional, will use current directory as default
 	var $photourl;									// URL path to full sized photos, Optional, will use current web path as default
-													// Should probably be customized if photobase is customized.
+	// Should probably be customized if photobase is customized.
 	// var $photodirregex = './[0-9]\{4\}/[0-9]\{2\}/[0-9]\{2\}/'; // Use '' (empty string) for all photos, regardless of structure.
 	var $photodirregex = '';						// Use '' (empty string) for all photos, regardless of structure.
 	var $ignore_tag  = array('iMovie','FaceTime');	// Tags to ignore from photos.
 	var $sortorder = 'DESC';						// Sort order of the photos for the csv (ASC or DESC)
 	var $canflag = array();							// List of users who can flag photos. eg. array('Michael','Caroline');
 	var $filecache = __DIR__ . '/cache/';			// Folder path to cache directory. sqlite and thumbnails will be stored here. 
-													// Optional, will create a cache folder in the current directory as the default
-													// $filecache doesn't have to be web accessable
+	// Optional, will create a cache folder in the current directory as the default
+	// $filecache doesn't have to be web accessable
 	var $precachethumbs = false;					// Should thumbnails be created for all photos in the cron task? Default is to generated them on the fly as needed.
 	var $sqlitefile = __DIR__ . '/fastback.sqlite';	// Path to .sqlite file, Optional, defaults to fastback/fastback.sqlite
 	var $csvfile = __DIR__ . '/cache/fastback.csv';	// Path to .csv file, Optional, will use fastback/cache/fastback.sqlite by default
@@ -36,13 +36,17 @@ class Fastback {
 	// Proceed with caution.
 	var $_process_limit = 100;						// How many records should we process at once?
 	var $_upsert_limit = 10000;						// Max number of SQL statements to do per upsert
-	var $_meta = array();							// Data fastback needs that isn't photos
 	var $_sql;										// The sqlite object
 	var $_sqlite_timeout = 60;						// Wait timeout for a db connection. Value in seconds.
 	var $_vipsthumbnail;							// Path to vips binary
 	var $_ffmpeg;									// Path to ffmpeg binary
-	var $_jpegoptim;									// Path to jpegoptim
-	var $_thumbsize = "256x256";						// Thumbnail size. Must be square.
+	var $_jpegoptim;								// Path to jpegoptim
+	var $_thumbsize = "256x256";					// Thumbnail size. Must be square.
+	var $_crontimeout = 10;						// How long to let cron run for in seconds. External calls don't count, so for thumbs and exif wall time may be longer
+	// If this is to short some cron jobs may not record any finished work. See also $_process_limit and $_upsert_limit.
+	var $_concurrent_cronjobs;						// How many concurrent cron jobs should we run? These take up fcgi processes. 
+	// We don't want to use all processes as it will make the server unresponsive.
+	// We will set it to CEIL(nproc/4) in cron() to allow some parallell processing.
 
 	/*
 	 * These are internal variables you probably shouldn't try to change
@@ -100,6 +104,7 @@ class Fastback {
 	 * This function exits.
 	 */
 	public function run() {
+		ini_set('error_log', $this->filecache . '/fastback.log'); 
 		// CLI stuff doesn't need auth
 		if (php_sapi_name() === 'cli') {
 			$this->util_handle_cli();
@@ -376,15 +381,11 @@ class Fastback {
 	public function sql_connect($try_no = 1){
 		if ( !file_exists($this->sqlitefile) ) {
 			$this->_sql = new SQLite3($this->sqlitefile);
-			$this->_sql->busyTimeout($this->_sqlite_timeout * 1000);
+			$this->_sql->busyTimeout($this->_sqlite_timeout * 1001);
 			$this->sql_setup_db();
 		} else {
 			$this->_sql = new SQLite3($this->sqlitefile);
 			$this->_sql->busyTimeout($this->_sqlite_timeout * 1000);
-		}
-
-		if (empty($this->_meta)){
-			$this->sql_load_meta();
 		}
 	}
 
@@ -392,7 +393,13 @@ class Fastback {
 	 * Initialize the database
 	 */
 	public function sql_setup_db() {
-		$q_create_meta = "Create TABLE IF NOT EXISTS fastbackmeta ( key VARCHAR(20) PRIMARY KEY, value VARCHAR(255))";
+		$q_create_meta = "Create TABLE IF NOT EXISTS cron ( 
+			job VARCHAR(255) PRIMARY KEY, 
+			updated INTEGER,
+			completed BOOL,
+			owner TEXT,
+			meta TEXT
+		)";
 		$res = $this->_sql->query($q_create_meta);
 
 		$q_create_files = "CREATE TABLE IF NOT EXISTS fastback ( 
@@ -434,22 +441,9 @@ class Fastback {
 			$this->log("SQL error: $err");
 		}
 
+		@$this->_sql->query("COMMIT");
 		$this->_sql->close();
 		unset($this->sql);
-	}
-
-	/**
-	 * Pull the metadata from the database. 
-	 *
-	 * At the moment it's just the last time a scan was completed.
-	 */
-	private function sql_load_meta() {
-		$q_getallmeta = "SELECT key,value FROM fastbackmeta";
-		$res = $this->_sql->query($q_getallmeta);
-		$this->_meta = array();
-		while($row = $res->fetchArray(SQLITE3_ASSOC)){
-			$this->_meta[$row['key']] = $row['value'];
-		}
 	}
 
 	/**
@@ -489,13 +483,14 @@ class Fastback {
 	 */
 	public function cron_find_new_files() {
 		$this->sql_connect();
+		$this->sql_update_cron_status('find_new_files');
 
 		$lastmod = '19000102';
-		if ( !empty($this->_meta['lastmod']) ){
-			$lastmod = $this->_meta['lastmod'];
+		$res = $this->_sql->querySingle("SELECT meta FROM cron WHERE job='find_new_files'");
+		if ( !empty($res) ) {
+			$lastmod = $res;
 		}
 
-		$this->log("Changing to " . $this->photobase);
 		$origdir = getcwd();
 		chdir($this->photobase);
 		$filetypes = implode('\|',array_merge($this->supported_photo_types, $this->supported_video_types));
@@ -503,73 +498,66 @@ class Fastback {
 
 		$modified_files_str = `$cmd`;
 
-		if (  is_null($modified_files_str) || strlen(trim($modified_files_str)) === 0) {
-			return;
-		}
+		if (  !is_null($modified_files_str) && strlen(trim($modified_files_str)) > 0) {
+			$modified_files = explode("\n",$modified_files_str);
+			$modified_files = array_filter($modified_files);
 
-		$modified_files = explode("\n",$modified_files_str);
-		$modified_files = array_filter($modified_files);
+			$today = date('Ymd');
+			$multi_insert = "INSERT INTO fastback (file,mtime,isvideo,share_key) VALUES ";
+			$multi_insert_tail = " ON CONFLICT(file) DO UPDATE SET isvideo=";
+			$collect_photo = array();
+			$collect_video = array();
+			foreach($modified_files as $k => $one_file){
+				$mtime = filemtime($one_file);
+				$pathinfo = pathinfo($one_file);
 
-		$today = date('Ymd');
-		$multi_insert = "INSERT INTO fastback (file,mtime,isvideo,share_key) VALUES ";
-		$multi_insert_tail = " ON CONFLICT(file) DO UPDATE SET isvideo=";
-		$collect_photo = array();
-		$collect_video = array();
-		$togo = count($modified_files);
-		$total = $togo;
-		foreach($modified_files as $k => $one_file){
-			$mtime = filemtime($one_file);
-			$pathinfo = pathinfo($one_file);
+				if ( empty($pathinfo['extension']) ) {
+					$this->log(print_r($pathinfo,TRUE));
+					continue;
+				}
 
-			if ( empty($pathinfo['extension']) ) {
-				$this->log(print_r($pathinfo,TRUE));
-				continue;
+				if ( in_array(strtolower($pathinfo['extension']),$this->supported_video_types) ) {
+					$collect_video[] = "('" .  SQLite3::escapeString($one_file) . "','" . SQLite3::escapeString($mtime) .  "',1,'" . md5($one_file) . "')";
+				} else if ( in_array(strtolower($pathinfo['extension']),$this->supported_photo_types) ) {
+					$collect_photo[] = "('" .  SQLite3::escapeString($one_file) . "','" .  SQLite3::escapeString($mtime) .  "',0,'" . md5($one_file) . "')";
+				} else {
+					$this->log("Don't know what to do with " . print_r($pathinfo,true));
+				}
+
+				if ( count($collect_photo) >= $this->_upsert_limit) {
+					$sql = $multi_insert . implode(",",$collect_photo) . $multi_insert_tail . '0';
+					$this->_sql->query($sql);
+					$this->sql_update_cron_status('find_new_files');
+					$collect_photo = array();
+				}
+
+				if ( count($collect_video) >= $this->_upsert_limit) {
+					$sql = $multi_insert . implode(",",$collect_video) . $multi_insert_tail . '1';
+					$this->_sql->query($sql);
+					$this->sql_update_cron_status('find_new_files');
+					$collect_video = array();
+				}
 			}
 
-			if ( in_array(strtolower($pathinfo['extension']),$this->supported_video_types) ) {
-				$collect_video[] = "('" .  SQLite3::escapeString($one_file) . "','" . SQLite3::escapeString($mtime) .  "',1,'" . md5($one_file) . "')";
-			} else if ( in_array(strtolower($pathinfo['extension']),$this->supported_photo_types) ) {
-				$collect_photo[] = "('" .  SQLite3::escapeString($one_file) . "','" .  SQLite3::escapeString($mtime) .  "',0,'" . md5($one_file) . "')";
-			} else {
-				$this->log("Don't know what to do with " . print_r($pathinfo,true));
-			}
-
-			if ( count($collect_photo) >= $this->_upsert_limit) {
+			if ( count($collect_photo) > 0 ) {
 				$sql = $multi_insert . implode(",",$collect_photo) . $multi_insert_tail . '0';
 				$this->_sql->query($sql);
+				$this->sql_update_cron_status('find_new_files');
 				$collect_photo = array();
-				$togo -= $this->_upsert_limit;
 			}
 
-			if ( count($collect_video) >= $this->_upsert_limit) {
+			if ( count($collect_video) > 0 ) {
 				$sql = $multi_insert . implode(",",$collect_video) . $multi_insert_tail . '1';
 				$this->_sql->query($sql);
+				$this->sql_update_cron_status('find_new_files');
 				$collect_video = array();
-				$togo -= $this->_upsert_limit;
 			}
 		}
 
-		if ( count($collect_photo) > 0 ) {
-			$sql = $multi_insert . implode(",",$collect_photo) . $multi_insert_tail . '0';
-			$this->_sql->query($sql);
-			$togo -= count($collect_photo);
-			$collect_photo = array();
-		}
-
-		if ( count($collect_video) > 0 ) {
-			$sql = $multi_insert . implode(",",$collect_video) . $multi_insert_tail . '1';
-			$this->_sql->query($sql);
-			$togo -= count($collect_video);
-			$collect_video = array();
-		}
-
-		$res = $this->_sql->query("SELECT MAX(mtime) AS maxtime FROM fastback");
-		$row = $res->fetchArray(SQLITE3_ASSOC);
-		if ( $row ) {
+		$maxtime = $this->_sql->querySingle("SELECT MAX(mtime) AS maxtime FROM fastback");
+		if ( $maxtime ) {
 			// lastmod to see where to pick up from
-			$this->_sql->query("INSERT INTO fastbackmeta (key,value) values ('lastmod',".date('Ymd',$row['maxtime']).") ON CONFLICT(key) DO UPDATE SET value=".date('Ymd',$row['maxtime']));
-			// find_new_files to see the last time we ran
-			$this->_sql->query("INSERT INTO fastbackmeta (key,value) values ('find_new_files',".time().") ON CONFLICT(key) DO UPDATE SET value=".time());
+			$this->sql_update_cron_status('find_new_files',true,$maxtime);
 			$this->sql_disconnect();
 		}
 
@@ -581,16 +569,10 @@ class Fastback {
 	 * This task will delete rows from the database for any files which were deleted from disk.
 	 */
 	public function cron_remove_deleted() {
+		$this->sql_update_cron_status('remove_deleted');
 		$filetypes = implode('\|',array_merge($this->supported_photo_types, $this->supported_video_types));
-		$this->log("Changing to " . $this->photobase);
 		chdir($this->photobase);
-		if ( $this->filestructure === 'datebased' ) {
-			$cmd = 'find . -type f -regextype sed -iregex  "./[0-9]\{4\}/[0-9]\{2\}/[0-9]\{2\}/.*\(' . $filetypes . '\)$" ';
-		} else if ( $this->filestructure === 'all' ) {
-			$cmd = 'find . -type f -regextype sed -iregex  ".*\(' . $filetypes . '\)$" ';
-		} else {
-			die("I don't know what kind of file structure to look for");
-		}
+		$cmd = 'find -L . -type f -regextype sed -iregex  "' . $this->photodirregex . '.*\(' . $filetypes . '\)$" | grep -v "./fastback/"';
 
 		$all_files = `$cmd`;
 		$all_files = explode("\n",$all_files);
@@ -600,9 +582,8 @@ class Fastback {
 
 		$this->sql_connect();
 
-		$res = $this->_sql->query("SELECT COUNT(*) AS c FROM fastback");
-		$row = $res->fetchArray(SQLITE3_ASSOC);
-		$this->log("Checking for missing files: Found {$row['c']} files in the database");
+		$count = $this->_sql->querySingle("SELECT COUNT(*) AS c FROM fastback");
+		$this->log("Checking for missing files: Found {$count} files in the database");
 
 		$q = "SELECT file FROM fastback";
 		$res = $this->_sql->query($q);
@@ -615,14 +596,13 @@ class Fastback {
 
 		$this->log("Checking for missing files: Removing " . count($not_found) . " files from the database which don't exist on disk");
 
-		if ( count($not_found) === 0 ) {
-			$this->sql_disconnect();
-			return;
+		if ( count($not_found) >  0 ) {
+			$not_found = array_map('SQLite3::escapeString',$not_found);
+			$q = 'DELETE FROM fastback WHERE file IN ("' . implode('","',$not_found) . '")';
+			$this->_sql->query($q);
 		}
 
-		$not_found = array_map('SQLite3::escapeString',$not_found);
-		$q = 'DELETE FROM fastback WHERE file IN ("' . implode('","',$not_found) . '")';
-		$this->_sql->query($q);
+		$this->sql_update_cron_status('remove_deleted',true);
 
 		$this->sql_disconnect();
 	}
@@ -632,6 +612,7 @@ class Fastback {
 	 *
 	 */
 	public function cron_make_thumbs() {
+		$this->sql_update_cron_status('make_thumbs');
 		do {
 
 			$this->sql_disconnect();
@@ -651,17 +632,18 @@ class Fastback {
 				}
 			}
 
-			$this->sql_connect();
 			$this->sql_update_case_when("UPDATE fastback SET _util=NULL, thumbnail=CASE", $made_thumbs, "ELSE thumbnail END", TRUE);
+
+			$this->sql_connect();
 			$flag_these = array_map('SQLite3::escapeString',$flag_these);
-			$this->sql->query("UPDATE fastback SET flagged=1 WHERE file IN ('" . implode("','",$flag_these) . "')");
-			$this->_sql->query("INSERT INTO fastbackmeta (key,value) values ('make_thumbs_complete','0') ON CONFLICT(key) DO UPDATE SET value='0'");
+			$this->_sql->query("UPDATE fastback SET flagged=1 WHERE file IN ('" . implode("','",$flag_these) . "')");
+			$this->sql_update_cron_status('make_thumbs');
 			$this->sql_disconnect();
 
 		} while (count($made_thumbs) > 0);
 
 		$this->sql_connect();
-		$this->_sql->query("INSERT INTO fastbackmeta (key,value) values ('make_thumbs_complete','1') ON CONFLICT(key) DO UPDATE SET value='1'");
+		$this->sql_update_cron_status('make_thumbs',true);
 		$this->sql_disconnect();
 	}
 
@@ -1026,7 +1008,6 @@ class Fastback {
 			flagged IS NOT TRUE 
 			AND (maybe_meme <= 1 OR maybe_meme IS NULL) -- Only display non-memes. Threshold of 1 seems pretty ok
 			ORDER BY filemtime " . $this->sortorder . ",file " . $this->sortorder;
-		$this->log($q);
 		$res = $this->_sql->query($q);
 
 		$printed = false;
@@ -1054,36 +1035,29 @@ class Fastback {
 		return true;
 	}
 
-	private function _process_exif_meme($exif) {
+	private function _process_exif_meme($exif,$file) {
 		$bad_filetypes = array('MacOS','WEBP');
 		$bad_mimetypes = array('application/unknown','image/png');
 		$maybe_meme = 0;
-
-		$this->log("======== MEME CHECK: $file =========\n");
-		$this->log(print_r($exif,TRUE));
 
 		// Bad filetype  or Mimetype
 		// "FileType":"MacOS"
 		// FileType WEBP
 		// "MIMEType":"application\/unknown"
 		if ( in_array($exif['FileType'],$bad_filetypes) ) {
-			$this->log("MEME + 1: Bad file type: {$exif['FileType']}");
 			$maybe_meme += 1;
 		}
 
 		if ( in_array($exif['MIMEType'],$bad_mimetypes) ) {
-			$this->log("MEME + 1: Bad mime type: {$exif['MIMEType']}");
 			$maybe_meme += 1;
 		} else if ( preg_match('/video/',$exif['MIMEType']) ) {
 			// Most videos aren't memes
-			$this->log("MEME - 1: Most videos aren't memes");
 			$maybe_meme -= 1;
 		}
 
 		//  Error present
 		// "Error":"File format error"
 		if ( array_key_exists('Error',$exif) ) {
-			$this->log("MEME + 1: Has Error type: {$exif['Error']}");
 			$maybe_meme +=1 ;
 		}
 
@@ -1095,7 +1069,6 @@ class Fastback {
 		// "ImageHeight":"1944",
 		if ( array_key_exists('ImageHeight',$exif) && array_key_exists('ImageWidth',$exif) ) {
 			if ( $exif['ImageHeight'] * $exif['ImageWidth'] <  804864 ) { // Less than 1024x768
-				$this->log("MEME + 1: Size too small: {$exif['ImageHeight']} * {$exif['ImageWidth']} = " . ($exif['ImageHeight'] * $exif['ImageWidth']));
 				$maybe_meme += 1;
 			}
 		}
@@ -1104,88 +1077,67 @@ class Fastback {
 			return strpos($k,"Exif") === 0;
 		},ARRAY_FILTER_USE_KEY);
 		if ( count($exif_keys) <= 4 ) {
-			$this->log("MEME + 1: Minimal exif keys, maybe a meme or screenshot");
 			$maybe_meme += 1;
 		}
 
 		if ( count($exif_keys) === 1 ) {
-			$this->log("MEME - 1: Absolutely no Exif. Maybe from Whatsapp or very old");
 			$maybe_meme -= 1;
 
 		}
 
 		// Having GPS is good
 		if ( array_key_exists('GPSLatitude',$exif) ) {
-			$this->log("MEME - 1: Has GPS");
 			$maybe_meme -= 1;
 		}
 
 		// Having a camera name is good
 		if ( array_key_exists('Model',$exif) ) {
-			$this->log("MEME - 1: Has Camer Model Name");
 			$maybe_meme -= 1;
 		} else 
 
 		// Not having a camera is extra bad in 2020s
 		if ( preg_match('/^202[0-9]:/',$exif['FileModifyDate']) && !array_key_exists('Model',$exif) ) {
-			$this->log("MEME + 1: Recent image and no Camera Model");
 			$maybe_meme += 1;
 		}
 
 		// Scanners might put a comment in 
 		if ( array_key_exists('Comment',$exif) ) {
-			$this->log("MEME - 1: Has Comment");
 			$maybe_meme -= 1;
 		}
 
 		// Scanners might put a comment in 
 		if ( array_key_exists('UserComment',$exif) && $exif['UserComment'] == 'Screenshot' ) {
-			$this->log("MEME + 2: Comment says screenshot");
 			$maybe_meme += 2;
 		}
 
 		if ( array_key_exists('Software',$exif) && $exif['Software'] == 'Instagram' ) {
-			$this->log("MEME + 1: Software is Instagram");
 			$maybe_meme += 1;
 		}
 
 		if ( array_key_exists('ThumbnailImage',$exif) ) {
-			$this->log("MEME - 1: Has Thumbnail");
 			$maybe_meme -= 1;
 		}
 
-		// if ( array_key_exists('IPTCDigest',$exif) ) {
-		// 	$this->log("MEME - 1: Has IPTC Digest");
-		// 	$maybe_meme -= 1;
-		// }
-
 		if ( array_key_exists('ProfileDescriptionML',$exif) ) {
-			$this->log("MEME - 1: Has ProfileDescription");
 			$maybe_meme -= 1;
 		}
 
 		// Luminance seems to maybe be something in some of our photos that aren't memes?
 		if ( array_key_exists('Luminance',$exif) ) {
-			$this->log("MEME - 1: Has Luminance");
 			$maybe_meme -= 1;
 		}
 
 		if ( array_key_exists('TagsList',$exif) ) {
-			$this->log("MEME - 1: Has Tags List");
 			$maybe_meme -= 1;
 		}
 
 		if ( array_key_exists('Subject',$exif) ) {
-			$this->log("MEME - 1: Has Subject");
 			$maybe_meme -= 1;
 		}
 
 		if ( array_key_exists('DeviceMfgDesc',$exif) ) {
-			$this->log("MEME - 1: Has ICC DeviceMfgDesc "); // eg value Gimp
 			$maybe_meme -= 1;
 		}
-
-		$this->log("MEME SCORE $maybe_meme for $file");
 
 		return array('maybe_meme' => $maybe_meme);
 	}
@@ -1194,10 +1146,11 @@ class Fastback {
 	 * Do an upsert to reserve some items from the queue in a consistant way. 
 	 * The queue is used on the cli when forking multiple processes to process a request.
 	 */
-	private function sql_get_queue($where,$multiplier = 1, $exit_on_empty = TRUE) {
+	private function sql_get_queue($where) {
 		$this->sql_connect();
 
-		$query = "UPDATE fastback SET _util='RESERVED-" . getmypid() . "' WHERE _util IS NULL AND " . $where . " ORDER BY file DESC LIMIT " . ($this->_process_limit * $multiplier);
+		$this->_sql->query("UPDATE fastback SET _util=NULL WHERE _util='RESERVED-" . getmypid() . "'");
+		$query = "UPDATE fastback SET _util='RESERVED-" . getmypid() . "' WHERE _util IS NULL AND (" . $where . ") ORDER BY file DESC LIMIT {$this->_process_limit}";
 		$this->_sql->query($query);
 
 		$query = "SELECT * FROM fastback WHERE _util='RESERVED-" . getmypid() . "'";
@@ -1209,10 +1162,6 @@ class Fastback {
 			$queue[$row['file']] = $row;
 		}
 		$this->sql_disconnect();
-
-		if ( count($queue) === 0 && $exit_on_empty) {
-			exit();
-		}
 
 		return $queue;
 	}
@@ -1455,7 +1404,7 @@ class Fastback {
 			);
 
 
-			$sizes = array( '48', '72', '96', '144', '168', '192', '256', '512');
+			$sizes = array( '49', '72', '96', '144', '168', '192', '256', '512');
 
 			foreach($sizes as $size){
 				$manifest['icons'][] = array(
@@ -1563,6 +1512,7 @@ class Fastback {
 	 * Get exif data for files that don't have it.
 	 */
 	public function cron_get_exif() {
+		$this->sql_update_cron_status('get_exif');
 		$cmd = "exiftool -stay_open True  -@ -";
 		$cmdargs = [];
 		$cmdargs[] = "-lang"; // Lang to english
@@ -1589,7 +1539,7 @@ class Fastback {
 		stream_set_blocking($pipes[2], 0);
 
 		do {
-			$queue = $this->sql_get_queue("exif IS NULL",1,FALSE);
+			$queue = $this->sql_get_queue("exif IS NULL");
 
 			$found_exif = array();
 
@@ -1600,8 +1550,7 @@ class Fastback {
 
 			$this->sql_update_case_when("UPDATE fastback SET _util=NULL, exif=CASE",$found_exif,"ELSE exif END",True);
 			$this->sql_connect();
-			$this->_sql->query("INSERT INTO fastbackmeta (key,value) values ('get_exif',".time().") ON CONFLICT(key) DO UPDATE SET value=".time());
-			$this->_sql->query("INSERT INTO fastbackmeta (key,value) values ('get_exif_complete','0') ON CONFLICT(key) DO UPDATE SET value='0'");
+			$this->sql_update_cron_status('get_exif');
 			$this->sql_disconnect();
 
 		} while (!empty($queue));
@@ -1614,7 +1563,7 @@ class Fastback {
 		proc_close($proc);
 
 		$this->sql_connect();
-		$this->_sql->query("INSERT INTO fastbackmeta (key,value) values ('get_exif_complete','1') ON CONFLICT(key) DO UPDATE SET value='1'");
+		$this->sql_update_cron_status('get_exif',true);
 		$this->sql_disconnect();
 	}
 
@@ -1622,6 +1571,7 @@ class Fastback {
 	 * Look for rows that haven't had their exif data processed and handle them.
 	 */
 	public function cron_process_exif() {
+		$this->sql_update_cron_status('process_exif');
 		do {
 			$queue = $this->sql_get_queue("
 			(
@@ -1659,7 +1609,8 @@ class Fastback {
 				)
 			) AND (
 				file != \"\"
-				AND exif IS NOT NULL				
+				AND exif IS NOT NULL
+				AND exif != \"\"
 				AND flagged IS NOT TRUE
 			)");
 
@@ -1667,30 +1618,52 @@ class Fastback {
 			$this->_sql->query("BEGIN DEFERRED");
 
 			foreach($queue as $row) {
-				$exif = json_decode($row['exif']);
-				$tags = $this->_process_exif_tags($exif);
-				$geo = $this->_process_exif_geo($exif);
-				$time = $this->_process_exif_time($exif,$row['file']);
-				$meme = $this->_process_exif_meme($exif);
+				$exif = json_decode($row['exif'],true);
 
-				$new_vals = array_merge($tags,$geo,$time,$meme,$new_vals);
+				if ( !is_array($exif) ) {
+					ob_start();
+					var_dump($row);
+					$content = ob_get_contents();
+					file_put_contents(__DIR__ . '/cache/row',$content);
+					ob_end_clean();
+					$this->log("Non array exif value found");
+					$this->log($row['exif']);
+					die("ASDF");
+				}
+
+				$tags = $this->_process_exif_tags($exif,$row['file']);
+				$geo = $this->_process_exif_geo($exif,$row['file']);
+				$time = $this->_process_exif_time($exif,$row['file']);
+				$meme = $this->_process_exif_meme($exif,$row['file']);
+
+				$new_vals = array_merge($tags,$geo,$time,$meme);
 				$new_vals = array_map('SQLite3::escapeString',$new_vals);
+
+				if ( empty($new_vals['lat']) && !empty($geo['lat']) ) {
+					$this->log("GEO ERROR IN {$row['file']}");
+				}
+
 				$file = SQLite3::escapeString($row['file']);
 				$q = "UPDATE fastback SET ";
 				foreach($new_vals as $k => $v){
-					$q .= str_replace("''NULL''","NULL","$k='$v'");
+					if ( empty($v) ) {
+						$v = 'NULL';
+					}
+					$q .= str_replace("'NULL'","NULL"," $k='$v',");
 				}
-				$q .= "file=file WHERE file=$file";
+				$q .= "file=file WHERE file='" . SQLite3::escapeString($file) . "'";
+
+				$this->log($q);
 
 				$this->_sql->query($q);
 			}
-			$this->_sql->query("INSERT INTO fastbackmeta (key,value) values ('process_exif',".time().") ON CONFLICT(key) DO UPDATE SET value=".time());
-			$this->_sql->query("INSERT INTO fastbackmeta (key,value) values ('process_exif_complete','0') ON CONFLICT(key) DO UPDATE SET value='0'");
-			$this->_sql->query("COMMIT");
+			die();
+			$this->sql_update_cron_status('process_exif');
+			@$this->_sql->query("COMMIT");
 			$this->sql_disconnect();
 
 		} while ( count($queue) > 0 );
-		$this->_sql->query("INSERT INTO fastbackmeta (key,value) values ('process_exif_complete','1') ON CONFLICT(key) DO UPDATE SET value='1'");
+		$this->sql_update_cron_status('process_exif',true);
 	}
 
 	/**
@@ -1698,11 +1671,8 @@ class Fastback {
 	 */
 	public function cron_clear_locks() {
 		$this->sql_connect();
-		$this->_sql->query("BEGIN DEFERRED");
-		$this->_sql->query('UPDATE fastbackmeta SET value="19000101" WHERE key="lastmod"');
-		$this->_sql->query("UPDATE fastabck SET _util=NULL WHERE _util='RESERVED-" . getmypid() . "'");
-		$this->_sql->query('UPDATE fastbackmeta SET value="NULL" WHERE key="process_exif_complete" OR key="find_new_files"');
-		$this->_sql->query("INSERT INTO fastbackmeta (key,value) values ('clear_locks'," . time() . ") ON CONFLICT(key) DO UPDATE SET value='" . time() . "'");
+		$this->_sql->query("UPDATE fastback SET _util=NULL WHERE _util LIKE 'RESERVED%'");
+		$this->sql_update_cron_status('clear_locks',true);
 		$this->sql_disconnect();
 	}
 
@@ -1794,10 +1764,11 @@ class Fastback {
 	/*
 	 * Find people tags in exif data
 	 */
-	private function _process_exif_tags($exif){
+	private function _process_exif_tags($exif,$file){
 			$simple = array('Subject','XPKeywords','Keywords','RegionName','RegionPersonDisplayName','CatalogSets','HierarchicalSubject','LastKeywordXMP','TagsList');
 
 			// Clean up values
+			$people_found = array();
 			foreach($simple as $exif_keyword) {
 				if ( !empty($exif[$exif_keyword]) ) {
 					$sub = str_replace(" 'who'",'',$exif[$exif_keyword]);
@@ -1827,19 +1798,19 @@ class Fastback {
 	/**
 	 * Find geo info in exif data
 	 */
-	private function _process_exif_geo($exif) {
+	private function _process_exif_geo($exif,$file) {
 		$xyz = array('lat' => NULL, 'lon' => NULL, 'elev' => 0);
 		if ( array_key_exists('GPSPosition',$exif) ) {
 			// eg "38.741200 N, 90.642800 W"
 			$xyz = $this->_parse_gps_line($exif['GPSPosition']);	
 		}
 
-		if ( count($xyz) === 0 && array_key_exists('GPSCoordinates',$exif) ) {
+		if ( $xyz['lat'] === NULL && array_key_exists('GPSCoordinates',$exif) ) {
 			// eg "38.741200 N, 90.642800 W"
 			$xyz = $this->_parse_gps_line($exif['GPSCoordinates']);	
 		}
 
-		if ( count($xyz) === 0 && array_key_exists('GPSLatitude',$exif) && array_key_exists('GPSLongitude',$exif)) {
+		if ( $xyz['lat'] === NULL && array_key_exists('GPSLatitude',$exif) && array_key_exists('GPSLongitude',$exif)) {
 			$lonval = floatval($exif['GPSLongitude']);
 			$latval = floatval($exif['GPSLatitude']);
 
@@ -1855,7 +1826,8 @@ class Fastback {
 			$xyz['lat'] = $latval;
 		}
 
-		if ( count($xyz) === 2 && array_key_exists('GPSAltitude',$exif) ) { //  && floatval($exif['GPSAltitude']) == $exif['GPSAltitude']) 
+		if ( $xyz['elev'] === 0 ) {
+		   if ( array_key_exists('GPSAltitude',$exif) ) {
 			if ( preg_match('/([0-9.]+) m/',$exif['GPSAltitude'],$matches ) ) {
 				if ( array_key_exists('GPSAltitudeRef',$exif) && $exif['GPSAltitudeRef'] == 'Below Sea Level' ) {
 					$xyz['elev'] = $matches[1] * -1;
@@ -1868,19 +1840,41 @@ class Fastback {
 				$this->log("New type of altitude value found: {$exif['GPSAltitude']} in $file");
 				$xyz['elev'] = 0;
 			}
-		} else {
-			$xyz['elev'] = 0;
+			} else {
+				$xyz['elev'] = 0;
+			}
 		}
 		return $xyz;
-	}	
-	
+	}
+
 	/**
 	 * For a single-line GPS record, parse out the lat/lon
 	 */
 	private function _parse_gps_line($line) {
 		$xyz = array('lat' => NULL,'lon' => NULL,'elev' => 0);
+
+		// 22.97400 S, 43.18910 W, 6.707 m Above Sea Level
+		preg_match('/\'?([0-9.]+)\'? (N|S), \'?([0-9.]+)\'? (E|W), \'?([0-9.]+)\'? m .*/',$line,$matches);
+		if ( count($matches) == 6) {
+
+			if ( $matches[2] == 'S' ) {
+				$matches[1] = $matches[1] * -1;
+			} else {
+				$matches[1] = $matches[1] * 1;
+			}
+
+			if ( $matches[4] == 'W' ) {
+				$matches[3] = $matches[3] * -1;
+			} else {
+				$matches[3] = $matches[3] * 1;
+			}
+
+			$xyz['lon'] = $matches[3];
+			$xyz['lat'] = $matches[1];
+			$xyz['elev'] = $matches[5];
+		} else  {
 		// eg "38.741200 N, 90.642800 W"
-		if ( preg_match('/\'?([0-9.]+)\'? (N|S), \'?([0-9.]+)\'? (E|W)/',$line,$matches) ) {
+			preg_match('/\'?([0-9.]+)\'? (N|S), \'?([0-9.]+)\'? (E|W)/',$line,$matches);
 			if ( count($matches) == 5) {
 
 				if ( $matches[2] == 'S' ) {
@@ -1897,9 +1891,9 @@ class Fastback {
 
 				$xyz['lon'] = $matches[3];
 				$xyz['lat'] = $matches[1];
+			} else {
+				$this->log("Couldn't parse >>$line<<");
 			}
-		} else {
-			$this->log("Couldn't parse >>$line<<");
 		}
 		return $xyz;
 	}
@@ -1960,9 +1954,9 @@ class Fastback {
 
 			// If the file was in a date folder, then use that date with the best datepart we have.
 			if ( !is_null($datepart) ) {
-				return array('sorttime' => "'" . $datepart . " " . $matches[4] . ':' . $matches[5] . ':' . $matches[6] . "'");
+				return array('sorttime' => $datepart . " " . $matches[4] . ':' . $matches[5] . ':' . $matches[6]);
 			} else {
-				return array('sorttime' => "'" . $matches[1] . '-' . $matches[2] . '-' . $matches[3] . ' ' . $matches[4] . ':' . $matches[5] . ':' . $matches[6] . "'");
+				return array('sorttime' => $matches[1] . '-' . $matches[2] . '-' . $matches[3] . ' ' . $matches[4] . ':' . $matches[5] . ':' . $matches[6]);
 			}
 		}
 
@@ -1971,6 +1965,39 @@ class Fastback {
 		}
 
 		return array('sorttime' => NULL);;
+	}
+
+	/**
+	 * Do cron upserts
+	 */
+	private function sql_update_cron_status($job,$complete = false,$meta=false) {
+		$do_disconnect = false;
+
+		if ( !isset($this->sql) ) {
+			$this->sql_connect();
+			$do_disconnect = true;
+		}
+
+		$complete = ( $complete ? 1 : 0 );
+		$owner = ( $complete ? 'NULL' : "'" . getmypid() . "'");
+
+		if ( $meta !== false ){
+			$this->_sql->query("INSERT INTO cron (job,updated,completed,owner,meta)
+				values ('$job'," . time() . ",$complete,'" . getmypid() . "','" . SQLite3::escapeString($meta) . "')
+				ON CONFLICT(job) DO UPDATE SET updated=".time().",completed=$complete,owner=$owner,meta='" . SQLite3::escapeString($meta). "'");
+		} else {
+			$this->_sql->query("INSERT INTO cron (job,updated,completed,owner)
+				values ('$job'," . time() . ",$complete,'" . getmypid() . "')
+				ON CONFLICT(job) DO UPDATE SET updated=".time().",completed=$complete,owner=$owner");
+		}
+
+		if ( $do_disconnect ) {
+			$this->sql_disconnect();
+		}
+
+		if ( $complete ) {
+			$this->log("Cron job $job was marked as complete");
+		}
 	}
 
 	/**
@@ -1989,31 +2016,101 @@ class Fastback {
 	 * It could also be run from the command line.
 	 */
 	public function cron() {
+		/*
+		 * Start a buffer and prep to run something in the background
+		 * CLI doesn't get a time limit or a buffer
+		 */
+
+		if (php_sapi_name() !== 'cli') {
+			ob_start();
+			header("Connection: close");
+			header("Content-Encoding: none");
+			header("Content-Type: text/plain");
+			set_time_limit($this->_crontimeout);
+		}
+
+		register_shutdown_function(function(){
+			$this->log("Shutting down!");
+			$this->sql_connect();
+			$this->_sql->query("UPDATE cron SET owner=NULL WHERE owner='" . getmypid() . "'");
+		});
+
+		if ( !isset($this->_concurrent_cronjobs) ) {
+			$this->_concurrent_cronjobs = ceil(`nproc`/4);
+		}
+
+		$jobs = array( 'find_new_files', 'get_exif', 'process_exif', 'make_thumbs', 'remove_deleted', 'clear_locks');
+		$cron_status = array();
+
 		$this->sql_connect();
+		$this->_sql->query("UPDATE cron SET completed=0 WHERE updated < " . time() - (60 * 60)); // Everything can run at least hourly. 
+
+		/*
+		 * Get the current cron status
+		 */
+		$q_get_cron = "SELECT job,updated,completed,owner FROM cron";
+		$res = $this->_sql->query($q_get_cron);
+		while($row = $res->fetchArray(SQLITE3_ASSOC)){
+			$cron_status[$row['job']] = $row;
+		}
+
+		foreach($jobs as $job) {
+			if ( empty($cron_status[$job] )) {
+				$cron_status[$job] = array(
+					'job' => $job,
+					'updated' => 0,
+					'completed' => false,
+					'owner' => NULL
+				);
+			}
+		}
+
+		print_r($cron_status);
+
+		/*
+		 * Find the next job to do
+		 */
+		shuffle($cron_status);
+
+		$job_to_run = FALSE;
+		$jobs_running = $this->_sql->querySingle("SELECT COUNT(*) FROM cron WHERE owner IS NOT NULL");
+		if ( $jobs_running <  $this->_concurrent_cronjobs ) {
+			foreach($cron_status as $job) {
+				if ( !empty($job['owner']) ) {
+					continue;
+				}
+
+				if ( $job['completed'] && time() - $job['updated'] < 60*60 ) {
+					continue;
+				}
+
+				$job_to_run = "cron_{$job['job']}";
+				break;
+			}
+		}
+
+		if ( in_array($_GET['cron'],$jobs) ){
+			$job_to_run = 'cron_' . $_GET['cron'];
+		}
+
+		if ( $job_to_run !== FALSE) {
+			print("About to run $job_to_run\n");
+		}
+
 		// http1 and non-fcgi implementations
-		set_time_limit(60);
-		ignore_user_abort(true);
-		ob_end_clean();
-		ob_start();
-		print_r($this->_meta);
-		$size = ob_get_length();
-		header("Connection: close");
-		header("Content-Encoding: none");
-		header("Content-Type: text/plain");
-		header("Content-Length: $size");
-		http_response_code(200);
-		ob_end_flush();
-		@ob_flush();
-		flush();
-		@fastcgi_finish_request();
+		if (php_sapi_name() !== 'cli') {
+			$old_val = ini_set('catch_workers_output','yes'); // Without this our error_log calls don't get sent to the error log. 
+			var_dump(ini_get('catch_workers_output'));
+			$size = ob_get_length();
+			header("Content-Length: $size");
+			http_response_code(200);
+			ob_end_flush();
+			@ob_flush();
+			flush();
+			@fastcgi_finish_request();
+		}
 
-
-		// do the actual tasks
-		$this->cron_find_new_files();
-		$this->cron_get_exif();
-		$this->cron_process_exif();
-		$this->cron_clear_locks();
-		$this->cron_make_thumbs();
-		$this->cron_remove_deleted();
+		$this->log($job_to_run);
+		$this->$job_to_run();
 	}
 }

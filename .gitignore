@@ -6,5 +6,5 @@ fastback.ini
 *.sqlite
 *.sqlite.lock
 *.csv
-fastback/cache/*.*
-fastback/cache/*
+cache/*.*
+cache/*
