@@ -559,8 +559,10 @@ class Fastback {
 		$csvmtime = "";
 		if( file_exists($this->csvfile) ) {
 			$csvmtime = filemtime($this->csvfile);
-		} else {
+		} else if ( file_exists($this->sqlitefile )) {
 			$csvmtime = filemtime($this->sqlitefile);
+		} else {
+			$csvmtime = filemtime(__FILE__);
 		}
 
 		$html .= '<script>
@@ -599,7 +601,7 @@ class Fastback {
 		if ( strpos($_SERVER['HTTP_ACCEPT_ENCODING'],'gzip') !== FALSE && file_exists($this->csvfile . '.gz')) {
 			$this->log(__FILE__ . ":" . __LINE__ . ' -- ' .  microtime () . "\n"); 
 			$this->util_readfile($this->csvfile . '.gz');
-		} else {
+		} else if ( file_exists($this->csvfile) ) {
 			$this->log(__FILE__ . ":" . __LINE__ . ' -- ' .  microtime () . "\n"); 
 			$this->util_readfile($this->csvfile);
 		}
@@ -835,7 +837,7 @@ class Fastback {
 			job VARCHAR(255) PRIMARY KEY, 
 			updated INTEGER,
 			last_completed INTEGER DEFAULT NULL, -- Set to 1 once it has last_completed at least once
-			due_to_run BOOL DEFALUT 1, -- Set to 0 each time it completes, and then cleared when the completion is stale
+			due_to_run BOOL DEFAULT 1, -- Set to 0 each time it completes, and then cleared when the completion is stale
 			owner TEXT, -- pid of the process running it
 			meta TEXT
 		)";
@@ -1883,8 +1885,30 @@ class Fastback {
 		$this->sql_connect();
 		$q_get_cron = "SELECT job,updated,last_completed,due_to_run,owner FROM cron";
 		$res = $this->_sql->query($q_get_cron);
+
+		$cron_status = array();
+
+		$template = array(
+			'updated' => NULL,
+			'last_completed' => NULL,
+			'due_to_run' => NULL,
+			'owner' => NULL,
+			'status' => 'Pending first run',
+		);
+
+		foreach($this->cronjobs as $job){
+			$cron_status[$job] = $template;
+		}
+
+
+		if ( empty($res) ) {
+			$cron_status['queue'] = array();
+			header("Content-Type: application/json");
+			print json_encode($cron_status);
+		}
+
 		while($row = $res->fetchArray(SQLITE3_ASSOC)){
-			$cron_status[$row['job']] = $row;
+			$cron_status[$row['job']] = array_merge($cron_status[$row['job']],$row);
 		}
 
 		foreach($cron_status as $job => $details){
@@ -1904,13 +1928,42 @@ class Fastback {
 			unset($cron_status[$job]['due_to_run']);
 		}
 
+		if ( array_key_exists('find_new_files',$cron_status) ) {
+			$cron_status['find_new_files']['percent_complete'] = ($cron_status['find_new_files']['last_completed'] ? '100%' : '0%');
+		}
+
 		$total_rows = $this->sql_query_single("SELECT COUNT(*) FROM fastback");
-		$cron_status['find_new_files']['percent_complete'] = ($cron_status['find_new_files']['last_completed'] ? '100%' : '0%');
 		$exif_rows = $this->sql_query_single("SELECT COUNT(*) FROM fastback WHERE flagged or exif IS NOT NULL");
-		$cron_status['get_exif']['percent'] = round( $exif_rows / $total_rows,4) * 100 . '%';
-		$cron_status['process_exif']['percent'] = round($this->sql_query_single("SELECT COUNT(*) FROM FASTBACK WHERE flagged OR sorttime IS NOT NULL") / $exif_rows,4) * 100 . '%';
-		$cron_status['make_thumbs']['percent'] = round($this->sql_query_single("SELECT COUNT(*) FROM FASTBACK WHERE flagged OR thumbnail IS NOT NULL") / $total_rows,4) * 100 . '%';
-		$cron_status['remove_deleted']['percent'] = ($cron_status['remove_deleted']['last_completed'] == 'Task not complete' ? '0%' : '100%');
+
+		if ( $total_rows > 0 ) {
+			if ( array_key_exists('get_exif',$cron_status) ) {
+				$cron_status['get_exif']['percent'] = round( $exif_rows / $total_rows,4) * 100 . '%';
+			}
+			if ( array_key_exists('make_thumbs',$cron_status) ) {
+				$cron_status['make_thumbs']['percent'] = round($this->sql_query_single("SELECT COUNT(*) FROM FASTBACK WHERE flagged OR thumbnail IS NOT NULL") / $total_rows,4) * 100 . '%';
+			}
+		} else {
+			if ( array_key_exists('get_exif',$cron_status) ) {
+				$cron_status['get_exif']['percent'] = '0%';
+			}
+			if ( array_key_exists('make_thumbs',$cron_status) ) {
+				$cron_status['make_thumbs']['percent'] = '0%';
+			}
+		}
+
+		if ( $exif_rows > 0 ) {
+			if ( array_key_exists('process_exif',$cron_status) ) {
+				$cron_status['process_exif']['percent'] = round($this->sql_query_single("SELECT COUNT(*) FROM FASTBACK WHERE flagged OR sorttime IS NOT NULL") / $exif_rows,4) * 100 . '%';
+			}
+		} else {
+			if ( array_key_exists('process_exif',$cron_status) ) {
+				$cron_status['process_exif']['percent'] =  '0%';
+			}
+		}
+
+		if ( array_key_exists('remove_deleted',$cron_status) ) {
+			$cron_status['remove_deleted']['percent'] = ($cron_status['remove_deleted']['last_completed'] == 'Task not complete' ? '0%' : '100%');
+		}
 		
 		unset($cron_status['clear_locks']);
 
