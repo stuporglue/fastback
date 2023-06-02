@@ -54,6 +54,7 @@ class Fastback {
 	var $_vipsthumbnail;							// Path to vips binary
 	var $_ffmpeg;									// Path to ffmpeg binary
 	var $_gzip;										// Generate gzipped csv
+	var $_convert;									// Path to ImageMagick binary
 	var $_jpegoptim;								// Path to jpegoptim
 	var $_thumbsize = "256x256";					// Thumbnail size. Must be square.
 	var $_crontimeout = 120;						/* How long to let cron run for in seconds. External calls don't count, so for thumbs and exif wall time may be longer
@@ -1412,14 +1413,14 @@ class Fastback {
 			}
 		}
 
-		if ( !isset($this->convert) ) { $this->convert = trim(`which convert`); }
-		if ( !empty($this->convert) ) {
+		if ( !isset($this->_convert) ) { $this->_convert = trim(`which convert`); }
+		if ( !empty($this->_convert) ) {
 
 			if ( $print_to_stdout ) {
 				$shellthumb = 'webp:-';
 			}
 
-			$cmd = "{$this->convert} -define jpeg:size={$this->_thumbsize} $shellfile  -thumbnail {$this->_thumbsize}^ -gravity center -extent $this->_thumbsize $shellthumb 2>/dev/null";
+			$cmd = "{$this->_convert} -define jpeg:size={$this->_thumbsize} $shellfile  -thumbnail {$this->_thumbsize}^ -gravity center -extent $this->_thumbsize $shellthumb 2>/dev/null";
 			$res = `$cmd`;
 
 			if ( $print_to_stdout ) {

@@ -42,7 +42,7 @@ Strongly Recommended
 Simple Installation
 -------------------
  * Put or link your full-sized photos into a directory which is served by your webserver. 
-  - eg. /var/www/html/photos/ 
+     - eg. /var/www/html/photos/ 
  * Clone this repository
 ```
 cd /var/www/html/photos/
@@ -52,7 +52,8 @@ git clone https://github.com/stuporglue/fastback.git
 ```
 cp fastabck/index.php .
 ```
- * Make sure that the fastback is writable by the web server process. Eg. if you are using Apache an it runs as user www-data: 
+ * Make sure that the fastback is writable by the web server process. Eg. if you 
+ are using Apache an it runs as user `www-data`: 
 ```
 chgrp -R www-data fastback
 chmod g+w -R www-data fastback
@@ -105,6 +106,11 @@ $fb->photodirregex = './[0-9]\{4\}/[0-9]\{2\}/[0-9]\{2\}/';
 // What types of image files should be accepted
 $fb->supported_photo_types[] = 'tiff';
 
+// Change to a different basemap
+// $fb->basemap =  "L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+// 	attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+// })";
+
 $fb->run();
 ```
 
@@ -119,7 +125,8 @@ It uses code from many other projects under various Open Source licenses, includ
  * Leaflet ([https://leafletjs.com/](Leaflet.js), [https://github.com/Leaflet/Leaflet.markercluster](Leaflet MarkerCluster))
  * [https://hammerjs.github.io/](hammer.js)
 
-Many thanks to the maintainers and developers of these projects for making this possible. I couldn't have done it without you.
+Many thanks to the maintainers and developers of these projects for making this 
+possible. I couldn't have done it without you.
 
 TODO
 ----
@@ -139,5 +146,3 @@ Basic steps have been taken for security and performance, but it is not hardened
 anything like that. 
 
 Please feel free to submit bug reports and feature requests.
-
-
