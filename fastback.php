@@ -455,7 +455,7 @@ class Fastback {
 		if ( !isset($this->_gzip) ) { $this->_gzip= trim(`which gzip`); }
 
 		if ( isset($this->_gzip) ) {
-			$cmd = "$this->_gzip -k --best -f {$this->csvfile}.gz";
+			$cmd = "$this->_gzip -k --best -f {$this->csvfile}";
 			`$cmd`;
 		} else if ( file_exists($this->csvfile . '.gz') ) {
 			$this->log("Can't write new {$this->csvfile}.gz, but it exists. It may get served and show stale results");
@@ -1224,6 +1224,7 @@ class Fastback {
 			}
 		}
 		$this->_sql->query("COMMIT");
+		$this->sql_query_single("UPDATE cron SET due_to_run=1 WHERE job = 'make_csv'"); // If we removed files, we need a new csv
 		$this->sql_disconnect();
 		$this->sql_update_cron_status('remove_deleted',true);
 	}
@@ -1874,6 +1875,7 @@ class Fastback {
 				$this->_sql->query($q);
 			}
 			$this->_sql->query("COMMIT");
+			$this->sql_query_single("UPDATE cron SET due_to_run=1 WHERE job = 'make_csv'"); // If we updated exif, we need a new csv
 			$this->sql_update_cron_status('process_exif');
 
 		} while ( count($queue) > 0 );

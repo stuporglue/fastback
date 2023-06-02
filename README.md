@@ -19,32 +19,25 @@ Additional features:
  * Password protection
  * Easy to set up (for a web app)
 
-Disclaimers and Decisions
--------------------------
-
-I'm making this for myself and my family. 
-
-Fastback is designed to be simple and for use by a small, trusted group. The default 
-settings leave the config file and sqlite files accessable which may give users
-information about your server or the users and passwords you have configured. 
-
-Please feel free to submit bug reports and feature requests.
-
 Requirements
 -------------
 
 * Linux PHP server
 * Sqlite3 support
 * find (command line tool)
-* ffmpeg (command line tool)
 
 Strongly Recommended
 --------------------
 
 * PHP-CLI
+* exiftool (required for geo, tagging and date sorting support)
+* ffmpeg (required for video thumbnails)
 * Writable cache directory
-* vipsthumbnail installed
+* vipsthumbnail (for best image thumbnails)
+    - As a backup Fastback will try to use convert (ImageMagick, command line program) or GD (PHP library)
 * jpegoptim (optional, for smaller thumbs)
+* gzip (for smaller csv over the wire)
+* htaccess support (for more security of your cache files)
 
 Simple Installation
 -------------------
@@ -65,12 +58,55 @@ chgrp -R www-data fastback
 chmod g+w -R www-data fastback
 chmod g+x fastback
 ```
- * Visit your site. Every page load will process more files. 
+ * Visit your site. 
 
 Advanced Instructions
 ---------------------
-* See fastback.ini.sample and configure as you see fit
-* Run ```index.php help``` from the command line to process files all at once
+* Clone fastback into a web server directory
+```
+cd /var/www/html/photos/
+git clone https://github.com/stuporglue/fastback.git
+```
+ * Copy fastback/index.php into /var/www/html/photos
+```
+cp fastabck/index.php .
+```
+* Edit index.php and mdify the variables of the Fastback object.  
+
+Settings
+--------
+Sometimes the best documentation is code. See fastback.php for 
+all options. They are pretty well documented. Some options you might
+want to set include: 
+
+```
+$fb = new Fastback();
+// Change the site title
+$fb->sitetitle = "Moore Family Gallery";
+
+// Add a user account
+$fb->user['Michael'] = 'moore';
+
+// Give the user permission to flag photos
+$fb->canflag[] = 'Michael';
+
+// Specify where full sized photos are located. This can read-only.
+$fb->photobase = '/mount/bigdisk/my_photos/'; 
+
+// Specify where the sqlite file is located. The file must be read-write.
+$fb->sqlitefile = '/mount/fastdisk/fastback_gallery.sqlite';
+
+// Specify where the csv file is saved. The location must be read-write.
+$fb->csvfile = '/mount/fastdisk/fastback_cache.csv';
+
+// Directory regex used to find photos
+$fb->photodirregex = './[0-9]\{4\}/[0-9]\{2\}/[0-9]\{2\}/'; 
+
+// What types of image files should be accepted
+$fb->supported_photo_types[] = 'tiff';
+
+$fb->run();
+```
 
 License, Credits and Thanks
 ----------------------------
@@ -85,11 +121,23 @@ It uses code from many other projects under various Open Source licenses, includ
 
 Many thanks to the maintainers and developers of these projects for making this possible. I couldn't have done it without you.
 
-
 TODO
 ----
 * Location search input 
 * Don't collapse exif tags
-* Handle processing through index.php page loads
-* Loading page
 * Prettier pwa offline page and more testing of pwa offline page.
+
+Disclaimers and Decisions
+-------------------------
+
+I'm making this for myself and my family. 
+
+Fastback is designed to be simple and for use by a small, trusted group. It is not meant
+for big groups or heavy usage. It is optimized for functionality. 
+
+Basic steps have been taken for security and performance, but it is not hardened or 
+anything like that. 
+
+Please feel free to submit bug reports and feature requests.
+
+
