@@ -118,7 +118,6 @@ class Fastback {
 				die("Fastback setup error. See errors log.");
 			}
 			touch($this->filecache . '/index.php');
-			file_put_contents('deny from all',$this->filecache . '/.htaccess');
 		}
 
 		// CLI stuff doesn't need auth
