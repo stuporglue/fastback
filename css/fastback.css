@@ -45,16 +45,15 @@ body #photos .photorow {
 	box-sizing: border-box;
 }
 
-
-#loadingbox {
+#loadingbox,#nophotos {
 	width: 300px;
 	max-width: 100%;
-	height: 120px;
 	border: 4px solid #ccc;
 	border-radius: 5px;
-	max-height: 100%;
-	margin: calc(50vh - 50px)  auto auto auto;
-  padding-left: 20px;
+	max-height: calc(100vh - 20px);
+	margin: calc(50vh - 160px)  auto auto calc(50vw - 150px);;
+	padding-top: 20px;
+	padding-left: 20px;
 	padding-right: 20px;
 	padding-bottom: 20px;
 	box-sizing: border-box
@@ -82,9 +81,15 @@ body #photos .photorow {
 	max-width: 100%;
 }
 
-@media screen and (max-height: 120px ) {
-	#loadingbox {
-		margin-top: 0;
+#nophotos {
+	position: absolute;
+	max-width: none;
+	max-height: none;
+}
+
+@media screen and (max-height: 350px ) {
+	#loadingbox,#nophotos {
+		margin-top: 10px;
 	}
 }
 

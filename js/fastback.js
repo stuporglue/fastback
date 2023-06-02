@@ -106,7 +106,7 @@ Fastback = class Fastback {
 					setTimeout(parser.resume,5);
 				}
 			},
-			complete: function(res,file){
+			complete: function(res,file) {
 				progressbar.css('width','85%');
 
 				if ( has_tag ) {
@@ -115,6 +115,10 @@ Fastback = class Fastback {
 
 				if ( has_geo ) {
 					jQuery('#globeicon').removeClass('disabled');
+				}
+
+				if ( self.photos.length == 0 ) {
+					self.csv_error_load = true;
 				}
 
 				self.orig_photos = self.add_date_blocks(self.photos);
@@ -132,6 +136,9 @@ Fastback = class Fastback {
 					self.hyperlist_init();
 					progressbar.css('width','100%');
 				},20);
+			}, error: function(err, file, inputElem, reason) {
+				// Whatever error we get, we assume 
+				self.csv_error_load = true;
 			}
 		});
 	}
@@ -142,6 +149,7 @@ Fastback = class Fastback {
 	setProps() {
 		this.photourl = "./";
 		this.fastbackurl = "./";
+		this.csv_error_load = false;
 
 		this.photos = [];
 		this.tags = {};
@@ -417,7 +425,6 @@ Fastback = class Fastback {
 	 * Only apply filters to data strctures, no redraws.
 	 */
 	apply_filters() {
-
 		// We never want to get stuck in an applying_filters loop
 		if ( this.applying_filters === true ) {
 			return;
@@ -445,7 +452,6 @@ Fastback = class Fastback {
 	 * Called manually and by hyperlist
 	 */
 	refresh_layout() {
-
 		jQuery('body').css('height',window.innerHeight);
 
 		this.apply_filters();
@@ -474,6 +480,16 @@ Fastback = class Fastback {
 
 		// propagate changes
 		this.hyperlist.refresh(this.hyperlist_container[0], this.hyperlist_config);
+
+		if ( this.photos.length == 0 ) {
+			jQuery('#photos > div').css('opacity',1);
+			var html = '<div id="nophotos"><p>No photos are available for this view. Try changing your filters.</p>';
+			if (this.csv_error_load) {
+				html += '<p>A new install will need a few minutes to populate the database.</p>';
+			}
+			html += '</div>';
+			jQuery('#photos > div').html(html);
+		}
 	}
 
 	/**
