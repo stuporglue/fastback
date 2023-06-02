@@ -19,16 +19,18 @@ class Fastback {
 
 	// Advanced usage
 	var $photobase = __DIR__ . '/../';				// File path to full sized photos, Optional, will use current directory as default
-	var $photourl;									// URL path to full sized photos, Optional, will use current web path as default
-	// Should probably be customized if photobase is customized.
-	// var $photodirregex = './[0-9]\{4\}/[0-9]\{2\}/[0-9]\{2\}/'; // Use '' (empty string) for all photos, regardless of structure.
+	var $photourl;									/* URL path to full sized photos, Optional, will use current web path as default
+													   Should probably be customized if photobase is customized.
+													   var $photodirregex = './[0-9]\{4\}/[0-9]\{2\}/[0-9]\{2\}/'; // Use '' (empty string) for all photos, regardless of structure.
+													*/
 	var $photodirregex = '';						// Use '' (empty string) for all photos, regardless of structure.
 	var $ignore_tag  = array('iMovie','FaceTime');	// Tags to ignore from photos.
 	var $sortorder = 'DESC';						// Sort order of the photos for the csv (ASC or DESC)
 	var $canflag = array();							// List of users who can flag photos. eg. array('Michael','Caroline');
-	var $filecache = __DIR__ . '/cache/';			// Folder path to cache directory. sqlite and thumbnails will be stored here. 
-	// Optional, will create a cache folder in the current directory as the default
-	// $filecache doesn't have to be web accessable
+	var $filecache = __DIR__ . '/cache/';			/* Folder path to cache directory. sqlite and thumbnails will be stored here. 
+													   Optional, will create a cache folder in the current directory as the default
+													   $filecache doesn't have to be web accessable
+													*/
 	var $precachethumbs = false;					// Should thumbnails be created for all photos in the cron task? Default is to generated them on the fly as needed.
 	var $sqlitefile = __DIR__ . '/fastback.sqlite';	// Path to .sqlite file, Optional, defaults to fastback/fastback.sqlite
 	var $csvfile = __DIR__ . '/cache/fastback.csv';	// Path to .csv file, Optional, will use fastback/cache/fastback.sqlite by default
@@ -52,18 +54,19 @@ class Fastback {
 	var $_gzip;										// Generate gzipped csv
 	var $_jpegoptim;								// Path to jpegoptim
 	var $_thumbsize = "256x256";					// Thumbnail size. Must be square.
-	/* 
-	 * How long to let cron run for in seconds. External calls don't count, so for thumbs and exif wall time may be longer
-	 * If this is to short some cron jobs may not record any finished work. See also $_process_limit and $_upsert_limit.
-	 */
-	var $_crontimeout = 120;
+	var $_crontimeout = 120;						/* How long to let cron run for in seconds. External calls don't count, so for thumbs and exif wall time may be longer
+													   If this is to short some cron jobs may not record any finished work. See also $_process_limit and $_upsert_limit.
+													*/
 	var $_cron_min_interval = 62;					// A completed cron will run again occastionally to see if anything is new. This is how long it should wait between runs, when completed.	
-	/* 
-	 * How many concurrent cron jobs should we run? These take up fcgi processes. 
-	 * We don't want to use all processes as it will make the server unresponsive.
-	 * We will set it to CEIL(nproc/4) in cron() to allow some parallell processing.
-	 */
-	var $_concurrent_cronjobs;						
+	var $_concurrent_cronjobs;						/* How many concurrent cron jobs should we run? These take up fcgi processes. 
+													   We don't want to use all processes as it will make the server unresponsive.
+													   We will set it to CEIL(nproc/4) in cron() to allow some parallell processing.
+													 */
+	var $_max_age_diff_csv = 10 * 60;				/* If the csv file is newer than the CSV, there might be new data available. But
+													   we don't want to regenerate the csv on every request while cron is running. This max
+													   age will make sure that we stay fresh, but not TOO fresh.
+													*/
+					
 
 	/*
 	 * These are internal variables you probably shouldn't try to change
@@ -442,6 +445,8 @@ class Fastback {
 		if ( isset($this->_gzip) ) {
 			$cmd = "$this->_gzip -k --best -f {$this->csvfile}.gz";
 			`$cmd`;
+		} else if ( file_exists($this->csvfile . '.gz') ) {
+			$this->log("Can't write new {$this->csvfile}.gz, but it exists. It may get served and show stale results");
 		}
 
 		return true;
@@ -578,7 +583,7 @@ class Fastback {
 	 */
 	public function send_csv() {
 		// Auto detect if CSV has gotten stale
-		if ( !file_exists($this->csvfile) || filemtime($this->sqlitefile) > filemtime($this->csvfile) || filemtime(__FILE__) > filemtime($this->csvfile) ) {
+		if ( !file_exists($this->csvfile) || filemtime($this->sqlitefile) - filemtime($this->csvfile) > $this->_max_age_diff_csv || filemtime(__FILE__) -  filemtime($this->csvfile) > $this->_max_age_diff_csv) {
 			$wrote = $this->util_make_csv(true);
 
 			if ( !$wrote ) {
@@ -588,6 +593,7 @@ class Fastback {
 			}
 		}
 
+		// If server accepts gzip and we have the gzip file, then send it. 
 		if ( strpos($_SERVER['HTTP_ACCEPT_ENCODING'],'gzip') !== FALSE && file_exists($this->csvfile . '.gz')) {
 			$this->log(__FILE__ . ":" . __LINE__ . ' -- ' .  microtime () . "\n"); 
 			$this->util_readfile($this->csvfile . '.gz');

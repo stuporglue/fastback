@@ -3,83 +3,10 @@ Fastback = class Fastback {
 	 * Load the data and set up event handlers
 	 */
 	constructor(args) {
+		var progressbar = jQuery('#loadingprogress');
 		this.setProps();
 		jQuery.extend(this,args);
 		var self = this;
-
-		var has_geo = false;
-		var has_tag = false;
-
-		var progressbar = jQuery('#loadingprogress');
-		var lastprogress = 0;
-
-		console.log("About to start");
-		Papa.parse(args.csvurl,{
-			download:true,
-			skipEmptyLines: true,
-			worker: true,
-			// preview: 100,
-			step: function(res,parser){
-				if ( self.photos.length === 0 ) {
-					console.log("First step");
-				}
-
-				if ( self.photos.length === self.photocount ) {
-					console.log("Last step");
-				}
-
-				if ( res.data[4] !== '' ) {
-					has_geo = true;
-				}
-				if ( res.data[5] !== '' ) {
-					has_tag = true;
-
-					var tags = res.data[5].split('|');
-					for(var j=0;j<tags.length;j++){
-						self.tags[tags[j]] = self.tags[tags[j]] || 0;
-						self.tags[tags[j]]++;
-					}
-				}
-
-				self.photos.push({
-					'file': res.data[0],
-					'isvideo': res.data[1] == 1,
-					'date': new Date(res.data[2] * 1000),
-					'type': 'media',
-					'coordinates': (isNaN(parseFloat(res.data[4])) ? null : [parseFloat(res.data[4]),parseFloat(res.data[3])]),
-					'tags': res.data[5].split('|')
-				});
-
-				// Only check progress every 1000 rows
-				if ( self.photos.length % self.photocount == 1000 ) {
-					var curprog = Math.round(self.photos.length / self.photocount * 100);
-					// And only refresh the progress bar every 5%
-					if (curprog > lastprogress && curprog % 5 === 0){
-						progressbar.css('width',curprog + '%');
-						progressbar.html(curprog);
-						console.log(curprog);
-					}
-				}
-			},
-			complete: function(res,file){
-				console.log("Complete started");
-				if ( has_tag ) {
-					jQuery('#tagicon').removeClass('disabled');
-				}
-
-				if ( has_geo ) {
-					jQuery('#globeicon').removeClass('disabled');
-				}
-
-				self.orig_photos = self.add_date_blocks(self.photos);
-				self.photos = self.orig_photos;
-
-				self.hyperlist_init();
-				self.load_nav();
-				self.make_tags();
-				console.log("Complete complete");
-			}
-		});
 
 		jQuery('#speedslide').on('input',this.speed_slide.bind(this));
 		jQuery('#zoom').on('change',this.zoom_change.bind(this));
@@ -114,7 +41,99 @@ Fastback = class Fastback {
 			jQuery('#webshare').removeClass('disabled');
 		}
 
+		progressbar.css('width','5%');
+
 		setTimeout(this.cron.bind(this),1000 * 30);
+		setTimeout(this.asyncCSV.bind(this),100);
+	}
+
+	/**
+	 * Run the papaparse routine inside a setTimeout to try to get the browser to paint the progress bar
+	 */
+	asyncCSV() {
+
+		var has_geo = false;
+		var has_tag = false;
+
+		var progressbar = jQuery('#loadingprogress');
+		var lastprogress = 0;
+		var self = this;
+
+		Papa.parse(this.csvurl,{
+			download:true,
+			skipEmptyLines: true,
+			// preview: 100,
+			step: function(res,parser){
+
+				if ( self.photos.length == 0 ) {
+					progressbar.css('width','5%');
+					parser.pause();
+					setTimeout(function(){ parser.resume() },5);
+				}
+
+				if ( res.data[4] !== '' ) {
+					has_geo = true;
+				}
+				if ( res.data[5] !== '' ) {
+					has_tag = true;
+
+					var tags = res.data[5].split('|');
+					for(var j=0;j<tags.length;j++){
+						self.tags[tags[j]] = self.tags[tags[j]] || 0;
+						self.tags[tags[j]]++;
+					}
+				}
+
+				self.photos.push({
+					'file': res.data[0],
+					'isvideo': res.data[1] == 1,
+					'date': new Date(res.data[2] * 1000),
+					'type': 'media',
+					'coordinates': (isNaN(parseFloat(res.data[4])) ? null : [parseFloat(res.data[4]),parseFloat(res.data[3])]),
+					'tags': res.data[5].split('|')
+				});
+
+				// Only check progress every 1000 rows
+				var prog_percent = self.photos.length / self.photocount;
+				var curprog = prog_percent * 80;
+				var rounded = Math.round(curprog,0);
+				var modded = rounded % 5;
+
+				if (rounded > lastprogress && modded === 0){
+					progressbar.css('width',rounded + '%');
+					lastprogress = rounded;
+					parser.pause();
+					setTimeout(function(){ parser.resume() },5);
+				}
+			},
+			complete: function(res,file){
+				progressbar.css('width','85%');
+
+				if ( has_tag ) {
+					jQuery('#tagicon').removeClass('disabled');
+				}
+
+				if ( has_geo ) {
+					jQuery('#globeicon').removeClass('disabled');
+				}
+
+				self.orig_photos = self.add_date_blocks(self.photos);
+				self.photos = self.orig_photos;
+
+				setTimeout(function(){
+					self.make_tags();
+					progressbar.css('width','90%');
+				},5);
+				setTimeout(function(){
+					self.load_nav();
+					progressbar.css('width','95%');
+				},15);
+				setTimeout(function(){
+					self.hyperlist_init();
+					progressbar.css('width','100%');
+				},20);
+			}
+		});
 	}
 
 	/**

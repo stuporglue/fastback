@@ -8,3 +8,4 @@ fastback.ini
 *.csv
 cache/*.*
 cache/*
+fastback.sqlite-journal
