@@ -36,7 +36,7 @@ class Fastback {
 		'find_new_files',							// If you don't want them all to run, for example if you don't want to generate thumbnails, then you could change this.
 		'process_exif',
 		'get_exif',
-		'make_thumbs',
+		// 'make_thumbs',							// We generate these on the fly, so by default we won't make them
 		'remove_deleted',
 		'clear_locks');
 
@@ -1244,11 +1244,13 @@ class Fastback {
 		}
 
 		// Quick exit if cachedir doesn't exist. That means we can't cache.
-		if ( !file_exists($this->filecache) && $print_if_not_write ) {
-			$print_to_stdout = true;
-		} else {
-			chdir($origdir);
-			return false;
+		if ( !file_exists($this->filecache) ) {
+			if ( $print_if_not_write ) {
+				$print_to_stdout = true;
+			} else {
+				chdir($origdir);
+				return false;
+			}
 		}
 
 		// Cachedir might exist, but not be wriatable. 
