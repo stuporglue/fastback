@@ -15,9 +15,9 @@ Core features:
 Additional features:
  * Mobile friendly
  * Convert non-web-friendly image formats on the fly (eg. HEIC)
- * Sharing buttons for Facebook, WhatsApp and email
- * Basic password protection
- * Easy to set up (for a web app) [PARTIALLY IMPLEMENTED]
+ * Easy photo sharing
+ * Password protection
+ * Easy to set up (for a web app)
 
 Disclaimers and Decisions
 -------------------------

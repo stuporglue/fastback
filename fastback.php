@@ -117,6 +117,7 @@ class Fastback {
 				$this->log("Fastback cache directory {$this->filecache} doesn't exist");
 				die("Fastback setup error. See errors log.");
 			}
+			touch($this->filecache . '/index.php');
 		}
 
 		// CLI stuff doesn't need auth
@@ -394,9 +395,6 @@ class Fastback {
 	 * @note Using $print_if_not_write will cause this function to exit() after sending.
 	 */
 	private function util_make_csv($print_if_not_write = false){
-		if ( !file_exists($this->filecache) ) {
-			@mkdir($this->filecache,0750,TRUE);
-		}
 
 		$this->sql_connect();
 		$q = "SELECT 
@@ -1030,12 +1028,10 @@ class Fastback {
 			foreach($this->cronjobs as $job) {
 
 				if ( !empty($cron_status[$job]['owner']) ) {
-					$this->log("Skipping {$cron_status[$job]['job']} because has owner");
 					continue;
 				}
 
 				if ( !$cron_status[$job]['due_to_run'] ) {
-					$this->log("Skipping {$cron_status[$job]['job']} because not due to run");
 					continue;
 				}
 
@@ -1248,18 +1244,11 @@ class Fastback {
 		}
 
 		// Quick exit if cachedir doesn't exist. That means we can't cache.
-		if ( !file_exists($this->filecache) ) {
-			mkdir($this->filecache,0750,TRUE);
-			if ( !is_dir($this->filecache) ) {
-				$this->log("Cache dir doesn't exist and can't create it");
-
-				if ( $print_if_not_write ) {
-					$print_to_stdout = true;
-				} else {
-					chdir($origdir);
-					return false;
-				}
-			}
+		if ( !file_exists($this->filecache) && $print_if_not_write ) {
+			$print_to_stdout = true;
+		} else {
+			chdir($origdir);
+			return false;
 		}
 
 		// Cachedir might exist, but not be wriatable. 
@@ -1725,7 +1714,7 @@ class Fastback {
 			$this->sql_query_single("UPDATE cron SET due_to_run=1 WHERE job = 'process_exif'"); // If we found exif, then we need to process it.
 			$this->sql_update_cron_status('get_exif');
 
-		} while (!empty($queue) && false);
+		} while (!empty($queue) );
 
 		fputs($pipes[0], "-stay_open\nFalse\n");
 		fflush($pipes[0]);
