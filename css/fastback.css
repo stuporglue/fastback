@@ -281,7 +281,7 @@ body.map #thumb, body.map #tagwindow {
 	width: 30px;
 }
 
-#thumbcontrols > div:hover {
+#thumbcontrols > div.fakelink:hover {
 	font-size: 11px;
 }
 
@@ -304,6 +304,7 @@ body.map #thumb, body.map #tagwindow {
 	overflow: hidden;
 	text-overflow: ellipsis;
 	overflow: hidden;
+	user-select: initial;
 }
 
 #sharelinkcopy {

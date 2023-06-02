@@ -477,15 +477,12 @@ class Fastback {
 			<div id="thumbleft" class="thumbctrl">LEFT</div>
 			<div id="thumbright" class="thumbctrl">RIGHT</div>
 			<div id="thumbcontrols">
-			<div id="thumbclose">🆇</div>
-			<div class="fakelink" id="thumbdownload" href="#">⬇️</div>
+			<div id="thumbclose" class="fakelink">🆇</div>
+			<div class="fakelink" id="thumbdownload">⬇️</div>
 			<div class="fakelink" id="sharelink"><a href="#">🔗<form id="sharelinkcopy">><input/></form></a></div>
 			<div class="fakelink disabled" id="webshare"><img src="fastback/img/share.png"></div>
 			<div class="fakelink ' . (!empty($this->canflag) && !in_array($_SESSION['user'],$this->canflag) ? 'disabled' : '') . '" id="thumbflag" data-file="#">🚩</div>
 			<div class="fakelink" id="thumbgeo" data-coordinates="">🌐</div>
-			<!-- div class="fakelink" id="sharefb"><img src="fastback/img/fb.png" /></div>
-			<div class="fakelink" id="sharewhatsapp"><img src="fastback/img/whatsapp.png" /></div>
-			<div class="fakelink" id="shareemail">✉️</div -->
 			<div id="thumbinfo"></div>
 			</div>';
 		$html .= '</div>';
