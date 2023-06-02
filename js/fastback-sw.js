@@ -56,6 +56,8 @@ self.addEventListener('fetch', event => {
 					cache_this = true;
 				} else if ( event.request.url.indexOf('?thumbnail=') !== -1 ) {
 					cache_this = true;
+				} else if ( event.request.url.indexOf('?csv=get') !== -1 ) {
+					cache_this = true;
 				} else if ( cleaned_url.indexOf('fastback/') === 0) {
 					cache_this = true;
 				} 

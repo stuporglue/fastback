@@ -49,6 +49,7 @@ class Fastback {
 	var $_sqlite_timeout = 60;						// Wait timeout for a db connection. Value in seconds.
 	var $_vipsthumbnail;							// Path to vips binary
 	var $_ffmpeg;									// Path to ffmpeg binary
+	var $_gzip;										// Generate gzipped csv
 	var $_jpegoptim;								// Path to jpegoptim
 	var $_thumbsize = "256x256";					// Thumbnail size. Must be square.
 	/* 
@@ -417,7 +418,9 @@ class Fastback {
 			$printed = true;
 			header("Content-type: text/plain");
 			header("Content-Disposition: inline; filename=\"" . basename($this->csvfile) . "\"");
-			header("Last-Modified: " . gmdate("D, d M Y H:i:s"));
+			header("Last-Modified: " . filemtime($this->csvfile));
+			header('Cache-Control: max-age=86400');
+			header('Etag: ' . md5_file($this->sqlitefile));
 			$fh = fopen('php://output', 'w');
 		}
 
@@ -433,7 +436,40 @@ class Fastback {
 		if ( $printed ) {
 			exit();
 		}
+
+		if ( !isset($this->_gzip) ) { $this->_gzip= trim(`which gzip`); }
+
+		if ( isset($this->_gzip) ) {
+			$cmd = "$this->_gzip -k --best -f {$this->csvfile}.gz";
+			`$cmd`;
+		}
+
 		return true;
+	}
+
+	private function util_readfile($file,$disposition= 'inline'){
+		$mime = mime_content_type($file);
+		if ( $mime == 'text/csv' ) {
+			$mime = 'text/plain';
+		}
+
+		if ( $mime == 'application/gzip' ) {
+			header("Content-Encoding: gzip");
+			$mime = mime_content_type(str_replace('.gz','',$file));
+		}
+
+		header("Content-Type: $mime");
+		header("Content-Disposition: $disposition; filename=\"" . basename($file) . "\"");
+		header("Content-Length: ".filesize($file));
+		header("Last-Modified: " . filemtime($file));
+		header('Cache-Control: max-age=86400');
+		header('Etag: ' . md5_file($file));
+
+		if ( $disposition == 'download' ) {
+			header("Content-Transfer-Encoding: Binary");
+		}
+
+		readfile($file);
 	}
 
 	/**
@@ -461,7 +497,7 @@ class Fastback {
 		$html .= '<body class="photos">';
 		$html .= '<div id="map"></div>';
 		$html .= '<div id="hyperlist_wrap">';
-		$html .= '<div id="photos"></div>';
+		$html .= '<div id="photos"><div id="loadingbox"><div id="loadingmsg">Loading...</div><div id="loadingprogress"></div></div></div>';
 		$html .= '</div>';
 		$html .= '<input id="speedslide" type="range" orient="vertical" min="0" max="100" value="0"/>';
 		$html .= '<div id="resizer">';
@@ -514,11 +550,19 @@ class Fastback {
 
 		$base_script = preg_replace(array('/.*\//','/\?.*/'),array('',''),$_SERVER['REQUEST_URI']);
 
+		$csvmtime = "";
+		if( file_exists($this->csvfile) ) {
+			$csvmtime = filemtime($this->csvfile);
+		} else {
+			$csvmtime = filemtime($this->sqlitefile);
+		}
+
 		$html .= '<script>
 			fastback = new Fastback({
-			csvurl: "' . $this->util_base_url() . '?csv=get&ts=' . filemtime($this->csvfile) . '",
+				csvurl: "' . $this->util_base_url() . '?csv=get&ts=' . $csvmtime . '",
 				photourl:    "' . $this->photourl .'",
 				fastbackurl: "' . $this->util_base_url() . $base_script . '",
+				photocount: ' . $this->sql_query_single("SELECT COUNT(*) FROM fastback") . '
 		});
 		if("serviceWorker" in navigator) {
 			navigator.serviceWorker.register("?pwa=sw", { scope: "' . $this->util_base_url() . '" });
@@ -544,12 +588,13 @@ class Fastback {
 			}
 		}
 
-		ob_start("ob_gzhandler");
-		header("Content-type: text/plain");
-		header("Content-Disposition: inline; filename=\"" . basename($this->csvfile) . "\"");
-		header("Last-Modified: " . filemtime($this->csvfile));
-		readfile($this->csvfile);
-		ob_end_flush();
+		if ( strpos($_SERVER['HTTP_ACCEPT_ENCODING'],'gzip') !== FALSE && file_exists($this->csvfile . '.gz')) {
+			$this->log(__FILE__ . ":" . __LINE__ . ' -- ' .  microtime () . "\n"); 
+			$this->util_readfile($this->csvfile . '.gz');
+		} else {
+			$this->log(__FILE__ . ":" . __LINE__ . ' -- ' .  microtime () . "\n"); 
+			$this->util_readfile($this->csvfile);
+		}
 	}
 
 	/**
@@ -583,12 +628,7 @@ class Fastback {
 
 		$file = $this->photobase . $file;
 
-		$mime = mime_content_type($file);
-		header("Content-Type: $mime");
-		header("Content-Transfer-Encoding: Binary");
-		header("Content-Length: ".filesize($file));
-		header("Content-Disposition: inline; filename=\"" . basename($file) . "\"");
-		readfile($file);
+		$this->util_readfile($file);
 		exit();
 	}
 
@@ -623,12 +663,7 @@ class Fastback {
 			passthru($cmd);
 			exit();
 		} else {
-			$mime = mime_content_type($file);
-			header("Content-Type: $mime");
-			header("Content-Transfer-Encoding: Binary");
-			header("Content-Length: ".filesize($file));
-			header("Content-Disposition: inline; filename=\"" . basename($file) . "\"");
-			readfile($file);
+			$this->util_readfile($file);
 			exit();
 		}
 	}
@@ -644,13 +679,7 @@ class Fastback {
 		}
 
 		$file = $this->photobase . $file;
-
-		$mime = mime_content_type($file);
-		header("Content-Type: $mime");
-		header("Content-Transfer-Encoding: Binary");
-		header("Content-Length: ".filesize($file));
-		header("Content-disposition: attachment; filename=\"" . basename($file) . "\"");
-		readfile($file);
+		$this->util_readfile($file,'download');
 		exit();
 	}
 
@@ -669,12 +698,7 @@ class Fastback {
 			$thumbnailfile = $this->util_file_is_ok($_GET['thumbnail']);
 		}
 
-		$mime = mime_content_type($thumbnailfile);
-		header("Content-Type: $mime");
-		header("Content-Transfer-Encoding: Binary");
-		header("Content-Length: ".filesize($thumbnailfile));
-		header("Content-Disposition: inline; filename=\"" . basename($thumbnailfile) . "\"");
-		readfile($thumbnailfile);
+		$this->util_readfile($thumbnailfile);
 		exit();
 	}
 
@@ -1331,8 +1355,7 @@ class Fastback {
 	private function _make_image_thumb($file,$thumbnailfile,$print_to_stdout = false) {
 		if ( file_exists($thumbnailfile) ) {
 			if ( $print_to_stdout ) {
-				header("Content-Type: image/webp");
-				readfile($thumbnailfile);
+				$this->util_readfile($thumbnailfile);
 				exit();
 			}
 			return $thumbnailfile;
@@ -1353,6 +1376,9 @@ class Fastback {
 
 			if ( $print_to_stdout ) {
 				header("Content-Type: image/webp");
+				header("Last-Modified: " . filemtime($file));
+				header('Cache-Control: max-age=86400');
+				header('Etag: ' . md5_file($file));
 				print $res;
 				exit();
 			}
@@ -1374,6 +1400,9 @@ class Fastback {
 
 			if ( $print_to_stdout ) {
 				header("Content-Type: image/webp");
+				header("Last-Modified: " . filemtime($file));
+				header('Cache-Control: max-age=86400');
+				header('Etag: ' . md5_file($file));
 				print $res;
 				exit();
 			}
@@ -1425,6 +1454,9 @@ class Fastback {
 						imagecopyresampled($tmpimg, $img, 0, 0, $srcx, $srcy, $newwidth, $newheight, $width, $height );
 						if ( $print_to_stdout ) {
 							header("Content-Type: image/webp");
+							header("Last-Modified: " . filemtime($file));
+							header('Cache-Control: max-age=86400');
+							header('Etag: ' . md5_file($file));
 							imagewebp($tmpimg);
 						} else {
 							imagewebp($tmpimg, $thumbnailfile);
@@ -1456,8 +1488,7 @@ class Fastback {
 	private function _make_video_thumb($file,$thumbnailfile,$print_to_stdout) {
 			if ( file_exists($thumbnailfile) ) {
 				if ( $print_to_stdout ) {
-					header("Content-Type: image/webp");
-					readfile($thumbnailfile);
+					$this->util_readfile($thumbnailfile);
 					exit();
 				}
 				return $thumbnailfile;
@@ -1483,6 +1514,9 @@ class Fastback {
 
 				if ( $print_to_stdout && $res !== NULL) {
 					header("Content-Type: image/webp");
+					header("Last-Modified: " . filemtime($file));
+					header('Cache-Control: max-age=86400');
+					header('Etag: ' . md5_file($file));
 					print($res);
 					exit();
 				}
@@ -1493,6 +1527,9 @@ class Fastback {
 
 					if ( $print_to_stdout && $res !== NULL) {
 						header("Content-Type: image/webp");
+						header("Last-Modified: " . filemtime($file));
+						header('Cache-Control: max-age=86400');
+						header('Etag: ' . md5_file($file));
 						print($res);
 						exit();
 					}
@@ -1503,6 +1540,9 @@ class Fastback {
 					$res = `$cmd`;
 					if ( $print_to_stdout && $res !== NULL) {
 						header("Content-Type: image/png");
+						header("Last-Modified: " . filemtime($file));
+						header('Cache-Control: max-age=86400');
+						header('Etag: ' . md5_file($file));
 						print($res);
 						exit();
 					} 
@@ -1531,8 +1571,7 @@ class Fastback {
 
 			if ( file_exists($thumbnailfile) ) {
 				if ( $print_to_stdout ) {
-					header('Content-Type: image/webp');
-					readfile($thumbnailfile);
+					$this->util_readfile($thumbnailfile);
 					exit();
 				} 
 
@@ -1540,8 +1579,7 @@ class Fastback {
 			}
 
 			if ( $print_to_stdout ) {
-				header('Content-Type: image/webp');
-				readfile(__DIR__ . '/img/movie.webp');
+				$this->util_readfile(__DIR__ . '/image/movie.webp');
 				exit();
 			}
 	}

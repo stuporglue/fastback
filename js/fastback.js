@@ -7,33 +7,62 @@ Fastback = class Fastback {
 		jQuery.extend(this,args);
 		var self = this;
 
+		var has_geo = false;
+		var has_tag = false;
+
+		var progressbar = jQuery('#loadingprogress');
+		var lastprogress = 0;
+
+		console.log("About to start");
 		Papa.parse(args.csvurl,{
 			download:true,
 			skipEmptyLines: true,
-			complete: function(res){
+			worker: true,
+			// preview: 100,
+			step: function(res,parser){
+				if ( self.photos.length === 0 ) {
+					console.log("First step");
+				}
 
-				var has_geo = false;
-				var has_tag = false;
+				if ( self.photos.length === self.photocount ) {
+					console.log("Last step");
+				}
 
-				self.photos = res.data.map(function(r){
+				if ( res.data[4] !== '' ) {
+					has_geo = true;
+				}
+				if ( res.data[5] !== '' ) {
+					has_tag = true;
 
-					if ( r[4] !== '' ) {
-						has_geo = true;
+					var tags = res.data[5].split('|');
+					for(var j=0;j<tags.length;j++){
+						self.tags[tags[j]] = self.tags[tags[j]] || 0;
+						self.tags[tags[j]]++;
 					}
-					if ( r[5] !== '' ) {
-						has_tag = true;
-					}
+				}
 
-					return {
-						'file': r[0],
-						'isvideo': r[1] == 1,
-						'date': new Date(r[2] * 1000),
-						'type': 'media',
-						'coordinates': (isNaN(parseFloat(r[4])) ? null : [parseFloat(r[4]),parseFloat(r[3])]),
-						'tags': r[5].split('|')
-					};
+				self.photos.push({
+					'file': res.data[0],
+					'isvideo': res.data[1] == 1,
+					'date': new Date(res.data[2] * 1000),
+					'type': 'media',
+					'coordinates': (isNaN(parseFloat(res.data[4])) ? null : [parseFloat(res.data[4]),parseFloat(res.data[3])]),
+					'tags': res.data[5].split('|')
 				});
 
+				// Only check progress every 1000 rows
+				if ( self.photos.length % self.photocount == 1000 ) {
+					var curprog = Math.round(self.photos.length / self.photocount * 100);
+					// And only refresh the progress bar every 5%
+					if (curprog > lastprogress && curprog % 5 === 0){
+						progressbar.css('width',curprog + '%');
+						progressbar.html(curprog);
+						console.log(curprog);
+					}
+				}
+			},
+			complete: function(res,file){
+				console.log("Complete started");
 				if ( has_tag ) {
 					jQuery('#tagicon').removeClass('disabled');
 				}
@@ -42,39 +71,13 @@ Fastback = class Fastback {
 					jQuery('#globeicon').removeClass('disabled');
 				}
 
-				var tmptags,j,i;
-
 				self.orig_photos = self.add_date_blocks(self.photos);
-
-				for(i = 0;i<self.orig_photos.length;i++){
-					self.orig_photos[i].id = i;
-				}
-
 				self.photos = self.orig_photos;
-
-				self.tags = {};
-				for(i = 0; i < self.orig_photos.length; i++){
-					if (self.orig_photos[i].type == 'media' && self.orig_photos[i].tags != '') {
-						tmptags = self.orig_photos[i].tags;
-						for(j = 0;j < tmptags.length; j++){
-							self.tags[tmptags[j]] = self.tags[tmptags[j]] || 0;
-							self.tags[tmptags[j]]++;
-						}
-					}
-				}
-
-				// Browsers can only support an object so big, so we can only use so many rows.
-				// Calculate the new max zoom
-				self.maxzoom = Math.ceil(Math.sqrt(self.hyperlist_container.width() * self.photos.length / HyperList.getMaxBrowserHeight()));
-
-				// Make sure our new cols doesn't go over the max zoom
-				self.cols = Math.max(self.maxzoom, self.cols);
-
-				self.hyperlist_container.addClass('up' + self.cols);
 
 				self.hyperlist_init();
 				self.load_nav();
 				self.make_tags();
+				console.log("Complete complete");
 			}
 		});
 
@@ -122,6 +125,7 @@ Fastback = class Fastback {
 		this.fastbackurl = "./";
 
 		this.photos = [];
+		this.tags = {};
 		this.cols = 5;
 		this.palette = [ '#eedfd1', '#52a162', '#23403b', '#f3a14b', '#ec6c3e', '#d0464e', '#963755' ];
 		this.hyperlist_container = jQuery('#photos');
@@ -168,6 +172,15 @@ Fastback = class Fastback {
 	 */
 	hyperlist_init() {
 		var self = this;
+
+		// Browsers can only support an object so big, so we can only use so many rows.
+		// Calculate the new max zoom
+		this.maxzoom = Math.ceil(Math.sqrt(this.hyperlist_container.width() * this.photos.length / HyperList.getMaxBrowserHeight()));
+
+		// Make sure our new cols doesn't go over the max zoom
+		this.cols = Math.max(this.maxzoom, this.cols);
+
+		this.hyperlist_container.addClass('up' + this.cols);
 
 		this.hyperlist_config = {
 			height: window.innerHeight,
@@ -330,6 +343,11 @@ Fastback = class Fastback {
 					'date': photos[i]['date']
 				});
 			}
+
+			if ( this.orig_photos == undefined ) {
+				photos[i].id = i;
+			}
+
 			prev_date = cur_date;
 		}
 
