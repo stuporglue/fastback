@@ -504,8 +504,8 @@ class Fastback {
 		$html .= '<div id="hyperlist_wrap">';
 		$html .= '<div id="photos"><div id="loadingbox"><div id="loadingmsg">Loading...</div><div id="loadingprogress"></div></div></div>';
 		$html .= '</div>';
-		$html .= '<input id="speedslide" type="range" orient="vertical" min="0" max="100" value="0"/>';
-		$html .= '<div id="resizer">';
+		$html .= '<input id="speedslide" class="afterload" type="range" orient="vertical" min="0" max="100" value="0"/>';
+		$html .= '<div id="resizer" class="afterload">';
 		$html .= '<input type="range" min="1" max="10" value="5" class="slider" id="zoom">';
 		$html .= '<div id="globeicon" class="disabled"></div>';
 		$html .= '<div id="tagicon" class="disabled"></div>';

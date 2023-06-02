@@ -68,7 +68,7 @@ Fastback = class Fastback {
 				if ( self.photos.length == 0 ) {
 					progressbar.css('width','5%');
 					parser.pause();
-					setTimeout(function(){ parser.resume() },5);
+					setTimeout(parser.resume,5);
 				}
 
 				if ( res.data[4] !== '' ) {
@@ -103,7 +103,7 @@ Fastback = class Fastback {
 					progressbar.css('width',rounded + '%');
 					lastprogress = rounded;
 					parser.pause();
-					setTimeout(function(){ parser.resume() },5);
+					setTimeout(parser.resume,5);
 				}
 			},
 			complete: function(res,file){
@@ -259,6 +259,7 @@ Fastback = class Fastback {
 		jQuery('#globeicon').on('click',this.handle_globe_click.bind(this));
 		jQuery('#exiticon').on('click',this.handle_exit_click.bind(this));
 		jQuery('#tagicon,#tagwindowclose').on('click',this.handle_tag_click.bind(this));
+		jQuery('.afterload').addClass('loaded');
 	}
 
 	/*
@@ -604,6 +605,10 @@ Fastback = class Fastback {
 	}
 
 	hide_thumb() {
+		if ( jQuery('#thumb').hasClass('disabled') ) {
+			return;
+		}
+
 		jQuery('#thumb').addClass('disabled');
 		if ( jQuery('#thumb video').length > 0 ) {
 			jQuery('#thumb video')[0].pause();
@@ -742,8 +747,10 @@ Fastback = class Fastback {
 		this.fmap.flashlayer.addTo(this.fmap.lmap);
 		L.control.mapfilter({ position: 'topleft' }).addTo(this.fmap.lmap);
 
-		this.map_update_cluster();
-		this.after_render();
+		setTimeout(function(){
+			self.map_update_cluster();
+			self.after_render();
+		},200);
 	}
 
 	_map_handle_zoom_move_end(e) {
@@ -996,6 +1003,11 @@ Fastback = class Fastback {
 	 * Close tags interface, applying filter, if needed
 	 */
 	hide_tags() {
+
+		if ( $('#tagwindow').hasClass('disabled') ) {
+			return;
+		}
+
 		$('#tagwindow').addClass('disabled');
 
 		var tagstate = JSON.stringify({
@@ -1043,7 +1055,7 @@ Fastback = class Fastback {
 		}
 
 		this.dirty_filters = true;
-		this.refresh_layout();
+		setTimeout(this.refresh_layout.bind(this),20);
 	}
 
 	/**
@@ -1060,7 +1072,7 @@ Fastback = class Fastback {
 			icon.addClass('active');
 
 			if ( this.fmap === undefined ) {
-				this.map_init();
+				setTimeout(this.map_init.bind(this),100);
 			} else {
 				this.fmap.lmap.invalidateSize();
 				if ( this.fmap.clusterlayer.getBounds().isValid() ) {

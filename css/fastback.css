@@ -49,11 +49,15 @@ body #photos .photorow {
 #loadingbox {
 	width: 300px;
 	max-width: 100%;
-	height: 100px;
+	height: 120px;
 	border: 4px solid #ccc;
 	border-radius: 5px;
 	max-height: 100%;
 	margin: calc(50vh - 50px)  auto auto auto;
+  padding-left: 20px;
+	padding-right: 20px;
+	padding-bottom: 20px;
+	box-sizing: border-box
 }
 
 #loadingmsg {
@@ -62,6 +66,7 @@ body #photos .photorow {
 	text-align: center;
 	animation: flickerAnimation 2s infinite;
 }
+
 @keyframes flickerAnimation {
   0%   { opacity:1; }
   50%  { opacity:0.3; }
@@ -71,14 +76,13 @@ body #photos .photorow {
 #loadingprogress {
 	background-color: #888;
 	height: 20px;
-	margin-top: 20px;
 	border-radius: 20px;
-	margin-left: 10px;
-	margin: 20px;
+	margin-top: 20px;
 	width: 0%;
+	max-width: 100%;
 }
 
-@media screen and (max-height: 100px ) {
+@media screen and (max-height: 120px ) {
 	#loadingbox {
 		margin-top: 0;
 	}
@@ -264,6 +268,15 @@ body .up10 .tn {width: calc(100vw/10); height: calc(100vw/10); font-size: 2vw;  
 
 .disabled {
 	display: none !important;
+}
+
+#speedslide.afterload,.afterload {
+	opacity: 0;
+}
+
+#speedslide.afterload.loaded,.afterload.loaded {
+	opacity: 1;
+	transition: opacity 1s ease-in;
 }
 
 #calendaricon {
