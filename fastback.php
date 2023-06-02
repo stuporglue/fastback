@@ -23,6 +23,7 @@ class Fastback {
 													   Should probably be customized if photobase is customized.
 													   var $photodirregex = './[0-9]\{4\}/[0-9]\{2\}/[0-9]\{2\}/'; // Use '' (empty string) for all photos, regardless of structure.
 													*/
+	var $basemap = "L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a> contributors'})";
 	var $photodirregex = '';						// Use '' (empty string) for all photos, regardless of structure.
 	var $ignore_tag  = array('iMovie','FaceTime');	// Tags to ignore from photos.
 	var $sortorder = 'DESC';						// Sort order of the photos for the csv (ASC or DESC)
@@ -567,7 +568,8 @@ class Fastback {
 				csvurl: "' . $this->util_base_url() . '?csv=get&ts=' . $csvmtime . '",
 				photourl:    "' . $this->photourl .'",
 				fastbackurl: "' . $this->util_base_url() . $base_script . '",
-				photocount: ' . $this->sql_query_single("SELECT COUNT(*) FROM fastback") . '
+				photocount: ' . $this->sql_query_single("SELECT COUNT(*) FROM fastback") . ',
+				basemap: ' . $this->basemap . '
 		});
 		if("serviceWorker" in navigator) {
 			navigator.serviceWorker.register("?pwa=sw", { scope: "' . $this->util_base_url() . '" });

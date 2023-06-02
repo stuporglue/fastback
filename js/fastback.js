@@ -668,10 +668,7 @@ Fastback = class Fastback {
 
 		this.fmap = {
 			'lmap':  L.map('map').setView([0,0], 2),
-			'base_map':  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-				maxZoom: 19,
-				attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-			}),
+			'base_map':  this.basemap,
 			'clusterlayer': L.markerClusterGroup({
 				spiderfyOnMaxZoom: true,
 				maxClusterRadius: 40
@@ -773,24 +770,29 @@ Fastback = class Fastback {
 			return;
 		}
 
-		var geojson = this.build_geojson();
+		var self = this;
+		setTimeout(function(){
+			var geojson = self.build_geojson();
 
-		var gj = L.geoJson(geojson);
+			var gj = L.geoJson(geojson);
 
-		this.fmap.clusterlayer.clearLayers()
-		this.fmap.clusterlayer.addLayer(gj,{
-			'chunkedLoading': true
-		});
+			self.fmap.clusterlayer.clearLayers()
 
+			setTimeout(function(){
+				self.fmap.clusterlayer.addLayer(gj,{
+					'chunkedLoading': true
+				});
 
-		// If we're handling a user inited map move we don't want to update zoom. Let the user go where they want.
-		if ( this.handling_map_move_end === undefined ) {
-			if ( this.fmap.clusterlayer.getBounds().isValid() ) {
-				this.fmap.lmap.fitBounds(this.fmap.clusterlayer.getBounds());
-			} else {
-				this.fmap.lmap.setView([0,0],1);
-			}
-		}
+				// If we're handling a user inited map move we don't want to update zoom. Let the user go where they want.
+				if ( self.handling_map_move_end === undefined ) {
+					if ( self.fmap.clusterlayer.getBounds().isValid() ) {
+						self.fmap.lmap.fitBounds(self.fmap.clusterlayer.getBounds());
+					} else {
+						self.fmap.lmap.setView([0,0],1);
+					}
+				}
+			},150);
+		},50);
 	}
 
 	/**
