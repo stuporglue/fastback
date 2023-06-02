@@ -13,7 +13,7 @@ class Fastback {
 	 * $fb->run();
 	 *
 	 */ 
-	var $debug = 1;									// Are we debugging
+	var $debug = 0;									// Are we debugging
 	var $sitetitle = "Fastback Photo Gallery";		// Title
 	var $user = array();							// Dictionary of username => password 
 
