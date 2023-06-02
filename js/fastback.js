@@ -43,7 +43,6 @@ Fastback = class Fastback {
 
 		progressbar.css('width','5%');
 
-		setTimeout(this.cron.bind(this),1000 * 30);
 		setTimeout(this.asyncCSV.bind(this),100);
 	}
 
@@ -119,6 +118,10 @@ Fastback = class Fastback {
 
 				if ( self.photos.length == 0 ) {
 					self.csv_error_load = true;
+					// If we got an error we want to start cron right away
+					setTimeout(self.cron.bind(self),1);
+				} else {
+					setTimeout(self.cron.bind(self),1000 * 30);
 				}
 
 				self.orig_photos = self.add_date_blocks(self.photos);
@@ -139,6 +142,7 @@ Fastback = class Fastback {
 			}, error: function(err, file, inputElem, reason) {
 				// Whatever error we get, we assume 
 				self.csv_error_load = true;
+				setTimeout(self.cron.bind(self),1);
 			}
 		});
 	}

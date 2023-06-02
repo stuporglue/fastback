@@ -37,6 +37,7 @@ class Fastback {
 	var $csvfile = __DIR__ . '/cache/fastback.csv';	// Path to .csv file, Optional, will use fastback/cache/fastback.sqlite by default
 	var $cronjobs = array(							// These are the cron jobs we will try to run, in the order we try to complete them.
 		'find_new_files',							// If you don't want them all to run, for example if you don't want to generate thumbnails, then you could change this.
+		'make_csv',
 		'process_exif',
 		'get_exif',
 		// 'make_thumbs',							// We generate these on the fly, so by default we won't make them
@@ -106,6 +107,12 @@ class Fastback {
 	 */
 	public function __construct() {
 		$this->photourl = $this->util_base_url();
+
+		if (php_sapi_name() !== 'cli') {
+			// Dothis after cli handling so that cli error log still goes to stdout
+			ini_set('error_log', $this->filecache . '/fastback.log'); 
+		}
+
 		// This will only log if debug is enabled
 		$this->log("Debug enabled");
 	}
@@ -130,9 +137,6 @@ class Fastback {
 			$this->util_handle_cli();
 			exit();
 		}
-
-		// Dothis after cli handling so that cli error log still goes to stdout
-		ini_set('error_log', $this->filecache . '/fastback.log'); 
 
 		// PWA stuff doesn't need auth
 		if ( !empty($_GET['pwa']) ) {
@@ -402,6 +406,13 @@ class Fastback {
 	private function util_make_csv($print_if_not_write = false){
 
 		$this->sql_connect();
+		$rows = $this->sql_query_single("SELECT COUNT(*) FROM fastback");
+
+		// If we have no rows in the db, try to run the find_new_files cron
+		if ( $rows === 0 ) {
+			$this->cron_find_new_files();	
+		}
+
 		$q = "SELECT 
 			file,
 			isvideo,
@@ -586,8 +597,7 @@ class Fastback {
 	 * Send, creating if needed, the CSV file of all the photos
 	 */
 	public function send_csv() {
-		// Auto detect if CSV has gotten stale
-		if ( !file_exists($this->csvfile) || filemtime($this->sqlitefile) - filemtime($this->csvfile) > $this->_max_age_diff_csv || filemtime(__FILE__) -  filemtime($this->csvfile) > $this->_max_age_diff_csv) {
+		if ( !file_exists($this->csvfile ) ) {
 			$wrote = $this->util_make_csv(true);
 
 			if ( !$wrote ) {
@@ -599,10 +609,8 @@ class Fastback {
 
 		// If server accepts gzip and we have the gzip file, then send it. 
 		if ( strpos($_SERVER['HTTP_ACCEPT_ENCODING'],'gzip') !== FALSE && file_exists($this->csvfile . '.gz')) {
-			$this->log(__FILE__ . ":" . __LINE__ . ' -- ' .  microtime () . "\n"); 
 			$this->util_readfile($this->csvfile . '.gz');
 		} else if ( file_exists($this->csvfile) ) {
-			$this->log(__FILE__ . ":" . __LINE__ . ' -- ' .  microtime () . "\n"); 
 			$this->util_readfile($this->csvfile);
 		}
 	}
@@ -1082,7 +1090,7 @@ class Fastback {
 			);
 			print(json_encode($res));
 
-		// http1 and non-fcgi implementations
+			// http1 and non-fcgi implementations
 			$old_val = ini_set('catch_workers_output','yes'); // Without this our error_log calls don't get sent to the error log. 
 			$size = ob_get_length();
 			header("Content-Length: $size");
@@ -1090,6 +1098,8 @@ class Fastback {
 			ob_end_flush();
 			@ob_flush();
 			flush();
+
+			// http2
 			@fastcgi_finish_request();
 		}
 
@@ -1152,6 +1162,7 @@ class Fastback {
 				if ( count($collect_photo) >= $this->_upsert_limit) {
 					$sql = $multi_insert . implode(",",$collect_photo) . $multi_insert_tail . '0';
 					$this->sql_query_single($sql);
+					$this->sql_query_single("UPDATE cron SET due_to_run=1 WHERE job = 'make_csv'"); // If we found files, we need to make csv
 					$this->sql_update_cron_status('find_new_files');
 					$collect_photo = array();
 				}
@@ -1159,6 +1170,7 @@ class Fastback {
 				if ( count($collect_video) >= $this->_upsert_limit) {
 					$sql = $multi_insert . implode(",",$collect_video) . $multi_insert_tail . '1';
 					$this->sql_query_single($sql);
+					$this->sql_query_single("UPDATE cron SET due_to_run=1 WHERE job = 'make_csv'"); // If we found files, we need to make csv
 					$this->sql_update_cron_status('find_new_files');
 					$collect_video = array();
 				}
@@ -1167,6 +1179,7 @@ class Fastback {
 			if ( count($collect_photo) > 0 ) {
 				$sql = $multi_insert . implode(",",$collect_photo) . $multi_insert_tail . '0';
 				$this->sql_query_single($sql);
+				$this->sql_query_single("UPDATE cron SET due_to_run=1 WHERE job = 'make_csv'"); // If we found files, we need to make csv
 				$this->sql_update_cron_status('find_new_files');
 				$collect_photo = array();
 			}
@@ -1174,6 +1187,7 @@ class Fastback {
 			if ( count($collect_video) > 0 ) {
 				$sql = $multi_insert . implode(",",$collect_video) . $multi_insert_tail . '1';
 				$this->sql_query_single($sql);
+				$this->sql_query_single("UPDATE cron SET due_to_run=1 WHERE job = 'make_csv'"); // If we found files, we need to make csv
 				$this->sql_update_cron_status('find_new_files');
 				$collect_video = array();
 			}
@@ -1184,7 +1198,6 @@ class Fastback {
 			// lastmod to see where to pick up from
 			$this->sql_update_cron_status('find_new_files',true,$maxtime);
 		}
-
 		chdir($origdir);
 		return true;
 	}
@@ -1871,11 +1884,28 @@ class Fastback {
 	 * Clear all locks. These can happen if jobs timeout or something.
 	 */
 	public function cron_clear_locks() {
+		$this->sql_update_cron_status('clear_locks');
 		// Clear reserved things once in a while.  May cause some double processing but also makes it possible to reprocess things that didn't work the first time.
 		$this->sql_query_single("UPDATE fastback SET _util=NULL WHERE _util LIKE 'RESERVED%'");
 		// Also clear owner of any cron entries which have been idle for 3x the timeout period.
 		$this->sql_query_single("UPDATE cron SET owner=NULL WHERE updated < " . (time() - (60 * $this->_crontimeout * 3)));
 		$this->sql_update_cron_status('clear_locks',true);
+	}
+
+	/**
+	 * Update the CSV file
+	 */
+	public function cron_make_csv(){
+		$this->sql_update_cron_status('make_csv');
+		// A change to the sqlite or this file could indicate the need for a new csv. 
+		// With the cron jobs being busy in the sqlite file that's not completely accurate, but it's the best easy thing.
+
+		if ( !file_exists($this->csvfile) || filemtime($this->sqlitefile) - filemtime($this->csvfile) > 0 || filemtime(__FILE__) -  filemtime($this->csvfile) > 0) {
+			$wrote = $this->util_make_csv();
+			if ( $wrote ) {
+				$this->sql_update_cron_status('make_csv',true);
+			}
+		}
 	}
 
 	/**
