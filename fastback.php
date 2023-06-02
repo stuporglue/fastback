@@ -3,7 +3,10 @@ class Fastback {
 	/*
 	 * Settings!
 	 *
-	 * Usage
+	 * Usage: 
+	 * Initialize Fastback, then override whatever you want to.
+	 * Then call run.
+	 *
 	 * $fb = new Fastback();
 	 * $fb->sitetitle = "Moore Family Gallery!";
 	 * $fb->user['Michael'] = 'Mypassw0rd!;
@@ -29,6 +32,13 @@ class Fastback {
 	var $precachethumbs = false;					// Should thumbnails be created for all photos in the cron task? Default is to generated them on the fly as needed.
 	var $sqlitefile = __DIR__ . '/fastback.sqlite';	// Path to .sqlite file, Optional, defaults to fastback/fastback.sqlite
 	var $csvfile = __DIR__ . '/cache/fastback.csv';	// Path to .csv file, Optional, will use fastback/cache/fastback.sqlite by default
+	var $cronjobs = array(							// These are the cron jobs we will try to run, in the order we try to complete them.
+		'find_new_files',							// If you don't want them all to run, for example if you don't want to generate thumbnails, then you could change this.
+		'process_exif',
+		'get_exif',
+		'make_thumbs',
+		'remove_deleted',
+		'clear_locks');
 
 	// Internal variables. These are also editable, but you probably don't need to.
 	// Proceed with caution.
@@ -41,11 +51,18 @@ class Fastback {
 	var $_ffmpeg;									// Path to ffmpeg binary
 	var $_jpegoptim;								// Path to jpegoptim
 	var $_thumbsize = "256x256";					// Thumbnail size. Must be square.
-	var $_crontimeout = 120;						// How long to let cron run for in seconds. External calls don't count, so for thumbs and exif wall time may be longer
-	// If this is to short some cron jobs may not record any finished work. See also $_process_limit and $_upsert_limit.
-	var $_concurrent_cronjobs;						// How many concurrent cron jobs should we run? These take up fcgi processes. 
-	// We don't want to use all processes as it will make the server unresponsive.
-	// We will set it to CEIL(nproc/4) in cron() to allow some parallell processing.
+	/* 
+	 * How long to let cron run for in seconds. External calls don't count, so for thumbs and exif wall time may be longer
+	 * If this is to short some cron jobs may not record any finished work. See also $_process_limit and $_upsert_limit.
+	 */
+	var $_crontimeout = 120;
+	var $_cron_min_interval = 62;					// A completed cron will run again occastionally to see if anything is new. This is how long it should wait between runs, when completed.	
+	/* 
+	 * How many concurrent cron jobs should we run? These take up fcgi processes. 
+	 * We don't want to use all processes as it will make the server unresponsive.
+	 * We will set it to CEIL(nproc/4) in cron() to allow some parallell processing.
+	 */
+	var $_concurrent_cronjobs;						
 
 	/*
 	 * These are internal variables you probably shouldn't try to change
@@ -95,7 +112,7 @@ class Fastback {
 	 */
 	public function run() {
 		if ( !is_dir($this->filecache) ) {
-			@mkdir($this->filecache,0700,TRUE);
+			@mkdir($this->filecache,0750,TRUE);
 			if ( !is_dir($this->filecache) ) {
 				$this->log("Fastback cache directory {$this->filecache} doesn't exist");
 				die("Fastback setup error. See errors log.");
@@ -168,6 +185,19 @@ class Fastback {
 	private function util_handle_cli(){
 			global $argv;
 
+			pcntl_async_signals(true);
+
+			// setup signal handlers
+			pcntl_signal(SIGINT, function(){
+				$this->log("Got SIGINT and now exiting");
+				exit();
+			});
+
+			pcntl_signal(SIGTERM, function(){
+				$this->log("Got SIGTERM and now exiting");
+				exit();
+			});
+
 			if ( isset($argv) ) {
 				$debug_found = array_search('debug',$argv);
 				if ( $debug_found !== FALSE ) {
@@ -181,9 +211,7 @@ class Fastback {
 				return;
 			} 
 
-			$allowed_actions = array('find_new_files','get_exif','process_exif','make_thumbs','remove_deleted','clear_locks');
-
-			if ( in_array($argv[1],$allowed_actions) ) {
+			if ( in_array($argv[1],$this->cronjobs) ) {
 				$this->log("Running {$argv[1]}");
 				$func = "cron_" . $argv[1];
 				$this->$func();
@@ -342,7 +370,7 @@ class Fastback {
 	 */
 	private function util_file_is_ok($file) {	
 		$file_safe = SQLite3::escapeString($file);
-		$file_safe = $this->sql_query_single("SELECT file FROM fastback WHERE file='$file'");
+		$file_safe = $this->sql_query_single("SELECT file FROM fastback WHERE file='$file_safe'");
 		if ( !$file_safe ) {
 			http_response_code(404);
 			$this->log("Someone tried to access file '''$file'''");
@@ -367,7 +395,7 @@ class Fastback {
 	 */
 	private function util_make_csv($print_if_not_write = false){
 		if ( !file_exists($this->filecache) ) {
-			@mkdir($this->filecache,0700,TRUE);
+			@mkdir($this->filecache,0750,TRUE);
 		}
 
 		$this->sql_connect();
@@ -767,7 +795,6 @@ class Fastback {
 			$this->_sql->busyTimeout($this->_sqlite_timeout * 1001);
 			$this->sql_setup_db();
 		} else {
-			$this->log("Connecting...");
 			$this->_sql = new SQLite3($this->sqlitefile);
 			$this->_sql->busyTimeout($this->_sqlite_timeout * 1000);
 		}
@@ -777,11 +804,12 @@ class Fastback {
 	 * Initialize the database
 	 */
 	public function sql_setup_db() {
-		$q_create_meta = "Create TABLE IF NOT EXISTS cron ( 
+		$q_create_meta = "CREATE TABLE IF NOT EXISTS cron ( 
 			job VARCHAR(255) PRIMARY KEY, 
 			updated INTEGER,
-			completed BOOL,
-			owner TEXT,
+			last_completed INTEGER DEFAULT NULL, -- Set to 1 once it has last_completed at least once
+			due_to_run BOOL DEFALUT 1, -- Set to 0 each time it completes, and then cleared when the completion is stale
+			owner TEXT, -- pid of the process running it
 			meta TEXT
 		)";
 		$res = $this->_sql->query($q_create_meta);
@@ -830,7 +858,7 @@ class Fastback {
 
 		$max = 5;
 		while ( $err = $this->_sql->lastErrorMsg() && $max--) {
-			if ( $err == "1") {
+			if ( $err != "1" && $err != "not an error") {
 				break;
 			}
 			$this->log("SQL error: $err");
@@ -842,6 +870,12 @@ class Fastback {
 	private function sql_query_single($query,$entireRow = false) {
 		$this->sql_connect();
 		$res = $this->_sql->querySingle($query,$entireRow);
+		$err = $this->_sql->lastErrorMsg();
+		if ( $err != "1" && $err != "not an error") {
+			$this->log("SQL error: $err");
+			$this->log($query);
+		}
+		
 		$this->sql_disconnect();
 		return $res;
 	}
@@ -894,17 +928,28 @@ class Fastback {
 	 * Do cron upserts
 	 */
 	private function sql_update_cron_status($job,$complete = false,$meta=false) {
-		$complete = ( $complete ? 1 : 0 );
+		$the_time = time();
 		$owner = ( $complete ? 'NULL' : "'" . getmypid() . "'");
 
-		if ( $meta !== false ){
-			$this->sql_query_single("INSERT INTO cron (job,updated,completed,owner,meta)
-				values ('$job'," . time() . ",$complete,'" . getmypid() . "','" . SQLite3::escapeString($meta) . "')
-				ON CONFLICT(job) DO UPDATE SET updated=".time().",completed=$complete,owner=$owner,meta='" . SQLite3::escapeString($meta). "'");
+		if ( $complete ) {
+			$complete_val = $the_time;
+			$due_to_run = 0; // Completed, then mark not due
 		} else {
-			$this->sql_query_single("INSERT INTO cron (job,updated,completed,owner)
-				values ('$job'," . time() . ",$complete,'" . getmypid() . "')
-				ON CONFLICT(job) DO UPDATE SET updated=".time().",completed=$complete,owner=$owner");
+			$complete_val = $this->sql_query_single("SELECT last_completed FROM cron WHERE job='$job'");
+			if ( empty($complete_val) ) {
+				$complete_val = 'NULL';
+			}
+			$due_to_run = 1; // Until it is complete again, we'll keep trying
+		}
+
+		if ( $meta !== false ){
+			$this->sql_query_single("INSERT INTO cron (job,updated,last_completed,due_to_run,owner,meta)
+				values ('$job'," . $the_time . ",$complete_val,$due_to_run,'" . getmypid() . "','" . SQLite3::escapeString($meta) . "')
+				ON CONFLICT(job) DO UPDATE SET updated=$the_time,last_completed=$complete_val,due_to_run=$due_to_run,owner=$owner,meta='" . SQLite3::escapeString($meta). "'");
+		} else {
+			$this->sql_query_single("INSERT INTO cron (job,updated,last_completed,due_to_run,owner)
+				values ('$job',$the_time,$complete_val,$due_to_run,'" . getmypid() . "')
+				ON CONFLICT(job) DO UPDATE SET updated=$the_time,last_completed=$complete_val,due_to_run=$due_to_run,owner=$owner");
 		}
 
 		if ( $complete ) {
@@ -928,6 +973,11 @@ class Fastback {
 	 * It could also be run from the command line.
 	 */
 	public function cron() {
+
+		if ( !empty($_GET['cron']) && $_GET['cron'] == 'status' ) {
+			return $this->cron_status();
+		}
+
 		/*
 		 * Start a buffer and prep to run something in the background
 		 * CLI doesn't get a time limit or a buffer
@@ -936,19 +986,9 @@ class Fastback {
 			ob_start();
 			header("Connection: close");
 			header("Content-Encoding: none");
-			header("Content-Type: text/plain");
+			header("Content-Type: application/json");
 			set_time_limit($this->_crontimeout);
 		} else {
-			pcntl_async_signals(true);
-
-			// setup signal handlers
-			pcntl_signal(SIGINT, function(){
-				exit();
-			});
-
-			pcntl_signal(SIGTERM, function(){
-				exit();
-			});
 		}
 
 		register_shutdown_function(function(){
@@ -959,62 +999,64 @@ class Fastback {
 			$this->_concurrent_cronjobs = ceil(`nproc`/4);
 		}
 
-		$jobs = array( 'find_new_files', 'get_exif', 'process_exif', 'make_thumbs', 'remove_deleted', 'clear_locks');
 		$cron_status = array();
 
-		$this->sql_query_single("UPDATE cron SET completed=0 WHERE updated < " . time() - (60 * 60)); // Everything can run at least hourly. 
+		$this->sql_query_single("UPDATE cron SET due_to_run=1,owner=NULL WHERE updated < " . (time() - $this->_cron_min_interval * 60)); // Everything can run at least hourly. 
 
 		/*
 		 * Get the current cron status
 		 */
-		$q_get_cron = "SELECT job,updated,completed,owner FROM cron";
+		$q_get_cron = "SELECT job,updated,last_completed,due_to_run,owner FROM cron";
 		$res = $this->_sql->query($q_get_cron);
 		while($row = $res->fetchArray(SQLITE3_ASSOC)){
 			$cron_status[$row['job']] = $row;
 		}
 
-		foreach($jobs as $job) {
+		foreach($this->cronjobs as $job) {
 			if ( empty($cron_status[$job] )) {
 				$cron_status[$job] = array(
 					'job' => $job,
 					'updated' => 0,
-					'completed' => false,
+					'last_completed' => false,
+					'due_to_run' => true,
 					'owner' => NULL
 				);
 			}
 		}
 
-		$job_to_run = FALSE;
+		$jobs_to_run = array();
 		$jobs_running = $this->sql_query_single("SELECT COUNT(*) FROM cron WHERE owner IS NOT NULL");
 		if ( $jobs_running <  $this->_concurrent_cronjobs ) {
-			foreach($jobs as $job) {
+			foreach($this->cronjobs as $job) {
+
 				if ( !empty($cron_status[$job]['owner']) ) {
 					$this->log("Skipping {$cron_status[$job]['job']} because has owner");
 					continue;
 				}
 
-				if ( $cron_status[$job]['completed'] && time() - $cron_status[$job]['updated'] < 60*60 ) {
-					$this->log("Skipping {$cron_status[$job]['job']} because completed recently");
+				if ( !$cron_status[$job]['due_to_run'] ) {
+					$this->log("Skipping {$cron_status[$job]['job']} because not due to run");
 					continue;
 				}
 
-				$job_to_run = 'cron_' . $job;
-				break;
+				$jobs_to_run[] = $job;
 			}
 		}
 
-		if ( array_key_exists('cron',$_GET) && in_array($_GET['cron'],$jobs) ){
-			$job_to_run = 'cron_' . $_GET['cron'];
+		if ( array_key_exists('cron',$_GET) && in_array($_GET['cron'],$this->cronjobs) ){
+			$jobs_to_run = array($_GET['cron']);
 		}
 
-		if ( $job_to_run !== FALSE) {
-			print("About to run $job_to_run\n");
-		}
+		if (php_sapi_name() !== 'cli') {
+
+			$res = array(
+				'queue' => $jobs_to_run,
+				'status' => $this->cron_status(true)
+			);
+			print(json_encode($res));
 
 		// http1 and non-fcgi implementations
-		if (php_sapi_name() !== 'cli') {
 			$old_val = ini_set('catch_workers_output','yes'); // Without this our error_log calls don't get sent to the error log. 
-			var_dump(ini_get('catch_workers_output'));
 			$size = ob_get_length();
 			header("Content-Length: $size");
 			http_response_code(200);
@@ -1024,11 +1066,12 @@ class Fastback {
 			@fastcgi_finish_request();
 		}
 
-		if ( $job_to_run !== FALSE ) {
-			$this->log("Running job $job_to_run");
-			$this->$job_to_run();
-		} else {
-			$this->log("No job found!");
+		$this->log("Cron Queue is: " . implode(', ',$jobs_to_run));
+		foreach($jobs_to_run as $job) {
+			$this->log("Running job $job");
+			$job = 'cron_' . $job;
+			$this->$job();
+			$this->log("Job complete!");
 		}
 	}
 
@@ -1206,7 +1249,7 @@ class Fastback {
 
 		// Quick exit if cachedir doesn't exist. That means we can't cache.
 		if ( !file_exists($this->filecache) ) {
-			mkdir($this->filecache,0700,TRUE);
+			mkdir($this->filecache,0750,TRUE);
 			if ( !is_dir($this->filecache) ) {
 				$this->log("Cache dir doesn't exist and can't create it");
 
@@ -1222,7 +1265,7 @@ class Fastback {
 		// Cachedir might exist, but not be wriatable. 
 		$dirname = dirname($thumbnailfile);
 		if (!file_exists($dirname) ){
-			@mkdir($dirname,0700,TRUE);
+			@mkdir($dirname,0750,TRUE);
 			if ( !is_dir($dirname) ) {
 				$this->log("Cache sub-dir doesn't exist and can't create it");
 				if ( $print_if_not_write ) {
@@ -1649,6 +1692,21 @@ class Fastback {
 
 		$proc = proc_open($cmd, $descriptors, $pipes,$this->photobase);
 
+		register_shutdown_function(function() use ($proc,$pipes) {
+				$this->log("About to close exif process");
+				if (is_resource($pipes[0])) {
+					fputs($pipes[0], "-stay_open\nFalse\n");
+					fflush($pipes[0]);
+					fclose($pipes[0]);
+					fclose($pipes[1]);
+					fclose($pipes[2]);
+				}
+
+				if ( is_resource($proc) ) {
+					proc_close($proc);
+				}
+		});
+
 		// Don't block on STDERR
 		stream_set_blocking($pipes[1], 0);
 		stream_set_blocking($pipes[2], 0);
@@ -1664,9 +1722,10 @@ class Fastback {
 			}
 
 			$this->sql_update_case_when("UPDATE fastback SET _util=NULL, exif=CASE",$found_exif,"ELSE exif END",True);
+			$this->sql_query_single("UPDATE cron SET due_to_run=1 WHERE job = 'process_exif'"); // If we found exif, then we need to process it.
 			$this->sql_update_cron_status('get_exif');
 
-		} while (!empty($queue));
+		} while (!empty($queue) && false);
 
 		fputs($pipes[0], "-stay_open\nFalse\n");
 		fflush($pipes[0]);
@@ -1763,8 +1822,8 @@ class Fastback {
 
 				$this->_sql->query($q);
 			}
-			$this->sql_update_cron_status('process_exif');
 			$this->_sql->query("COMMIT");
+			$this->sql_update_cron_status('process_exif');
 
 		} while ( count($queue) > 0 );
 		$this->sql_update_cron_status('process_exif',true);
@@ -1779,6 +1838,52 @@ class Fastback {
 		// Also clear owner of any cron entries which have been idle for 3x the timeout period.
 		$this->sql_query_single("UPDATE cron SET owner=NULL WHERE updated < " . (time() - (60 * $this->_crontimeout * 3)));
 		$this->sql_update_cron_status('clear_locks',true);
+	}
+
+	/**
+	 * Get the status of the cron jobs
+	 */
+	public function cron_status($return = false) {
+		$this->sql_connect();
+		$q_get_cron = "SELECT job,updated,last_completed,due_to_run,owner FROM cron";
+		$res = $this->_sql->query($q_get_cron);
+		while($row = $res->fetchArray(SQLITE3_ASSOC)){
+			$cron_status[$row['job']] = $row;
+		}
+
+		foreach($cron_status as $job => $details){
+			$cron_status[$job]['updated'] = is_null($cron_status[$job]['updated']) ? 'Never' : date('Y-m-d H:i:s',$cron_status[$job]['updated']);
+			$cron_status[$job]['last_completed'] = is_null($cron_status[$job]['last_completed']) ? 'Task not complete' : date('Y-m-d H:i:s',$cron_status[$job]['last_completed']);
+			$cron_status[$job]['due_to_run'] = $cron_status[$job]['due_to_run'] == '1' ? 'Queued to run' : 'Not queued';
+			if ( !in_array($job,$this->cronjobs) ) {
+				$cron_status[$job]['due_to_run'] = 'Disabled';
+			}
+
+			if ( !empty($cron_status[$job]['owner']) ) {
+				$cron_status[$job]['due_to_run'] = 'Currently Running';
+			}
+
+			$cron_status[$job]['status'] = $cron_status[$job]['due_to_run'];
+			unset($cron_status[$job]['owner']);
+			unset($cron_status[$job]['due_to_run']);
+		}
+
+		$total_rows = $this->sql_query_single("SELECT COUNT(*) FROM fastback");
+		$cron_status['find_new_files']['percent_complete'] = ($cron_status['find_new_files']['last_completed'] ? '100%' : '0%');
+		$exif_rows = $this->sql_query_single("SELECT COUNT(*) FROM fastback WHERE flagged or exif IS NOT NULL");
+		$cron_status['get_exif']['percent'] = round( $exif_rows / $total_rows,4) * 100 . '%';
+		$cron_status['process_exif']['percent'] = round($this->sql_query_single("SELECT COUNT(*) FROM FASTBACK WHERE flagged OR sorttime IS NOT NULL") / $exif_rows,4) * 100 . '%';
+		$cron_status['make_thumbs']['percent'] = round($this->sql_query_single("SELECT COUNT(*) FROM FASTBACK WHERE flagged OR thumbnail IS NOT NULL") / $total_rows,4) * 100 . '%';
+		$cron_status['remove_deleted']['percent'] = ($cron_status['remove_deleted']['last_completed'] == 'Task not complete' ? '0%' : '100%');
+		
+		unset($cron_status['clear_locks']);
+
+		if (!$return) {
+			header("Content-Type: application/json");
+			print json_encode($cron_status);
+		} else {
+			return $cron_status;
+		}
 	}
 
 	/**
