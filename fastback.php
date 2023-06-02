@@ -1,6 +1,4 @@
 <?php
-declare(ticks = 1);
-
 class Fastback {
 	/*
 	 * Settings!
@@ -37,12 +35,13 @@ class Fastback {
 	var $_process_limit = 100;						// How many records should we process at once?
 	var $_upsert_limit = 10000;						// Max number of SQL statements to do per upsert
 	var $_sql;										// The sqlite object
+	var $_sql_counter = 0;							// How many sql_connect calls do we have? Every function can sql_connect and sql_disconnect without closing the handle on someone else.
 	var $_sqlite_timeout = 60;						// Wait timeout for a db connection. Value in seconds.
 	var $_vipsthumbnail;							// Path to vips binary
 	var $_ffmpeg;									// Path to ffmpeg binary
 	var $_jpegoptim;								// Path to jpegoptim
 	var $_thumbsize = "256x256";					// Thumbnail size. Must be square.
-	var $_crontimeout = 10;						// How long to let cron run for in seconds. External calls don't count, so for thumbs and exif wall time may be longer
+	var $_crontimeout = 120;						// How long to let cron run for in seconds. External calls don't count, so for thumbs and exif wall time may be longer
 	// If this is to short some cron jobs may not record any finished work. See also $_process_limit and $_upsert_limit.
 	var $_concurrent_cronjobs;						// How many concurrent cron jobs should we run? These take up fcgi processes. 
 	// We don't want to use all processes as it will make the server unresponsive.
@@ -84,16 +83,7 @@ class Fastback {
 	 * Defaults should be sane. Other things can be overridden in index.php
 	 */
 	public function __construct() {
-		$this->photourl = $this->_base_url();
-
-		if ( !is_dir($this->filecache) ) {
-			@mkdir($this->filecache,0700,TRUE);
-			if ( !is_dir($this->filecache) ) {
-				$this->log("Fastback cache directory {$this->filecache} doesn't exist");
-				die("Fastback setup error. See errors log.");
-			}
-		}
-
+		$this->photourl = $this->util_base_url();
 		// This will only log if debug is enabled
 		$this->log("Debug enabled");
 	}
@@ -104,12 +94,22 @@ class Fastback {
 	 * This function exits.
 	 */
 	public function run() {
-		ini_set('error_log', $this->filecache . '/fastback.log'); 
+		if ( !is_dir($this->filecache) ) {
+			@mkdir($this->filecache,0700,TRUE);
+			if ( !is_dir($this->filecache) ) {
+				$this->log("Fastback cache directory {$this->filecache} doesn't exist");
+				die("Fastback setup error. See errors log.");
+			}
+		}
+
 		// CLI stuff doesn't need auth
 		if (php_sapi_name() === 'cli') {
 			$this->util_handle_cli();
 			exit();
 		}
+
+		// Dothis after cli handling so that cli error log still goes to stdout
+		ini_set('error_log', $this->filecache . '/fastback.log'); 
 
 		// PWA stuff doesn't need auth
 		if ( !empty($_GET['pwa']) ) {
@@ -163,99 +163,34 @@ class Fastback {
 	}
 
 	/**
-	 * Generate the HTML for the application
+	 * Process args and run what we should
 	 */
-	public function send_html() {
-		$html = '<!doctype html>
-			<html lang="en">
-			<head>
-			<meta charset="utf-8">
-			<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
-			<title>' . htmlspecialchars($this->sitetitle) . '</title>
-			<link rel="manifest" href="?pwa=manifest">	
-			<link rel="shortcut icon" href="fastback/img/favicon.png"> 
-			<link rel="apple-touch-icon" href="fastback/img/favicon.png">
-			<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">';
+	private function util_handle_cli(){
+			global $argv;
 
-		$html .= '<link rel="stylesheet" href="fastback/css/jquery-ui.min.css">
-			<link rel="stylesheet" href="fastback/css/leaflet.css"/>
-			<link rel="stylesheet" href="fastback/css/MarkerCluster.Default.css"/>
-			<link rel="stylesheet" href="fastback/css/MarkerCluster.css"/>
-			<link rel="stylesheet" href="fastback/css/fastback.css?ts=' . filemtime(__DIR__ . '/css/fastback.css') . '">
-			</head>';
+			if ( isset($argv) ) {
+				$debug_found = array_search('debug',$argv);
+				if ( $debug_found !== FALSE ) {
+					$this->debug = true;
+					array_splice($argv,$debug_found,1);
+				}
+			}
 
-		$html .= '<body class="photos">';
-		$html .= '<div id="map"></div>';
-		$html .= '<div id="hyperlist_wrap">';
-		$html .= '<div id="photos"></div>';
-		$html .= '</div>';
-		$html .= '<input id="speedslide" type="range" orient="vertical" min="0" max="100" value="0"/>';
-		$html .= '<div id="resizer">';
-		$html .= '<input type="range" min="1" max="10" value="5" class="slider" id="zoom">';
-		$html .= '<div id="globeicon"></div>';
-		$html .= '<div id="tagicon"></div>';
-		$html .= '<div id="rewindicon"></div>';
-		$html .= '<div id="calendaricon"><input readonly id="datepicker" type="text"></div>';
-		$html .= '<div id="exiticon" class="' . (isset($this->user) ? '' : 'disabled') . '"></div>';
-		$html .= '</div>';
-		$html .= '<div id="thumb" class="disabled">
-			<div id="thumbcontent"></div>
-			<div id="thumbleft" class="thumbctrl">LEFT</div>
-			<div id="thumbright" class="thumbctrl">RIGHT</div>
-			<div id="thumbcontrols">
-			<div id="thumbclose">🆇</div>
-			<div class="fakelink" id="thumbdownload" href="#">⬇️</div>
-			<div class="fakelink" id="sharelink"><a href="#">🔗<form id="sharelinkcopy">><input/></form></a></div>
-			<div class="fakelink disabled" id="webshare"><img src="fastback/img/share.png"></div>
-			<div class="fakelink ' . (!empty($this->canflag) && !in_array($_SESSION['user'],$this->canflag) ? 'disabled' : '') . '" id="thumbflag" data-file="#">🚩</div>
-			<div class="fakelink" id="thumbgeo" data-coordinates="">🌐</div>
-			<!-- div class="fakelink" id="sharefb"><img src="fastback/img/fb.png" /></div>
-			<div class="fakelink" id="sharewhatsapp"><img src="fastback/img/whatsapp.png" /></div>
-			<div class="fakelink" id="shareemail">✉️</div -->
-			<div id="thumbinfo"></div>
-			</div>';
-		$html .= '</div>';
+			if ( !isset($argv) || count($argv) == 1 ) {
+				$this->cron();
+				return;
+			} 
 
-		$html .= '<div id="tagwindow" class="disabled">
-			<div id="and_or_toggle">
-			<div id="tagwindowclose">🆇</div>
-			<div class="tagtooltoggle"><label>Tag Filter Status:</label>
-			<div class="nowrap"><span class="" id="tagon">On</span><span class="active" id="tagoff">Off</span></div>
-			</div>
-			<div class="tagtooltoggle"><label>Show photos that match:</label>
-			<div class="nowrap"><span class="active" id="tagor">ANY tag</span><span id="tagand">ALL tags</span></div>
-			</div>
-			</div>
-			<div id="thetags"></div>
-			</div>';
+			$allowed_actions = array('find_new_files','get_exif','process_exif','make_thumbs','remove_deleted','clear_locks');
 
-		$html .= '<script src="fastback/js/jquery.min.js"></script>';
-		$html .= '<script src="fastback/js/hammer.js"></script>';
-		// $html .= '<script src="fastback/js/leaflet.js"></script>';
-		$html .= '<script src="fastback/js/leaflet-src.js"></script>';
-		$html .= '<script src="fastback/js/jquery-ui.min.js"></script>';
-		$html .= '<script src="fastback/js/hyperlist.js"></script>';
-		$html .= '<script src="fastback/js/papaparse.min.js"></script>';
-		$html .= '<script src="fastback/js/jquery.hammer.js"></script>';
-		$html .= '<script src="fastback/js/leaflet.markercluster.js"></script>';
-		$html .= '<script src="fastback/js/fastback.js?ts=' . filemtime(__DIR__ . '/js/fastback.js') . '"></script>';
-		$html .= '<script src="fastback/js/md5.js"></script>';
-
-		$base_script = preg_replace(array('/.*\//','/\?.*/'),array('',''),$_SERVER['REQUEST_URI']);
-
-		$html .= '<script>
-			fastback = new Fastback({
-			csvurl: "' . $this->_base_url() . '?csv=get&ts=' . filemtime($this->csvfile) . '",
-				photourl:    "' . $this->photourl .'",
-				fastbackurl: "' . $this->_base_url() . $base_script . '",
-	});
-	if("serviceWorker" in navigator) {
-		navigator.serviceWorker.register("?pwa=sw", { scope: "' . $this->_base_url() . '" });
-	}
-			</script>';
-		$html .= '</body></html>';
-
-		print $html;
+			if ( in_array($argv[1],$allowed_actions) ) {
+				$this->log("Running {$argv[1]}");
+				$func = "cron_" . $argv[1];
+				$this->$func();
+			} else {
+				print("You're using fastback photo gallery\n");
+				print("Usage: ./index.php [debug] [" . implode('|',$allowed_actions) . "]\n");
+			}
 	}
 
 	/**
@@ -354,22 +289,465 @@ class Fastback {
 	}
 
 	/**
+	* Check whether URL is HTTPS/HTTP
+	* @return boolean [description]
+	*
+	* https://stackoverflow.com/questions/5100189/use-php-to-check-if-page-was-accessed-with-ssl
+	*/
+	private function util_base_url() {
+		// Probably from a CLI context
+		if ( empty($_SERVER['HTTP_HOST']) ) {
+			return false;
+		}
+
+		$http = '';
+		if (
+			( ! empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+			|| ( ! empty($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] == 'https')
+			|| ( ! empty($_SERVER['HTTP_X_FORWARDED_SSL']) && $_SERVER['HTTP_X_FORWARDED_SSL'] == 'on')
+			|| (isset($_SERVER['SERVER_PORT']) && $_SERVER['SERVER_PORT'] == 443)
+			|| (isset($_SERVER['HTTP_X_FORWARDED_PORT']) && $_SERVER['HTTP_X_FORWARDED_PORT'] == 443)
+			|| (isset($_SERVER['REQUEST_SCHEME']) && $_SERVER['REQUEST_SCHEME'] == 'https')
+		) {
+			$http .= 'https://';
+		} else {
+			$http .= 'http://';
+		}
+
+		$therest = preg_replace('/\?.*/','',$_SERVER['SERVER_NAME'] . $_SERVER['REQUEST_URI']);
+
+		if ( preg_match('/\.php$/',$therest) ) {
+			$therest = dirname($therest);
+		}
+
+		$ret = str_replace('//','/',$therest . '/');
+		$whole_url = $http . $ret;
+
+		if ( filter_var($whole_url, FILTER_VALIDATE_URL) === FALSE ) {
+			$this->log("Unable to create valid URL: $whole_url");
+			die("Couldn't figure out server URL");
+			return false;
+		}
+		return $whole_url;
+	}
+
+	/**
+	 * For a short file name check if the file is a valid photo option
+	 *
+	 * @param $file A short file name to check the database for.
+	 *
+	 * @return A file name that is valid according to the database and which exists on disk.
+	 *
+	 * Dies on file not exist or not in database.
+	 */
+	private function util_file_is_ok($file) {	
+		$file_safe = SQLite3::escapeString($file);
+		$file_safe = $this->sql_query_single("SELECT file FROM fastback WHERE file='$file'");
+		if ( !$file_safe ) {
+			http_response_code(404);
+			$this->log("Someone tried to access file '''$file'''");
+			die();
+		}
+
+		if ( !file_exists($this->photobase . $file_safe) ) {
+			http_response_code(404);
+			$this->log("Someone tried to access $file, which doesn't exist");
+			die();
+		}
+
+		return $file_safe;
+	}
+
+	/**
+	 * Make the csv cache file
+	 *
+	 * @param $print_if_not_write If we can't open the cache file, then send the csv directly.
+	 *
+	 * @note Using $print_if_not_write will cause this function to exit() after sending.
+	 */
+	private function util_make_csv($print_if_not_write = false){
+		if ( !file_exists($this->filecache) ) {
+			@mkdir($this->filecache,0700,TRUE);
+		}
+
+		$this->sql_connect();
+		$q = "SELECT 
+			file,
+			isvideo,
+			COALESCE(CAST(STRFTIME('%s',sorttime) AS INTEGER),mtime) AS filemtime,
+			ROUND(lat,5) AS lat,
+			ROUND(lon,5) AS lon,
+			tags
+			FROM fastback 
+			WHERE 
+			flagged IS NOT TRUE 
+			AND (maybe_meme <= 1 OR maybe_meme IS NULL) -- Only display non-memes. Threshold of 1 seems pretty ok
+			ORDER BY filemtime " . $this->sortorder . ",file " . $this->sortorder;
+		$res = $this->_sql->query($q);
+
+		$printed = false;
+		$fh = fopen($this->csvfile,'w');
+		if ( $fh === false  && $print_if_not_write) {
+			$printed = true;
+			header("Content-type: text/plain");
+			header("Content-Disposition: inline; filename=\"" . basename($this->csvfile) . "\"");
+			header("Last-Modified: " . gmdate("D, d M Y H:i:s"));
+			$fh = fopen('php://output', 'w');
+		}
+
+		while($row = $res->fetchArray(SQLITE3_ASSOC)){
+			if ( $row['isvideo'] == 0 ) {
+				$row['isvideo'] = NULL;
+			}
+			fputcsv($fh,$row);
+		}
+		fclose($fh);
+		$this->sql_disconnect();
+
+		if ( $printed ) {
+			exit();
+		}
+		return true;
+	}
+
+	/**
+	 * Generate the HTML for the application
+	 */
+	public function send_html() {
+		$html = '<!doctype html>
+			<html lang="en">
+			<head>
+			<meta charset="utf-8">
+			<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+			<title>' . htmlspecialchars($this->sitetitle) . '</title>
+			<link rel="manifest" href="?pwa=manifest">	
+			<link rel="shortcut icon" href="fastback/img/favicon.png"> 
+			<link rel="apple-touch-icon" href="fastback/img/favicon.png">
+			<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">';
+
+		$html .= '<link rel="stylesheet" href="fastback/css/jquery-ui.min.css">
+			<link rel="stylesheet" href="fastback/css/leaflet.css"/>
+			<link rel="stylesheet" href="fastback/css/MarkerCluster.Default.css"/>
+			<link rel="stylesheet" href="fastback/css/MarkerCluster.css"/>
+			<link rel="stylesheet" href="fastback/css/fastback.css?ts=' . filemtime(__DIR__ . '/css/fastback.css') . '">
+			</head>';
+
+		$html .= '<body class="photos">';
+		$html .= '<div id="map"></div>';
+		$html .= '<div id="hyperlist_wrap">';
+		$html .= '<div id="photos"></div>';
+		$html .= '</div>';
+		$html .= '<input id="speedslide" type="range" orient="vertical" min="0" max="100" value="0"/>';
+		$html .= '<div id="resizer">';
+		$html .= '<input type="range" min="1" max="10" value="5" class="slider" id="zoom">';
+		$html .= '<div id="globeicon" class="disabled"></div>';
+		$html .= '<div id="tagicon" class="disabled"></div>';
+		$html .= '<div id="rewindicon"></div>';
+		$html .= '<div id="calendaricon"><input readonly id="datepicker" type="text"></div>';
+		$html .= '<div id="exiticon" class="' . (empty($this->user) ? 'disabled' : '') . '"></div>';
+		$html .= '</div>';
+		$html .= '<div id="thumb" class="disabled">
+			<div id="thumbcontent"></div>
+			<div id="thumbleft" class="thumbctrl">LEFT</div>
+			<div id="thumbright" class="thumbctrl">RIGHT</div>
+			<div id="thumbcontrols">
+			<div id="thumbclose">🆇</div>
+			<div class="fakelink" id="thumbdownload" href="#">⬇️</div>
+			<div class="fakelink" id="sharelink"><a href="#">🔗<form id="sharelinkcopy">><input/></form></a></div>
+			<div class="fakelink disabled" id="webshare"><img src="fastback/img/share.png"></div>
+			<div class="fakelink ' . (!empty($this->canflag) && !in_array($_SESSION['user'],$this->canflag) ? 'disabled' : '') . '" id="thumbflag" data-file="#">🚩</div>
+			<div class="fakelink" id="thumbgeo" data-coordinates="">🌐</div>
+			<!-- div class="fakelink" id="sharefb"><img src="fastback/img/fb.png" /></div>
+			<div class="fakelink" id="sharewhatsapp"><img src="fastback/img/whatsapp.png" /></div>
+			<div class="fakelink" id="shareemail">✉️</div -->
+			<div id="thumbinfo"></div>
+			</div>';
+		$html .= '</div>';
+
+		$html .= '<div id="tagwindow" class="disabled">
+			<div id="and_or_toggle">
+			<div id="tagwindowclose">🆇</div>
+			<div class="tagtooltoggle"><label>Tag Filter Status:</label>
+			<div class="nowrap"><span class="" id="tagon">On</span><span class="active" id="tagoff">Off</span></div>
+			</div>
+			<div class="tagtooltoggle"><label>Show photos that match:</label>
+			<div class="nowrap"><span class="active" id="tagor">ANY tag</span><span id="tagand">ALL tags</span></div>
+			</div>
+			</div>
+			<div id="thetags"></div>
+			</div>';
+
+		$html .= '<script src="fastback/js/jquery.min.js"></script>';
+		$html .= '<script src="fastback/js/hammer.js"></script>';
+		// $html .= '<script src="fastback/js/leaflet.js"></script>';
+		$html .= '<script src="fastback/js/leaflet-src.js"></script>';
+		$html .= '<script src="fastback/js/jquery-ui.min.js"></script>';
+		$html .= '<script src="fastback/js/hyperlist.js"></script>';
+		$html .= '<script src="fastback/js/papaparse.min.js"></script>';
+		$html .= '<script src="fastback/js/jquery.hammer.js"></script>';
+		$html .= '<script src="fastback/js/leaflet.markercluster.js"></script>';
+		$html .= '<script src="fastback/js/fastback.js?ts=' . filemtime(__DIR__ . '/js/fastback.js') . '"></script>';
+		$html .= '<script src="fastback/js/md5.js"></script>';
+
+		$base_script = preg_replace(array('/.*\//','/\?.*/'),array('',''),$_SERVER['REQUEST_URI']);
+
+		$html .= '<script>
+			fastback = new Fastback({
+			csvurl: "' . $this->util_base_url() . '?csv=get&ts=' . filemtime($this->csvfile) . '",
+				photourl:    "' . $this->photourl .'",
+				fastbackurl: "' . $this->util_base_url() . $base_script . '",
+		});
+		if("serviceWorker" in navigator) {
+			navigator.serviceWorker.register("?pwa=sw", { scope: "' . $this->util_base_url() . '" });
+		}
+			</script>';
+		$html .= '</body></html>';
+
+		print $html;
+	}
+
+	/**
+	 * Send, creating if needed, the CSV file of all the photos
+	 */
+	public function send_csv() {
+		// Auto detect if CSV has gotten stale
+		if ( !file_exists($this->csvfile) || filemtime($this->sqlitefile) > filemtime($this->csvfile) || filemtime(__FILE__) > filemtime($this->csvfile) ) {
+			$wrote = $this->util_make_csv(true);
+
+			if ( !$wrote ) {
+				header("HTTP/1.0 404 Not Found");
+				print("CSV file not found");
+				exit();
+			}
+		}
+
+		ob_start("ob_gzhandler");
+		header("Content-type: text/plain");
+		header("Content-Disposition: inline; filename=\"" . basename($this->csvfile) . "\"");
+		header("Last-Modified: " . filemtime($this->csvfile));
+		readfile($this->csvfile);
+		ob_end_flush();
+	}
+
+	/**
+	 * Handle publicly sharable link
+	 */
+	public function send_share() {
+		if ( empty($_GET['share']) ) {
+			return false;
+		}
+		$share = SQLite3::escapeString($_GET['share']);
+		$file = $this->sql_query_single("SELECT file FROM fastback WHERE share_key='$share' RETURNING file");
+
+		if ( !$file ) {
+			http_response_code(404);
+			$this->log("Someone tried to access a shared file with parameters " . print_r($_GET,true));
+			die();
+		} else {
+			$file = $row['file'];
+		}
+
+		if ( !file_exists($this->photobase . $file) ) {
+			http_response_code(404);
+			$this->log("Someone tried to access $file, which doesn't exist");
+			die();
+		}
+
+		if ( !empty($_GET['proxy']) ) {
+			$_GET['proxy'] = $file;
+			return $this->send_proxy();
+		}
+
+		$file = $this->photobase . $file;
+
+		$mime = mime_content_type($file);
+		header("Content-Type: $mime");
+		header("Content-Transfer-Encoding: Binary");
+		header("Content-Length: ".filesize($file));
+		header("Content-Disposition: inline; filename=\"" . basename($file) . "\"");
+		readfile($file);
+		exit();
+	}
+
+	/**
+	 * Proxy a file type which is not supported by the browser.
+	 */
+	public function send_proxy() {
+		if ( !$file = $this->util_file_is_ok($_GET['proxy']) ) {
+			die();
+		}
+
+		$file = $this->photobase . $file;
+
+		$mime = mime_content_type($file);
+		$mime = explode('/',$mime);
+
+		if ( $mime[1] == 'x-tga' ) {
+			$mime[0] = 'video';
+			$mime[1] = 'mpeg2';
+		}
+
+		if ( $mime[0] == 'image' ) {
+			header("Content-Type: image/jpeg");
+			header("Content-Disposition: inline; filename=\"" . basename($file) . ".jpg\"");
+			$cmd = 'convert ' . escapeshellarg($file) . ' JPG:-';
+			passthru($cmd);
+			exit();
+		} else if ($mime[0] == 'video' ) {
+			header("Content-Type: image/jpeg");
+			header("Content-Disposition: inline; filename=\"" . basename($file) . ".jpg\"");
+			$cmd = "ffmpeg -ss 00:00:00 -i " . escapeshellarg($file) . " -frames:v 1 -f singlejpeg - ";
+			passthru($cmd);
+			exit();
+		} else {
+			$mime = mime_content_type($file);
+			header("Content-Type: $mime");
+			header("Content-Transfer-Encoding: Binary");
+			header("Content-Length: ".filesize($file));
+			header("Content-Disposition: inline; filename=\"" . basename($file) . "\"");
+			readfile($file);
+			exit();
+		}
+	}
+
+	/**
+	 * Download a specific file
+	 *
+	 * Dies if file not in database or not on disk
+	 */
+	public function send_download() {
+		if ( !$file = $this->util_file_is_ok($_GET['download']) ) {
+			die();
+		}
+
+		$file = $this->photobase . $file;
+
+		$mime = mime_content_type($file);
+		header("Content-Type: $mime");
+		header("Content-Transfer-Encoding: Binary");
+		header("Content-Length: ".filesize($file));
+		header("Content-disposition: attachment; filename=\"" . basename($file) . "\"");
+		readfile($file);
+		exit();
+	}
+
+	/**
+	 * Send a thumbnail for the requested file
+	 *
+	 * Dies if file not in database or not on disk
+	 */
+	public function send_thumbnail() {
+		$thumbnailfile = $this->_make_a_thumb($_GET['thumbnail'],false,true);
+
+		if ( $thumbnailfile === false ) {
+			$this->log("Couldn't find thumbnail for '''{$_GET['thumbnail']}''', sending full sized!!!");
+			// I know this breaks video thumbs, but if a user is just getting set up I want something to still work for them
+			// This at least gets them images for now
+			$thumbnailfile = $this->util_file_is_ok($_GET['thumbnail']);
+		}
+
+		$mime = mime_content_type($thumbnailfile);
+		header("Content-Type: $mime");
+		header("Content-Transfer-Encoding: Binary");
+		header("Content-Length: ".filesize($thumbnailfile));
+		header("Content-Disposition: inline; filename=\"" . basename($thumbnailfile) . "\"");
+		readfile($thumbnailfile);
+		exit();
+	}
+
+	/**
+	 * Send any of the various resources needed for Progressive Web App
+	 *
+	 * The purpose of the PWA is to provide client side caching and to run the cron task in the background.
+	 */
+	public function send_pwa() {
+		if ( $_GET['pwa'] == 'manifest' ) {
+			$base_url = $this->util_base_url();
+			$manifest = array(
+				'id' => $base_url,
+				'name' => 'Fastback',
+				'short_name' => $this->sitetitle,
+				'description' => 'Fastback Photo Gallery for ' . $this->sitetitle,
+				'icons' => array(),
+				'start_url' => $base_url,
+				'display' => 'standalone',
+				'theme_color' => '#8888ff',
+				'background_color' => '#8888ff',
+				'scope' => $base_url,
+				'orientatin' => 'any',
+			);
+
+
+			$sizes = array( '49', '72', '96', '144', '168', '192', '256', '512');
+
+			foreach($sizes as $size){
+				$manifest['icons'][] = array(
+						'src' => "fastback/img/icons/$size.png",
+						'sizes' => "{$size}x{$size}",
+						'type' => 'image/png',
+						'purpose' => 'any maskable'
+					);
+			}
+
+			header("Content-Type: application/manifest+json");
+			header("Content-Disposition: inline; filename=\"manifest.json\"");
+			print json_encode($manifest,JSON_UNESCAPED_SLASHES);
+			exit();
+		} else if ( $_GET['pwa'] == 'sw' ) {
+			header("Content-Type: application/javascript; charset=UTF-8");
+			header("Content-Transfer-Encoding: Binary");
+			header("Content-Length: ".filesize(__DIR__ . '/js/fastback-sw.js'));
+			header("Content-Disposition: inline; filename=\"fastback-sw.js\"");
+			$sw = file_get_contents(__DIR__ . '/js/fastback-sw.js');
+			$sw = str_replace('SW_FASTBACK_BASEURL',$this->util_base_url(),$sw);
+			$sw = str_replace('SW_FASTBACK_PHOTOURL',$this->photourl,$sw);
+			$sw = str_replace('SW_FASTBACK_TS',filemtime(__DIR__ . '/js/fastback-sw.js'),$sw);
+			print($sw);
+			exit();
+		} else if ( $_GET['pwa'] == 'down' ) {
+			$html = '<!doctype html>
+			<html lang="en">
+			<head>
+			<meta charset="utf-8">
+			<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+			<title>' . htmlspecialchars($this->sitetitle) . '</title>
+			<link rel="manifest" href="?pwa=manifest">	
+			<link rel="shortcut icon" href="fastback/img/favicon.png"> 
+			<link rel="apple-touch-icon" href="fastback/img/favicon.png">
+			<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">';
+
+		$html .= '<link rel="stylesheet" href="fastback/css/jquery-ui.min.css">
+			<link rel="stylesheet" href="fastback/css/leaflet.css"/>
+			<link rel="stylesheet" href="fastback/css/MarkerCluster.Default.css"/>
+			<link rel="stylesheet" href="fastback/css/MarkerCluster.css"/>
+			<link rel="stylesheet" href="fastback/css/fastback.css?ts=' . filemtime(__DIR__ . '/css/fastback.css') . '">
+			</head>';
+
+			$html .= '<body>If you\'re seeing this, then ' . $this->util_base_url() . ' is in accessable. Maybe it\'s down? You could also be offline, or the site could be an IPV6 site and you\'re on an IPV4 only network.';
+
+			$html .= '<script>
+				if("serviceWorker" in navigator) {
+					navigator.serviceWorker.register("' . $this->util_base_url() . '?pwa=sw", { scope: "' . $this->util_base_url() . '" });
+		}
+		</script>';
+			$html .= '</body</html>';
+			print($html);
+		} else if ( $_GET['pwa'] == 'test' ) {
+			header("Content-Type: application/json");
+			header("Cache-Control: no-cache");
+			print(json_encode(array('status' => 'OK')));
+		}
+	}
+	
+	/**
 	 * Set the flag field in the database to 1 for a specified file. 
 	 *
 	 * Flagged files are hidden the next time make_csv is run
 	 */
 	public function action_flag_photo(){
-		$this->sql_connect();
-		$stmt = $this->_sql->prepare("UPDATE fastback SET flagged=1 WHERE file=:file");
-		$stmt->bindValue(':file',$_GET['flag']);
-		$stmt->execute();
+		$file = SQLite3::escapeString($_GET['flag']);
+		$row = $this->sql_query_single("UPDATE fastback SET flagged=1 WHERE file='$file' RETURNING file,flagged",true);
 
-		$stmt = $this->_sql->prepare("SELECT file,flagged FROM fastback WHERE file=:file");
-		$stmt->bindValue(':file',$_GET['flag']);
-		$res = $stmt->execute();
-		$row = $res->fetchArray(SQLITE3_ASSOC);
-
-		$this->sql_disconnect();
 		header("Content-Type: application/json");
 		header("Cache-Control: no-cache");
 		print json_encode($row);
@@ -378,12 +756,18 @@ class Fastback {
 	/**
 	 * Connect to sqlite, setting $this->sql
 	 */
-	public function sql_connect($try_no = 1){
+	public function sql_connect(){
+		$this->_sql_counter++;
+		if ( isset($this->_sql) ) {
+			return $this->_sql;
+		}
+
 		if ( !file_exists($this->sqlitefile) ) {
 			$this->_sql = new SQLite3($this->sqlitefile);
 			$this->_sql->busyTimeout($this->_sqlite_timeout * 1001);
 			$this->sql_setup_db();
 		} else {
+			$this->log("Connecting...");
 			$this->_sql = new SQLite3($this->sqlitefile);
 			$this->_sql->busyTimeout($this->_sqlite_timeout * 1000);
 		}
@@ -429,6 +813,17 @@ class Fastback {
 	 * Log the last 5 error messages.
 	 */
 	public function sql_disconnect(){
+		$this->_sql_counter--;
+
+		if ($this->_sql_counter < 0) {
+			$this->log("How did sql_counter go negative?");
+			$this->_sql_counter = 0;
+			return;
+		} else if ($this->_sql_counter > 0) {
+			// Don't disconnect yet.
+			return;
+		}
+
 		if ( !isset($this->sql) ) {
 			return;
 		}
@@ -440,40 +835,201 @@ class Fastback {
 			}
 			$this->log("SQL error: $err");
 		}
-
-		@$this->_sql->query("COMMIT");
 		$this->_sql->close();
 		unset($this->sql);
 	}
 
+	private function sql_query_single($query,$entireRow = false) {
+		$this->sql_connect();
+		$res = $this->_sql->querySingle($query,$entireRow);
+		$this->sql_disconnect();
+		return $res;
+	}
+
 	/**
-	 * Process args and run what we should
+	 * Do an upsert to reserve some items from the queue in a consistant way. 
+	 * The queue is used on the cli when forking multiple processes to process a request.
 	 */
-	private function util_handle_cli(){
-			global $argv;
+	private function sql_get_queue($where) {
+		$this->sql_connect();
+		$this->_sql->query("UPDATE fastback SET _util=NULL WHERE _util='RESERVED-" . getmypid() . "'");
+		$this->_sql->query("UPDATE fastback SET _util='RESERVED-" . getmypid() . "' WHERE _util IS NULL AND (" . $where . ") ORDER BY file DESC LIMIT {$this->_process_limit}");
 
-			if ( isset($argv) ) {
-				$debug_found = array_search('debug',$argv);
-				if ( $debug_found !== FALSE ) {
-					$this->debug = true;
-					array_splice($argv,$debug_found,1);
-				}
-			}
+		$query = "SELECT * FROM fastback WHERE _util='RESERVED-" . getmypid() . "'";
+		$res = $this->_sql->query($query);
 
-			if ( !isset($argv) || count($argv) == 1 ) {
-				$this->cron();
-				return;
-			} 
+		$queue = array();
 
-			$allowed_actions = array('find_new_files','get_exif','process_exif','make_thumbs','remove_deleted','clear_locks');
+		while($row = $res->fetchArray(SQLITE3_ASSOC)){
+			$queue[$row['file']] = $row;
+		}
+		$this->sql_disconnect();
 
-			if ( in_array($argv[1],$allowed_actions) ) {
-				$func = "cron_" . $argv[1];
-				$this->$func();
+		return $queue;
+	}
+
+	/*
+	 * Update a bunch of rows at once using a CASE WHEN statement
+	 */
+	public function sql_update_case_when($update_q,$ar,$else,$escape_val = False) {
+		if ( empty($ar) ) {
+			return;
+		}
+
+		foreach($ar as $file => $val){
+			if ( $escape_val ) {
+				$update_q .= " WHEN file='" . SQLite3::escapeString($file) . "' THEN '" . SQLite3::escapeString($val) . "'\n";
 			} else {
-				print("You're using fastback photo gallery\n");
-				print("Usage: ./index.php [debug] [" . implode('|',$allowed_actions) . "]\n");
+				$update_q .= " WHEN file='" . SQLite3::escapeString($file) . "' THEN " . $val . "\n";
 			}
+		}
+		$update_q .= " " . $else;
+		$update_q .= " WHERE _util='RESERVED-" . getmypid() . "'";
+		$this->sql_connect();
+		$res = $this->sql_query_single($update_q);
+		$this->sql_disconnect();
+	}
+
+	/**
+	 * Do cron upserts
+	 */
+	private function sql_update_cron_status($job,$complete = false,$meta=false) {
+		$complete = ( $complete ? 1 : 0 );
+		$owner = ( $complete ? 'NULL' : "'" . getmypid() . "'");
+
+		if ( $meta !== false ){
+			$this->sql_query_single("INSERT INTO cron (job,updated,completed,owner,meta)
+				values ('$job'," . time() . ",$complete,'" . getmypid() . "','" . SQLite3::escapeString($meta) . "')
+				ON CONFLICT(job) DO UPDATE SET updated=".time().",completed=$complete,owner=$owner,meta='" . SQLite3::escapeString($meta). "'");
+		} else {
+			$this->sql_query_single("INSERT INTO cron (job,updated,completed,owner)
+				values ('$job'," . time() . ",$complete,'" . getmypid() . "')
+				ON CONFLICT(job) DO UPDATE SET updated=".time().",completed=$complete,owner=$owner");
+		}
+
+		if ( $complete ) {
+			$this->log("Cron job $job was marked as complete");
+		}
+	}
+
+	/**
+	 * Cron should do all the maintenance work as needed. 
+	 * It should send JSON with the status so that a JS loop will know when to stop
+	 *
+	 * This should be called service worker.
+	 *
+	 * Tasks: 
+	 *	* Find new files
+	 *	* Get exif from files
+	 *	* Get times, geo and tags from exif
+	 *	* Flag memes
+	 *	* Find and remove deleted files
+	 *
+	 * It could also be run from the command line.
+	 */
+	public function cron() {
+		/*
+		 * Start a buffer and prep to run something in the background
+		 * CLI doesn't get a time limit or a buffer
+		 */
+		if (php_sapi_name() !== 'cli') {
+			ob_start();
+			header("Connection: close");
+			header("Content-Encoding: none");
+			header("Content-Type: text/plain");
+			set_time_limit($this->_crontimeout);
+		} else {
+			pcntl_async_signals(true);
+
+			// setup signal handlers
+			pcntl_signal(SIGINT, function(){
+				exit();
+			});
+
+			pcntl_signal(SIGTERM, function(){
+				exit();
+			});
+		}
+
+		register_shutdown_function(function(){
+			$this->sql_query_single("UPDATE cron SET owner=NULL WHERE owner='" . getmypid() . "'");
+		});
+
+		if ( !isset($this->_concurrent_cronjobs) ) {
+			$this->_concurrent_cronjobs = ceil(`nproc`/4);
+		}
+
+		$jobs = array( 'find_new_files', 'get_exif', 'process_exif', 'make_thumbs', 'remove_deleted', 'clear_locks');
+		$cron_status = array();
+
+		$this->sql_query_single("UPDATE cron SET completed=0 WHERE updated < " . time() - (60 * 60)); // Everything can run at least hourly. 
+
+		/*
+		 * Get the current cron status
+		 */
+		$q_get_cron = "SELECT job,updated,completed,owner FROM cron";
+		$res = $this->_sql->query($q_get_cron);
+		while($row = $res->fetchArray(SQLITE3_ASSOC)){
+			$cron_status[$row['job']] = $row;
+		}
+
+		foreach($jobs as $job) {
+			if ( empty($cron_status[$job] )) {
+				$cron_status[$job] = array(
+					'job' => $job,
+					'updated' => 0,
+					'completed' => false,
+					'owner' => NULL
+				);
+			}
+		}
+
+		$job_to_run = FALSE;
+		$jobs_running = $this->sql_query_single("SELECT COUNT(*) FROM cron WHERE owner IS NOT NULL");
+		if ( $jobs_running <  $this->_concurrent_cronjobs ) {
+			foreach($jobs as $job) {
+				if ( !empty($cron_status[$job]['owner']) ) {
+					$this->log("Skipping {$cron_status[$job]['job']} because has owner");
+					continue;
+				}
+
+				if ( $cron_status[$job]['completed'] && time() - $cron_status[$job]['updated'] < 60*60 ) {
+					$this->log("Skipping {$cron_status[$job]['job']} because completed recently");
+					continue;
+				}
+
+				$job_to_run = 'cron_' . $job;
+				break;
+			}
+		}
+
+		if ( array_key_exists('cron',$_GET) && in_array($_GET['cron'],$jobs) ){
+			$job_to_run = 'cron_' . $_GET['cron'];
+		}
+
+		if ( $job_to_run !== FALSE) {
+			print("About to run $job_to_run\n");
+		}
+
+		// http1 and non-fcgi implementations
+		if (php_sapi_name() !== 'cli') {
+			$old_val = ini_set('catch_workers_output','yes'); // Without this our error_log calls don't get sent to the error log. 
+			var_dump(ini_get('catch_workers_output'));
+			$size = ob_get_length();
+			header("Content-Length: $size");
+			http_response_code(200);
+			ob_end_flush();
+			@ob_flush();
+			flush();
+			@fastcgi_finish_request();
+		}
+
+		if ( $job_to_run !== FALSE ) {
+			$this->log("Running job $job_to_run");
+			$this->$job_to_run();
+		} else {
+			$this->log("No job found!");
+		}
 	}
 
 	/**
@@ -482,13 +1038,12 @@ class Fastback {
 	 * Because we are reading from the file system this must complete 100% or not at all. We don't have a good way to crawl only part of the fs at the moment.
 	 */
 	public function cron_find_new_files() {
-		$this->sql_connect();
 		$this->sql_update_cron_status('find_new_files');
 
 		$lastmod = '19000102';
-		$res = $this->_sql->querySingle("SELECT meta FROM cron WHERE job='find_new_files'");
+		$res = $this->sql_query_single("SELECT meta FROM cron WHERE job='find_new_files'");
 		if ( !empty($res) ) {
-			$lastmod = $res;
+			$lastmod = date('Ymd',$res);
 		}
 
 		$origdir = getcwd();
@@ -526,14 +1081,14 @@ class Fastback {
 
 				if ( count($collect_photo) >= $this->_upsert_limit) {
 					$sql = $multi_insert . implode(",",$collect_photo) . $multi_insert_tail . '0';
-					$this->_sql->query($sql);
+					$this->sql_query_single($sql);
 					$this->sql_update_cron_status('find_new_files');
 					$collect_photo = array();
 				}
 
 				if ( count($collect_video) >= $this->_upsert_limit) {
 					$sql = $multi_insert . implode(",",$collect_video) . $multi_insert_tail . '1';
-					$this->_sql->query($sql);
+					$this->sql_query_single($sql);
 					$this->sql_update_cron_status('find_new_files');
 					$collect_video = array();
 				}
@@ -541,24 +1096,23 @@ class Fastback {
 
 			if ( count($collect_photo) > 0 ) {
 				$sql = $multi_insert . implode(",",$collect_photo) . $multi_insert_tail . '0';
-				$this->_sql->query($sql);
+				$this->sql_query_single($sql);
 				$this->sql_update_cron_status('find_new_files');
 				$collect_photo = array();
 			}
 
 			if ( count($collect_video) > 0 ) {
 				$sql = $multi_insert . implode(",",$collect_video) . $multi_insert_tail . '1';
-				$this->_sql->query($sql);
+				$this->sql_query_single($sql);
 				$this->sql_update_cron_status('find_new_files');
 				$collect_video = array();
 			}
 		}
 
-		$maxtime = $this->_sql->querySingle("SELECT MAX(mtime) AS maxtime FROM fastback");
+		$maxtime = $this->sql_query_single("SELECT MAX(mtime) AS maxtime FROM fastback");
 		if ( $maxtime ) {
 			// lastmod to see where to pick up from
 			$this->sql_update_cron_status('find_new_files',true,$maxtime);
-			$this->sql_disconnect();
 		}
 
 		chdir($origdir);
@@ -570,41 +1124,25 @@ class Fastback {
 	 */
 	public function cron_remove_deleted() {
 		$this->sql_update_cron_status('remove_deleted');
-		$filetypes = implode('\|',array_merge($this->supported_photo_types, $this->supported_video_types));
 		chdir($this->photobase);
-		$cmd = 'find -L . -type f -regextype sed -iregex  "' . $this->photodirregex . '.*\(' . $filetypes . '\)$" | grep -v "./fastback/"';
 
-		$all_files = `$cmd`;
-		$all_files = explode("\n",$all_files);
-		$all_files = array_filter($all_files);
-
-		$this->log("Checking for missing files: Found " . count($all_files) . " files on disk");
-
-		$this->sql_connect();
-
-		$count = $this->_sql->querySingle("SELECT COUNT(*) AS c FROM fastback");
+		$count = $this->sql_query_single("SELECT COUNT(*) AS c FROM fastback");
 		$this->log("Checking for missing files: Found {$count} files in the database");
 
+		$this->sql_connect();
 		$q = "SELECT file FROM fastback";
 		$res = $this->_sql->query($q);
 		$not_found = array();
+
+		$this->_sql->query("BEGIN");
 		while($row = $res->fetchArray(SQLITE3_ASSOC)){
-			if ( !in_array($row['file'],$all_files) ) {
-				$not_found[] = $row['file'];
+			if ( !file_exists($row['file'])){
+				$this->_sql->query("DELETE FROM fastback WHERE file='" . SQLite3::escapeString($row['file']) . "'");
 			}
 		}
-
-		$this->log("Checking for missing files: Removing " . count($not_found) . " files from the database which don't exist on disk");
-
-		if ( count($not_found) >  0 ) {
-			$not_found = array_map('SQLite3::escapeString',$not_found);
-			$q = 'DELETE FROM fastback WHERE file IN ("' . implode('","',$not_found) . '")';
-			$this->_sql->query($q);
-		}
-
-		$this->sql_update_cron_status('remove_deleted',true);
-
+		$this->_sql->query("COMMIT");
 		$this->sql_disconnect();
+		$this->sql_update_cron_status('remove_deleted',true);
 	}
 
 	/**
@@ -614,8 +1152,6 @@ class Fastback {
 	public function cron_make_thumbs() {
 		$this->sql_update_cron_status('make_thumbs');
 		do {
-
-			$this->sql_disconnect();
 			$queue = $this->sql_get_queue("flagged IS NOT TRUE AND thumbnail IS NULL AND file != ''");
 
 			$made_thumbs = array();
@@ -634,17 +1170,13 @@ class Fastback {
 
 			$this->sql_update_case_when("UPDATE fastback SET _util=NULL, thumbnail=CASE", $made_thumbs, "ELSE thumbnail END", TRUE);
 
-			$this->sql_connect();
 			$flag_these = array_map('SQLite3::escapeString',$flag_these);
-			$this->_sql->query("UPDATE fastback SET flagged=1 WHERE file IN ('" . implode("','",$flag_these) . "')");
+			$this->sql_query_single("UPDATE fastback SET flagged=1 WHERE file IN ('" . implode("','",$flag_these) . "')");
 			$this->sql_update_cron_status('make_thumbs');
-			$this->sql_disconnect();
 
 		} while (count($made_thumbs) > 0);
 
-		$this->sql_connect();
 		$this->sql_update_cron_status('make_thumbs',true);
-		$this->sql_disconnect();
 	}
 
 	/**
@@ -658,7 +1190,7 @@ class Fastback {
 	 */
 	private function _make_a_thumb($file,$skip_db_write=false,$print_if_not_write = false){
 		// Find original file
-		$file = $this->_file_is_ok($file);
+		$file = $this->util_file_is_ok($file);
 		$print_to_stdout = false;
 
 		$origdir = getcwd();
@@ -748,10 +1280,8 @@ class Fastback {
 		}
 
 		if ( !$skip_db_write ) {
-			$this->sql_connect();
 			$made_thumbs[$file] = $thumbnailfile;
 			$this->sql_update_case_when("UPDATE fastback SET _util=NULL, thumbnail=CASE", $made_thumbs, "ELSE thumbnail END", TRUE);
-			$this->sql_disconnect();
 		}
 
 		chdir($origdir);
@@ -936,7 +1466,7 @@ class Fastback {
 				}
 
 				if ( !file_exists($tmpthumb) || filesize($tmpthumb) == 0 ) {
-					$cmd = "{$this->_ffmpeg} -y -ss 00:00:00 -i $shellfile -frames:v 1 $formatflags $tmpshellthumb";
+					$cmd = "{$this->_ffmpeg} -y -ss 00:00:00 -i $shellfile -frames:v 1 $formatflags $tmpshellthumb 2> /dev/null";
 					$res = `$cmd`;
 					if ( $print_to_stdout && $res !== NULL) {
 						header("Content-Type: image/png");
@@ -984,57 +1514,8 @@ class Fastback {
 	}
 
 	/**
-	 * Make the csv cache file
-	 *
-	 * @param $print_if_not_write If we can't open the cache file, then send the csv directly.
-	 *
-	 * @note Using $print_if_not_write will cause this function to exit() after sending.
+	 * Try to give an image a score of how likely it is to be a meme, based on some factors that seemed relavant for my photos.
 	 */
-	private function _make_csv($print_if_not_write = false){
-		if ( !file_exists($this->filecache) ) {
-			@mkdir($this->filecache,0700,TRUE);
-		}
-
-		$this->sql_connect();
-		$q = "SELECT 
-			file,
-			isvideo,
-			COALESCE(CAST(STRFTIME('%s',sorttime) AS INTEGER),mtime) AS filemtime,
-			ROUND(lat,5) AS lat,
-			ROUND(lon,5) AS lon,
-			tags
-			FROM fastback 
-			WHERE 
-			flagged IS NOT TRUE 
-			AND (maybe_meme <= 1 OR maybe_meme IS NULL) -- Only display non-memes. Threshold of 1 seems pretty ok
-			ORDER BY filemtime " . $this->sortorder . ",file " . $this->sortorder;
-		$res = $this->_sql->query($q);
-
-		$printed = false;
-		$fh = fopen($this->csvfile,'w');
-		if ( $fh === false  && $print_if_not_write) {
-			$printed = true;
-			header("Content-type: text/plain");
-			header("Content-Disposition: inline; filename=\"" . basename($this->csvfile) . "\"");
-			header("Last-Modified: " . gmdate("D, d M Y H:i:s"));
-			$fh = fopen('php://output', 'w');
-		}
-
-		while($row = $res->fetchArray(SQLITE3_ASSOC)){
-			if ( $row['isvideo'] == 0 ) {
-				$row['isvideo'] = NULL;
-			}
-			fputcsv($fh,$row);
-		}
-		fclose($fh);
-		$this->sql_disconnect();
-
-		if ( $printed ) {
-			exit();
-		}
-		return true;
-	}
-
 	private function _process_exif_meme($exif,$file) {
 		$bad_filetypes = array('MacOS','WEBP');
 		$bad_mimetypes = array('application/unknown','image/png');
@@ -1044,13 +1525,13 @@ class Fastback {
 		// "FileType":"MacOS"
 		// FileType WEBP
 		// "MIMEType":"application\/unknown"
-		if ( in_array($exif['FileType'],$bad_filetypes) ) {
+		if ( array_key_exists('FileType',$exif) && in_array($exif['FileType'],$bad_filetypes) ) {
 			$maybe_meme += 1;
 		}
 
-		if ( in_array($exif['MIMEType'],$bad_mimetypes) ) {
+		if ( array_key_exists('MIMEType',$exif) && in_array($exif['MIMEType'],$bad_mimetypes) ) {
 			$maybe_meme += 1;
-		} else if ( preg_match('/video/',$exif['MIMEType']) ) {
+		} else if ( array_key_exists('MIMEType',$exif) && preg_match('/video/',$exif['MIMEType']) ) {
 			// Most videos aren't memes
 			$maybe_meme -= 1;
 		}
@@ -1143,372 +1624,6 @@ class Fastback {
 	}
 
 	/**
-	 * Do an upsert to reserve some items from the queue in a consistant way. 
-	 * The queue is used on the cli when forking multiple processes to process a request.
-	 */
-	private function sql_get_queue($where) {
-		$this->sql_connect();
-
-		$this->_sql->query("UPDATE fastback SET _util=NULL WHERE _util='RESERVED-" . getmypid() . "'");
-		$query = "UPDATE fastback SET _util='RESERVED-" . getmypid() . "' WHERE _util IS NULL AND (" . $where . ") ORDER BY file DESC LIMIT {$this->_process_limit}";
-		$this->_sql->query($query);
-
-		$query = "SELECT * FROM fastback WHERE _util='RESERVED-" . getmypid() . "'";
-		$res = $this->_sql->query($query);
-
-		$queue = array();
-
-		while($row = $res->fetchArray(SQLITE3_ASSOC)){
-			$queue[$row['file']] = $row;
-		}
-		$this->sql_disconnect();
-
-		return $queue;
-	}
-
-	/*
-	 * Update a bunch of rows at once using a CASE WHEN statement
-	 */
-	public function sql_update_case_when($update_q,$ar,$else,$escape_val = False) {
-		if ( empty($ar) ) {
-			return;
-		}
-
-		$this->sql_connect();
-		foreach($ar as $file => $val){
-			if ( $escape_val ) {
-				$update_q .= " WHEN file='" . SQLite3::escapeString($file) . "' THEN '" . SQLite3::escapeString($val) . "'\n";
-			} else {
-				$update_q .= " WHEN file='" . SQLite3::escapeString($file) . "' THEN " . $val . "\n";
-			}
-		}
-		$update_q .= " " . $else;
-		$update_q .= " WHERE _util='RESERVED-" . getmypid() . "'";
-		$res = $this->_sql->query($update_q);
-		if ( $res == False ) {
-			$this->log($update_q);
-			$this->log($this->_sql->lastErrorMsg());
-		}
-		$this->sql_disconnect();
-	}
-
-	/**
-	 * Send, creating if needed, the CSV file of all the photos
-	 */
-	public function send_csv() {
-		// Auto detect if CSV has gotten stale
-		if ( !file_exists($this->csvfile) || filemtime($this->sqlitefile) > filemtime($this->csvfile) || filemtime(__FILE__) > filemtime($this->csvfile) ) {
-			$wrote = $this->_make_csv(true);
-
-			if ( !$wrote ) {
-				header("HTTP/1.0 404 Not Found");
-				print("CSV file not found");
-				exit();
-			}
-		}
-
-		ob_start("ob_gzhandler");
-		header("Content-type: text/plain");
-		header("Content-Disposition: inline; filename=\"" . basename($this->csvfile) . "\"");
-		header("Last-Modified: " . filemtime($this->csvfile));
-		readfile($this->csvfile);
-		ob_end_flush();
-	}
-
-	/**
-	 * Handle publicly sharable link
-	 */
-	public function send_share() {
-		if ( empty($_GET['share']) ) {
-			return false;
-		}
-		$this->sql_connect();
-		$stmt = $this->_sql->prepare("SELECT file FROM fastback WHERE share_key=:share");
-		$stmt->bindValue(":share",strtolower($_GET['share']));
-		$res = $stmt->execute();
-		$row = $res->fetchArray(SQLITE3_ASSOC);
-
-		if ( $row === FALSE ) {
-			http_response_code(404);
-			$this->log("Someone tried to access a shared file with parameters " . print_r($_GET,true));
-			die();
-		} else {
-			$file = $row['file'];
-		}
-
-		$this->sql_disconnect();
-
-		if ( !file_exists($this->photobase . $file) ) {
-			http_response_code(404);
-			$this->log("Someone tried to access $file, which doesn't exist");
-			die();
-		}
-
-		if ( !empty($_GET['proxy']) ) {
-			$_GET['proxy'] = $file;
-			return $this->send_proxy();
-		}
-
-		$file = $this->photobase . $file;
-
-		$mime = mime_content_type($file);
-		header("Content-Type: $mime");
-		header("Content-Transfer-Encoding: Binary");
-		header("Content-Length: ".filesize($file));
-		header("Content-Disposition: inline; filename=\"" . basename($file) . "\"");
-		readfile($file);
-		exit();
-	}
-
-	/**
-	 * Proxy a file type which is not supported by the browser.
-	 */
-	public function send_proxy() {
-		if ( !$file = $this->_file_is_ok($_GET['proxy']) ) {
-			die();
-		}
-
-		$file = $this->photobase . $file;
-
-		$mime = mime_content_type($file);
-		$mime = explode('/',$mime);
-
-		if ( $mime[1] == 'x-tga' ) {
-			$mime[0] = 'video';
-			$mime[1] = 'mpeg2';
-		}
-
-		if ( $mime[0] == 'image' ) {
-			header("Content-Type: image/jpeg");
-			header("Content-Disposition: inline; filename=\"" . basename($file) . ".jpg\"");
-			$cmd = 'convert ' . escapeshellarg($file) . ' JPG:-';
-			passthru($cmd);
-			exit();
-		} else if ($mime[0] == 'video' ) {
-			header("Content-Type: image/jpeg");
-			header("Content-Disposition: inline; filename=\"" . basename($file) . ".jpg\"");
-			$cmd = "ffmpeg -ss 00:00:00 -i " . escapeshellarg($file) . " -frames:v 1 -f singlejpeg - ";
-			passthru($cmd);
-			exit();
-		} else {
-			$mime = mime_content_type($file);
-			header("Content-Type: $mime");
-			header("Content-Transfer-Encoding: Binary");
-			header("Content-Length: ".filesize($file));
-			header("Content-Disposition: inline; filename=\"" . basename($file) . "\"");
-			readfile($file);
-			exit();
-		}
-	}
-
-	/**
-	 * Download a specific file
-	 *
-	 * Dies if file not in database or not on disk
-	 */
-	public function send_download() {
-		if ( !$file = $this->_file_is_ok($_GET['download']) ) {
-			die();
-		}
-
-		$file = $this->photobase . $file;
-
-		$mime = mime_content_type($file);
-		header("Content-Type: $mime");
-		header("Content-Transfer-Encoding: Binary");
-		header("Content-Length: ".filesize($file));
-		header("Content-disposition: attachment; filename=\"" . basename($file) . "\"");
-		readfile($file);
-		exit();
-	}
-
-	/**
-	 * Send a thumbnail for the requested file
-	 *
-	 * Dies if file not in database or not on disk
-	 */
-	public function send_thumbnail() {
-		$thumbnailfile = $this->_make_a_thumb($_GET['thumbnail'],false,true);
-
-		if ( $thumbnailfile === false ) {
-			$this->log("Couldn't find thumbnail for '''{$_GET['thumbnail']}''', sending full sized!!!");
-			// I know this breaks video thumbs, but if a user is just getting set up I want something to still work for them
-			// This at least gets them images for now
-			$thumbnailfile = $this->_file_is_ok($_GET['thumbnail']);
-		}
-
-		$mime = mime_content_type($thumbnailfile);
-		header("Content-Type: $mime");
-		header("Content-Transfer-Encoding: Binary");
-		header("Content-Length: ".filesize($thumbnailfile));
-		header("Content-Disposition: inline; filename=\"" . basename($thumbnailfile) . "\"");
-		readfile($thumbnailfile);
-		exit();
-	}
-
-	/**
-	 * For a short file name check if the file is a valid photo option
-	 *
-	 * @param $file A short file name to check the database for.
-	 *
-	 * @return A file name that is valid according to the database and which exists on disk.
-	 *
-	 * Dies on file not exist or not in database.
-	 */
-	private function _file_is_ok($file) {	
-		$this->sql_connect();
-		$stmt = $this->_sql->prepare("SELECT file FROM fastback WHERE file=:file");
-		$stmt->bindValue(":file",$file);
-		$res = $stmt->execute();
-		$row = $res->fetchArray(SQLITE3_ASSOC);
-
-		if ( $row === FALSE ) {
-			http_response_code(404);
-			$this->log("Someone tried to access file '''$file'''");
-			die();
-		} else {
-			$file = $row['file'];
-		}
-
-		$this->sql_disconnect();
-
-		if ( !file_exists($this->photobase . $file) ) {
-			http_response_code(404);
-			$this->log("Someone tried to access $file, which doesn't exist");
-			die();
-		}
-
-		return $file;
-	}
-
-	/**
-	 * Send any of the various resources needed for Progressive Web App
-	 *
-	 * The purpose of the PWA is to provide client side caching and to run the cron task in the background.
-	 */
-	public function send_pwa() {
-		if ( $_GET['pwa'] == 'manifest' ) {
-			$base_url = $this->_base_url();
-			$manifest = array(
-				'id' => $base_url,
-				'name' => 'Fastback',
-				'short_name' => $this->sitetitle,
-				'description' => 'Fastback Photo Gallery for ' . $this->sitetitle,
-				'icons' => array(),
-				'start_url' => $base_url,
-				'display' => 'standalone',
-				'theme_color' => '#8888ff',
-				'background_color' => '#8888ff',
-				'scope' => $base_url,
-				'orientatin' => 'any',
-			);
-
-
-			$sizes = array( '49', '72', '96', '144', '168', '192', '256', '512');
-
-			foreach($sizes as $size){
-				$manifest['icons'][] = array(
-						'src' => "fastback/img/icons/$size.png",
-						'sizes' => "{$size}x{$size}",
-						'type' => 'image/png',
-						'purpose' => 'any maskable'
-					);
-			}
-
-			header("Content-Type: application/manifest+json");
-			header("Content-Disposition: inline; filename=\"manifest.json\"");
-			print json_encode($manifest,JSON_UNESCAPED_SLASHES);
-			exit();
-		} else if ( $_GET['pwa'] == 'sw' ) {
-			header("Content-Type: application/javascript; charset=UTF-8");
-			header("Content-Transfer-Encoding: Binary");
-			header("Content-Length: ".filesize(__DIR__ . '/js/fastback-sw.js'));
-			header("Content-Disposition: inline; filename=\"fastback-sw.js\"");
-			$sw = file_get_contents(__DIR__ . '/js/fastback-sw.js');
-			$sw = str_replace('SW_FASTBACK_BASEURL',$this->_base_url(),$sw);
-			$sw = str_replace('SW_FASTBACK_PHOTOURL',$this->photourl,$sw);
-			$sw = str_replace('SW_FASTBACK_TS',filemtime(__DIR__ . '/js/fastback-sw.js'),$sw);
-			print($sw);
-			exit();
-		} else if ( $_GET['pwa'] == 'down' ) {
-			$html = '<!doctype html>
-			<html lang="en">
-			<head>
-			<meta charset="utf-8">
-			<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
-			<title>' . htmlspecialchars($this->sitetitle) . '</title>
-			<link rel="manifest" href="?pwa=manifest">	
-			<link rel="shortcut icon" href="fastback/img/favicon.png"> 
-			<link rel="apple-touch-icon" href="fastback/img/favicon.png">
-			<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">';
-
-		$html .= '<link rel="stylesheet" href="fastback/css/jquery-ui.min.css">
-			<link rel="stylesheet" href="fastback/css/leaflet.css"/>
-			<link rel="stylesheet" href="fastback/css/MarkerCluster.Default.css"/>
-			<link rel="stylesheet" href="fastback/css/MarkerCluster.css"/>
-			<link rel="stylesheet" href="fastback/css/fastback.css?ts=' . filemtime(__DIR__ . '/css/fastback.css') . '">
-			</head>';
-
-			$html .= '<body>If you\'re seeing this, then ' . $this->_base_url() . ' is in accessable. Maybe it\'s down? You could also be offline, or the site could be an IPV6 site and you\'re on an IPV4 only network.';
-
-			$html .= '<script>
-				if("serviceWorker" in navigator) {
-					navigator.serviceWorker.register("' . $this->_base_url() . '?pwa=sw", { scope: "' . $this->_base_url() . '" });
-		}
-		</script>';
-			$html .= '</body</html>';
-			print($html);
-		} else if ( $_GET['pwa'] == 'test' ) {
-			header("Content-Type: application/json");
-			header("Cache-Control: no-cache");
-			print(json_encode(array('status' => 'OK')));
-		}
-	}
-
-	/**
-	* Check whether URL is HTTPS/HTTP
-	* @return boolean [description]
-	*
-	* https://stackoverflow.com/questions/5100189/use-php-to-check-if-page-was-accessed-with-ssl
-	*/
-	private function _base_url() {
-		// Probably from a CLI context
-		if ( empty($_SERVER['HTTP_HOST']) ) {
-			return false;
-		}
-
-		$http = '';
-		if (
-			( ! empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
-			|| ( ! empty($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] == 'https')
-			|| ( ! empty($_SERVER['HTTP_X_FORWARDED_SSL']) && $_SERVER['HTTP_X_FORWARDED_SSL'] == 'on')
-			|| (isset($_SERVER['SERVER_PORT']) && $_SERVER['SERVER_PORT'] == 443)
-			|| (isset($_SERVER['HTTP_X_FORWARDED_PORT']) && $_SERVER['HTTP_X_FORWARDED_PORT'] == 443)
-			|| (isset($_SERVER['REQUEST_SCHEME']) && $_SERVER['REQUEST_SCHEME'] == 'https')
-		) {
-			$http .= 'https://';
-		} else {
-			$http .= 'http://';
-		}
-
-		$therest = preg_replace('/\?.*/','',$_SERVER['SERVER_NAME'] . $_SERVER['REQUEST_URI']);
-
-		if ( preg_match('/\.php$/',$therest) ) {
-			$therest = dirname($therest);
-		}
-
-		$ret = str_replace('//','/',$therest . '/');
-		$whole_url = $http . $ret;
-
-		if ( filter_var($whole_url, FILTER_VALIDATE_URL) === FALSE ) {
-			$this->log("Unable to create valid URL: $whole_url");
-			die("Couldn't figure out server URL");
-			return false;
-		}
-		return $whole_url;
-	}
-
-	/**
 	 * Get exif data for files that don't have it.
 	 */
 	public function cron_get_exif() {
@@ -1549,9 +1664,7 @@ class Fastback {
 			}
 
 			$this->sql_update_case_when("UPDATE fastback SET _util=NULL, exif=CASE",$found_exif,"ELSE exif END",True);
-			$this->sql_connect();
 			$this->sql_update_cron_status('get_exif');
-			$this->sql_disconnect();
 
 		} while (!empty($queue));
 
@@ -1562,9 +1675,7 @@ class Fastback {
 		fclose($pipes[2]);
 		proc_close($proc);
 
-		$this->sql_connect();
 		$this->sql_update_cron_status('get_exif',true);
-		$this->sql_disconnect();
 	}
 
 	/**
@@ -1614,8 +1725,11 @@ class Fastback {
 				AND flagged IS NOT TRUE
 			)");
 
-			$this->sql_connect();
 			$this->_sql->query("BEGIN DEFERRED");
+
+			if ( count($queue) == 0 ) {
+				$this->log("Empty queue");
+			}
 
 			foreach($queue as $row) {
 				$exif = json_decode($row['exif'],true);
@@ -1636,31 +1750,21 @@ class Fastback {
 				$time = $this->_process_exif_time($exif,$row['file']);
 				$meme = $this->_process_exif_meme($exif,$row['file']);
 
-				$new_vals = array_merge($tags,$geo,$time,$meme);
-				$new_vals = array_map('SQLite3::escapeString',$new_vals);
-
-				if ( empty($new_vals['lat']) && !empty($geo['lat']) ) {
-					$this->log("GEO ERROR IN {$row['file']}");
-				}
-
-				$file = SQLite3::escapeString($row['file']);
+				$found_vals = array_merge($tags,$geo,$time,$meme);
 				$q = "UPDATE fastback SET ";
-				foreach($new_vals as $k => $v){
-					if ( empty($v) ) {
-						$v = 'NULL';
+				foreach($found_vals as $k => $v){
+					if ( is_null($v) ) {
+						$q .= "$k=NULL, ";
+					} else {
+						$q .= "$k='" . SQLite3::escapeString($v). "', ";
 					}
-					$q .= str_replace("'NULL'","NULL"," $k='$v',");
 				}
-				$q .= "file=file WHERE file='" . SQLite3::escapeString($file) . "'";
-
-				$this->log($q);
+				$q .= "file=file WHERE file='" . SQLite3::escapeString($row['file']) . "'";
 
 				$this->_sql->query($q);
 			}
-			die();
 			$this->sql_update_cron_status('process_exif');
-			@$this->_sql->query("COMMIT");
-			$this->sql_disconnect();
+			$this->_sql->query("COMMIT");
 
 		} while ( count($queue) > 0 );
 		$this->sql_update_cron_status('process_exif',true);
@@ -1670,10 +1774,11 @@ class Fastback {
 	 * Clear all locks. These can happen if jobs timeout or something.
 	 */
 	public function cron_clear_locks() {
-		$this->sql_connect();
-		$this->_sql->query("UPDATE fastback SET _util=NULL WHERE _util LIKE 'RESERVED%'");
+		// Clear reserved things once in a while.  May cause some double processing but also makes it possible to reprocess things that didn't work the first time.
+		$this->sql_query_single("UPDATE fastback SET _util=NULL WHERE _util LIKE 'RESERVED%'");
+		// Also clear owner of any cron entries which have been idle for 3x the timeout period.
+		$this->sql_query_single("UPDATE cron SET owner=NULL WHERE updated < " . (time() - (60 * $this->_crontimeout * 3)));
 		$this->sql_update_cron_status('clear_locks',true);
-		$this->sql_disconnect();
 	}
 
 	/**
@@ -1844,6 +1949,13 @@ class Fastback {
 				$xyz['elev'] = 0;
 			}
 		}
+
+		if ( $xyz['lat'] === NULL ) {
+			$xyz['nullgeom'] = 1;
+		} else {
+			$xyz['nullgeom'] = 0;
+		}
+
 		return $xyz;
 	}
 
@@ -1852,6 +1964,10 @@ class Fastback {
 	 */
 	private function _parse_gps_line($line) {
 		$xyz = array('lat' => NULL,'lon' => NULL,'elev' => 0);
+
+		if ( trim($line) == '0.00000 N, 0.00000 E' ) {
+			return $xyz;
+		}
 
 		// 22.97400 S, 43.18910 W, 6.707 m Above Sea Level
 		preg_match('/\'?([0-9.]+)\'? (N|S), \'?([0-9.]+)\'? (E|W), \'?([0-9.]+)\'? m .*/',$line,$matches);
@@ -1965,152 +2081,5 @@ class Fastback {
 		}
 
 		return array('sorttime' => NULL);;
-	}
-
-	/**
-	 * Do cron upserts
-	 */
-	private function sql_update_cron_status($job,$complete = false,$meta=false) {
-		$do_disconnect = false;
-
-		if ( !isset($this->sql) ) {
-			$this->sql_connect();
-			$do_disconnect = true;
-		}
-
-		$complete = ( $complete ? 1 : 0 );
-		$owner = ( $complete ? 'NULL' : "'" . getmypid() . "'");
-
-		if ( $meta !== false ){
-			$this->_sql->query("INSERT INTO cron (job,updated,completed,owner,meta)
-				values ('$job'," . time() . ",$complete,'" . getmypid() . "','" . SQLite3::escapeString($meta) . "')
-				ON CONFLICT(job) DO UPDATE SET updated=".time().",completed=$complete,owner=$owner,meta='" . SQLite3::escapeString($meta). "'");
-		} else {
-			$this->_sql->query("INSERT INTO cron (job,updated,completed,owner)
-				values ('$job'," . time() . ",$complete,'" . getmypid() . "')
-				ON CONFLICT(job) DO UPDATE SET updated=".time().",completed=$complete,owner=$owner");
-		}
-
-		if ( $do_disconnect ) {
-			$this->sql_disconnect();
-		}
-
-		if ( $complete ) {
-			$this->log("Cron job $job was marked as complete");
-		}
-	}
-
-	/**
-	 * Cron should do all the maintenance work as needed. 
-	 * It should send JSON with the status so that a JS loop will know when to stop
-	 *
-	 * This should be called service worker.
-	 *
-	 * Tasks: 
-	 *	* Find new files
-	 *	* Get exif from files
-	 *	* Get times, geo and tags from exif
-	 *	* Flag memes
-	 *	* Find and remove deleted files
-	 *
-	 * It could also be run from the command line.
-	 */
-	public function cron() {
-		/*
-		 * Start a buffer and prep to run something in the background
-		 * CLI doesn't get a time limit or a buffer
-		 */
-
-		if (php_sapi_name() !== 'cli') {
-			ob_start();
-			header("Connection: close");
-			header("Content-Encoding: none");
-			header("Content-Type: text/plain");
-			set_time_limit($this->_crontimeout);
-		}
-
-		register_shutdown_function(function(){
-			$this->log("Shutting down!");
-			$this->sql_connect();
-			$this->_sql->query("UPDATE cron SET owner=NULL WHERE owner='" . getmypid() . "'");
-		});
-
-		if ( !isset($this->_concurrent_cronjobs) ) {
-			$this->_concurrent_cronjobs = ceil(`nproc`/4);
-		}
-
-		$jobs = array( 'find_new_files', 'get_exif', 'process_exif', 'make_thumbs', 'remove_deleted', 'clear_locks');
-		$cron_status = array();
-
-		$this->sql_connect();
-		$this->_sql->query("UPDATE cron SET completed=0 WHERE updated < " . time() - (60 * 60)); // Everything can run at least hourly. 
-
-		/*
-		 * Get the current cron status
-		 */
-		$q_get_cron = "SELECT job,updated,completed,owner FROM cron";
-		$res = $this->_sql->query($q_get_cron);
-		while($row = $res->fetchArray(SQLITE3_ASSOC)){
-			$cron_status[$row['job']] = $row;
-		}
-
-		foreach($jobs as $job) {
-			if ( empty($cron_status[$job] )) {
-				$cron_status[$job] = array(
-					'job' => $job,
-					'updated' => 0,
-					'completed' => false,
-					'owner' => NULL
-				);
-			}
-		}
-
-		print_r($cron_status);
-
-		/*
-		 * Find the next job to do
-		 */
-		shuffle($cron_status);
-
-		$job_to_run = FALSE;
-		$jobs_running = $this->_sql->querySingle("SELECT COUNT(*) FROM cron WHERE owner IS NOT NULL");
-		if ( $jobs_running <  $this->_concurrent_cronjobs ) {
-			foreach($cron_status as $job) {
-				if ( !empty($job['owner']) ) {
-					continue;
-				}
-
-				if ( $job['completed'] && time() - $job['updated'] < 60*60 ) {
-					continue;
-				}
-
-				$job_to_run = "cron_{$job['job']}";
-				break;
-			}
-		}
-
-		if ( in_array($_GET['cron'],$jobs) ){
-			$job_to_run = 'cron_' . $_GET['cron'];
-		}
-
-		if ( $job_to_run !== FALSE) {
-			print("About to run $job_to_run\n");
-		}
-
-		// http1 and non-fcgi implementations
-		if (php_sapi_name() !== 'cli') {
-			$old_val = ini_set('catch_workers_output','yes'); // Without this our error_log calls don't get sent to the error log. 
-			var_dump(ini_get('catch_workers_output'));
-			$size = ob_get_length();
-			header("Content-Length: $size");
-			http_response_code(200);
-			ob_end_flush();
-			@ob_flush();
-			flush();
-			@fastcgi_finish_request();
-		}
-
-		$this->log($job_to_run);
-		$this->$job_to_run();
 	}
 }

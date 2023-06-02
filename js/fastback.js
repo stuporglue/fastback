@@ -35,11 +35,11 @@ Fastback = class Fastback {
 				});
 
 				if ( has_tag ) {
-					jQuery('#tagicon').show();
+					jQuery('#tagicon').removeClass('disabled');
 				}
 
 				if ( has_geo ) {
-					jQuery('#globeicon').show();
+					jQuery('#globeicon').removeClass('disabled');
 				}
 
 				var tmptags,j,i;
@@ -110,6 +110,8 @@ Fastback = class Fastback {
 		if (typeof navigator.share === 'function') {
 			jQuery('#webshare').removeClass('disabled');
 		}
+
+		setTimeout(this.cron.bind(this),1000 * 30);
 	}
 
 	/**
@@ -1141,5 +1143,13 @@ Fastback = class Fastback {
 			this.active_tags.splice(idx,1);
 			$(e.target).removeClass('active');
 		}
+	}
+
+	cron() {
+		var url = this.fastbackurl + '?cron=now';
+		var self = this;
+		$.get(url).then(function() {
+			setTimeout(self.cron.bind(self),1001 * 5 * 60);
+		});
 	}
 }

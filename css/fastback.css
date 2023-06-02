@@ -207,18 +207,16 @@ body .up10 .tn {width: calc(100vw/10); height: calc(100vw/10); font-size: 2vw;  
 	border: 2px inset black;
 }
 
-#resizer > div#rewindicon {
+#rewindicon {
 	background-image: url('../img/rewind.png');
 }
 
-#resizer > div##globeicon {
+#globeicon {
 	background-image: url('../img/globe.png');
-	display: none;
 }
 
-#resizer > div#tagicon {
+#tagicon {
 	background-image: url('../img/tag.png');
-	display: none;
 }
 
 #exiticon {
