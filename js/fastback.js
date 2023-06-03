@@ -43,6 +43,7 @@ Fastback = class Fastback {
 
 		progressbar.css('width','5%');
 
+		// Do setTimeout so the screen has time to repaint
 		setTimeout(this.asyncCSV.bind(this),100);
 	}
 
@@ -67,6 +68,7 @@ Fastback = class Fastback {
 				if ( self.photos.length == 0 ) {
 					progressbar.css('width','5%');
 					parser.pause();
+					// A brief pause here lets the progress bar work
 					setTimeout(parser.resume,5);
 				}
 
@@ -102,6 +104,7 @@ Fastback = class Fastback {
 					progressbar.css('width',rounded + '%');
 					lastprogress = rounded;
 					parser.pause();
+					// A brief pause here lets the progress bar work
 					setTimeout(parser.resume,5);
 				}
 			},
@@ -119,14 +122,17 @@ Fastback = class Fastback {
 				if ( self.photos.length == 0 ) {
 					self.csv_error_load = true;
 					// If we got an error we want to start cron right away
+					// Cron should run on its own
 					setTimeout(self.cron.bind(self),1);
 				} else {
+					// Cron should run on its own
 					setTimeout(self.cron.bind(self),1000 * 30);
 				}
 
 				self.orig_photos = self.add_date_blocks(self.photos);
 				self.photos = self.orig_photos;
 
+				// These three processes can run almost concurrently off of the main thread to allow screen repainting
 				setTimeout(function(){
 					self.make_tags();
 					progressbar.css('width','90%');
@@ -142,6 +148,7 @@ Fastback = class Fastback {
 			}, error: function(err, file, inputElem, reason) {
 				// Whatever error we get, we assume 
 				self.csv_error_load = true;
+				// Cron should run on its own
 				setTimeout(self.cron.bind(self),1);
 			}
 		});
@@ -398,15 +405,18 @@ Fastback = class Fastback {
 		var slice_to = (row * this.cols) + this.cols;
 		var vidclass = '';
 		var date;
+		var errimg;
 		var html = this.photos.slice(slice_from,slice_to).map(function(p){
 
 			if ( p['type'] == 'media' ) {
 				if ( p['isvideo'] ) {
 					vidclass = ' vid';
+					errimg = 'movie.webp';
 				} else {
+					errimg = 'noface.webp';
 					vidclass = '';
 				}
-				return '<div class="tn' + vidclass + '"><img data-photoid="' + p['id'] + '" src="' + encodeURI(self.fastbackurl + '?thumbnail=' + p['file']) + '"/></div>';
+				return '<div class="tn' + vidclass + '"><img data-photoid="' + p['id'] + '" src="' + encodeURI(self.fastbackurl + '?thumbnail=' + p['file']) + '" onerror="this.onerror=null;this.src=\'fastback/img/' + errimg + '\';"/></div>';
 			} else if ( p['type'] == 'dateblock' ) {
 				date = p['date'];
 				// I feel like this is kind of clever. I take the Year-Month, eg. 2021-12, parse it to an int like 202112 and then take the mod of the palette length to get a fixed random color for each date.
@@ -751,18 +761,19 @@ Fastback = class Fastback {
 		});
 
 		// Scroll to first, if we're all the way zoomed in
-		this.fmap.clusterlayer.on('clusterclick', function (e) {
-			if ( e.layer._map.getZoom() == e.layer._map.getMaxZoom() ) {
-				var id = e.layer.getAllChildMarkers()[0].feature.properties.id
-				self.go_to_photo_id(id);
-			}
-		});
+		// this.fmap.clusterlayer.on('clusterclick', function (e) {
+		// 	if ( e.layer._map.getZoom() == e.layer._map.getMaxZoom() ) {
+		// 		var id = e.layer.getAllChildMarkers()[0].feature.properties.id
+		// 		self.go_to_photo_id(id);
+		// 	}
+		// });
 
 		this.fmap.base_map.addTo(this.fmap.lmap);
 		this.fmap.clusterlayer.addTo(this.fmap.lmap);
 		this.fmap.flashlayer.addTo(this.fmap.lmap);
 		L.control.mapfilter({ position: 'topleft' }).addTo(this.fmap.lmap);
 
+		// These two make the map freeze for a while. We can use setTimeout at least during page load.
 		setTimeout(function(){
 			self.map_update_cluster();
 			self.after_render();
@@ -790,6 +801,8 @@ Fastback = class Fastback {
 		}
 
 		var self = this;
+		// map_update_cluster gets called from update and blocks. 
+		// Separate it out so it can updae cluster on its own
 		setTimeout(function(){
 			var geojson = self.build_geojson();
 
@@ -797,20 +810,18 @@ Fastback = class Fastback {
 
 			self.fmap.clusterlayer.clearLayers()
 
-			setTimeout(function(){
-				self.fmap.clusterlayer.addLayer(gj,{
-					'chunkedLoading': true
-				});
+			self.fmap.clusterlayer.addLayer(gj,{
+				'chunkedLoading': true
+			});
 
-				// If we're handling a user inited map move we don't want to update zoom. Let the user go where they want.
-				if ( self.handling_map_move_end === undefined ) {
-					if ( self.fmap.clusterlayer.getBounds().isValid() ) {
-						self.fmap.lmap.fitBounds(self.fmap.clusterlayer.getBounds());
-					} else {
-						self.fmap.lmap.setView([0,0],1);
-					}
+			// If we're handling a user inited map move we don't want to update zoom. Let the user go where they want.
+			if ( self.handling_map_move_end === undefined ) {
+				if ( self.fmap.clusterlayer.getBounds().isValid() ) {
+					self.fmap.lmap.fitBounds(self.fmap.clusterlayer.getBounds());
+				} else {
+					self.fmap.lmap.setView([0,0],1);
 				}
-			},150);
+			}
 		},50);
 	}
 
@@ -918,8 +929,8 @@ Fastback = class Fastback {
 	 */
 	go_to_photo_id(id) {
 		this._go_to_photo('id',id);
-		this.flash_square_for_id(id);
 		this.show_thumb_popup(id);
+		this.flash_square_for_id(id);
 	}
 
 	/**

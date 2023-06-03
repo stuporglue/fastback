@@ -317,7 +317,7 @@ class Fastback {
 			<link rel="shortcut icon" href="fastback/img/favicon.png"> 
 			<link rel="apple-touch-icon" href="fastback/img/favicon.png">
 			<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
-			<link rel="stylesheet" href="fastback/css/fastback.css?ts=' . filemtime(__DIR__ . '/css/fastback.css') . '">
+			<link rel="stylesheet" href="fastback/css/fastback.css?ts=' . ($this->debug ? 'debug' : filemtime(__DIR__ . '/css/fastback.css')) . '">
 			</head>';
 
 		$html .= '<body><div id="loginform"><h1>Log in to ' . htmlspecialchars($this->sitetitle) . '</h1>
@@ -517,13 +517,13 @@ class Fastback {
 			<link rel="stylesheet" href="fastback/css/leaflet.css"/>
 			<link rel="stylesheet" href="fastback/css/MarkerCluster.Default.css"/>
 			<link rel="stylesheet" href="fastback/css/MarkerCluster.css"/>
-			<link rel="stylesheet" href="fastback/css/fastback.css?ts=' . filemtime(__DIR__ . '/css/fastback.css') . '">
+			<link rel="stylesheet" href="fastback/css/fastback.css?ts=' . ($this->debug ? 'debug' : filemtime(__DIR__ . '/css/fastback.css')) . '">
 			</head>';
 
 		$html .= '<body class="photos">';
 		$html .= '<div id="map"></div>';
 		$html .= '<div id="hyperlist_wrap">';
-		$html .= '<div id="photos"><div id="loadingbox"><div id="loadingmsg">Loading...</div><div id="loadingprogress"></div></div></div>';
+		$html .= '<div id="photos"><div id="loadingbox"><div id="loadingmsg">...Loading...</div><div id="loadingprogress"></div></div></div>';
 		$html .= '</div>';
 		$html .= '<input id="speedslide" class="afterload" type="range" orient="vertical" min="0" max="100" value="0"/>';
 		$html .= '<div id="resizer" class="afterload">';
@@ -571,13 +571,15 @@ class Fastback {
 		$html .= '<script src="fastback/js/papaparse.min.js"></script>';
 		$html .= '<script src="fastback/js/jquery.hammer.js"></script>';
 		$html .= '<script src="fastback/js/leaflet.markercluster.js"></script>';
-		$html .= '<script src="fastback/js/fastback.js?ts=' . filemtime(__DIR__ . '/js/fastback.js') . '"></script>';
+		$html .= '<script src="fastback/js/fastback.js?ts=' . ($this->debug ? 'debug' : filemtime(__DIR__ . '/js/fastback.js')) . '"></script>';
 		$html .= '<script src="fastback/js/md5.js"></script>';
 
 		$base_script = preg_replace(array('/.*\//','/\?.*/'),array('',''),$_SERVER['REQUEST_URI']);
 
 		$csvmtime = "";
-		if( file_exists($this->csvfile) ) {
+		if ( $this->debug ) {
+			$csvmtime = 'debug';
+		} else if( file_exists($this->csvfile) ) {
 			$csvmtime = filemtime($this->csvfile);
 		} else if ( file_exists($this->sqlitefile )) {
 			$csvmtime = filemtime($this->sqlitefile);
@@ -717,11 +719,13 @@ class Fastback {
 	public function send_thumbnail() {
 		$thumbnailfile = $this->_make_a_thumb($_GET['thumbnail'],false,true);
 
-		if ( $thumbnailfile === false ) {
+		if ( empty($thumbnailfile) ) {
 			$this->log("Couldn't find thumbnail for '''{$_GET['thumbnail']}''', sending full sized!!!");
 			// I know this breaks video thumbs, but if a user is just getting set up I want something to still work for them
 			// This at least gets them images for now
-			$thumbnailfile = $this->util_file_is_ok($_GET['thumbnail']);
+			$thumbnailfile = $this->photobase . '/' . $this->util_file_is_ok($_GET['thumbnail']);
+		} else {
+			$thumbnailfile = $this->filecache . '/' . $thumbnailfile;
 		}
 
 		$this->util_readfile($thumbnailfile);
@@ -792,16 +796,19 @@ class Fastback {
 			<link rel="stylesheet" href="fastback/css/leaflet.css"/>
 			<link rel="stylesheet" href="fastback/css/MarkerCluster.Default.css"/>
 			<link rel="stylesheet" href="fastback/css/MarkerCluster.css"/>
-			<link rel="stylesheet" href="fastback/css/fastback.css?ts=' . filemtime(__DIR__ . '/css/fastback.css') . '">
+			<link rel="stylesheet" href="fastback/css/fastback.css?ts=' . ($this->debug ? 'debug' : filemtime(__DIR__ . '/css/fastback.css')) . '">
 			</head>';
 
 			$html .= '<body>If you\'re seeing this, then ' . $this->util_base_url() . ' is in accessable. Maybe it\'s down? You could also be offline, or the site could be an IPV6 site and you\'re on an IPV4 only network.';
 
+			if ( !$this->debug) {
 			$html .= '<script>
 				if("serviceWorker" in navigator) {
 					navigator.serviceWorker.register("' . $this->util_base_url() . '?pwa=sw", { scope: "' . $this->util_base_url() . '" });
-		}
-		</script>';
+				}';
+			}
+
+			$html .= '</script>';
 			$html .= '</body</html>';
 			print($html);
 		} else if ( $_GET['pwa'] == 'test' ) {
@@ -1281,17 +1288,23 @@ class Fastback {
 	 */
 	private function _make_a_thumb($file,$skip_db_write=false,$print_if_not_write = false){
 		// Find original file
+		$thumbnailfile = $this->sql_query_single("SELECT thumbnail FROM fastback WHERE file='" . SQLite3::escapeString($file) . "'");
+		if ( !empty($thumbnailfile) && file_exists($this->filecache . '/' . $thumbnailfile) ) {
+			// If it exists, we're golden
+			return $thumbnailfile;
+		}
+
 		$file = $this->util_file_is_ok($file);
 		$print_to_stdout = false;
 
 		$origdir = getcwd();
-		chdir($this->photobase);
-
-		$thumbnailfile = $this->filecache . '/' . ltrim($file,'./') . '.webp';
+		$thumbnailfile = ltrim($file,'./') . '.webp';
 
 		// Quick exit if thumb exists. Should be the default case
-		if ( file_exists($thumbnailfile) ) {
-			chdir($origdir);
+		if ( file_exists($this->filecache . '/' . $thumbnailfile) ) {
+			if ( !$skip_db_write ) {
+				$this->sql_query_single("UPDATE fastback SET thumbnail='" . SQLite3::escapeString($thumbnailfile) . "' WHERE file='" . SQLite3::escapeString($file) . "'");
+			}
 			return $thumbnailfile;
 		}
 
@@ -1305,8 +1318,8 @@ class Fastback {
 			}
 		}
 
-		// Cachedir might exist, but not be wriatable. 
-		$dirname = dirname($thumbnailfile);
+		// Cachedir might exist, make sure we have our subdir
+		$dirname = dirname($this->filecache . '/' . $thumbnailfile);
 		if (!file_exists($dirname) ){
 			@mkdir($dirname,0750,TRUE);
 			if ( !is_dir($dirname) ) {
@@ -1318,6 +1331,7 @@ class Fastback {
 					return false;
 				}
 			} else {
+				// When we make the dir, put an empty index.php file to prevent directory listings.
 				touch($dirname . '/index.php');
 			}
 		}
@@ -1356,20 +1370,19 @@ class Fastback {
 			return false;
 		}
 
-		if ( !file_exists( $thumbnailfile ) ) {
+		if ( !file_exists( $this->cachedir . '/' . $thumbnailfile ) ) {
 			chdir($origdir);
 			return false;
 		}
 
 		if ( !empty($this->_jpegoptim) ) {
-			$shellthumb = escapeshellarg($thumbnailfile);
+			$shellthumb = escapeshellarg($this->cachedir . '/' . $thumbnailfile);
 			$cmd = "jpegoptim --strip-all --strip-exif --strip-iptc $shellthumb";
 			$res = `$cmd`;
 		}
 
 		if ( !$skip_db_write ) {
-			$made_thumbs[$file] = $thumbnailfile;
-			$this->sql_update_case_when("UPDATE fastback SET _util=NULL, thumbnail=CASE", $made_thumbs, "ELSE thumbnail END", TRUE);
+			$this->sql_query_single("UPDATE fastback SET thumbnail='" . SQLite3::escapeString($thumbnailfile) . "' WHERE file='" . SQLite3::escapeString($file) . "'");
 		}
 
 		chdir($origdir);
@@ -1384,16 +1397,19 @@ class Fastback {
 	 * @print_to_stdout If true then we print headers and image and exit
 	 */
 	private function _make_image_thumb($file,$thumbnailfile,$print_to_stdout = false) {
-		if ( file_exists($thumbnailfile) ) {
+		if ( file_exists($this->filecache . '/' . $thumbnailfile) ) {
 			if ( $print_to_stdout ) {
-				$this->util_readfile($thumbnailfile);
+				$this->util_readfile($this->filecache . '/' . $thumbnailfile);
 				exit();
 			}
 			return $thumbnailfile;
 		}
 
+		$origdir = getcwd();
+		chdir($this->photobase);
+
 		$shellfile = escapeshellarg($file);
-		$shellthumb = escapeshellarg($thumbnailfile);
+		$shellthumb = escapeshellarg($this->filecache . '/' . $thumbnailfile);
 
 		if ( !isset($this->_vipsthumbnail) ) { $this->_vipsthumbnail = trim(`which vipsthumbnail`); }
 		if (!empty($this->_vipsthumbnail) ) {
@@ -1403,18 +1419,21 @@ class Fastback {
 			}
 
 			$cmd = "{$this->_vipsthumbnail} --size={$this->_thumbsize} --output=$shellthumb --smartcrop=attention $shellfile 2>/dev/null";
-			$res = `$cmd`;
 
 			if ( $print_to_stdout ) {
 				header("Content-Type: image/webp");
 				header("Last-Modified: " . filemtime($file));
 				header('Cache-Control: max-age=86400');
 				header('Etag: ' . md5_file($file));
-				print $res;
+				passthru($cmd);
+				chdir($origdir);
 				exit();
+			} else {
+				$res = `$cmd`;
 			}
 
-			if ( file_exists($thumbnailfile) ) {
+			if ( file_exists($this->filecache . '/' . $thumbnailfile) ) {
+				chdir($origdir);
 				return $thumbnailfile;
 			}
 		}
@@ -1434,11 +1453,15 @@ class Fastback {
 				header("Last-Modified: " . filemtime($file));
 				header('Cache-Control: max-age=86400');
 				header('Etag: ' . md5_file($file));
-				print $res;
+				passthru($cmd);
+				chdir($origdir);
 				exit();
+			} else {
+				$res = `$cmd`;
 			}
 
 			if ( file_exists($thumbnailfile) ) {
+				chdir($origdir);
 				return $thumbnailfile;
 			}
 		}
@@ -1490,13 +1513,14 @@ class Fastback {
 							header('Etag: ' . md5_file($file));
 							imagewebp($tmpimg);
 						} else {
-							imagewebp($tmpimg, $thumbnailfile);
+							imagewebp($tmpimg, $this->filecache . '/' . $thumbnailfile);
 						}
 					} else {
 						$this->log("Tried GD, but image was not png/jpg/gif");
 					}
 
-					if(file_exists($thumbnailfile)){
+					if(file_exists($this->filecache . '/' . $thumbnailfile)){
+						chdir($origdir);
 						return $thumbnailfile;
 					}   
 				} catch (Exception $e){
@@ -1506,6 +1530,7 @@ class Fastback {
 			$this->log("No GD here");
 		}
 
+		chdir($origdir);
 		return false;
 	}
 
@@ -1517,9 +1542,9 @@ class Fastback {
 	 * @print_to_stdout If true then we print headers and image and exit
 	 */
 	private function _make_video_thumb($file,$thumbnailfile,$print_to_stdout) {
-			if ( file_exists($thumbnailfile) ) {
+			if ( file_exists($this->filecache . '/' . $thumbnailfile) ) {
 				if ( $print_to_stdout ) {
-					$this->util_readfile($thumbnailfile);
+					$this->util_readfile($this->filecache . '/' . $thumbnailfile);
 					exit();
 				}
 				return $thumbnailfile;
@@ -1527,9 +1552,12 @@ class Fastback {
 
 			if ( !isset($this->_ffmpeg) ) { $this->_ffmpeg = trim(`which ffmpeg`); }
 
+			$origdir = getcwd();
+			chdir($this->photobase);
+
 			$shellfile = escapeshellarg($file);
-			$shellthumb = escapeshellarg($thumbnailfile);
-			$tmpthumb = $this->filecache . 'tmpthumb_' . getmypid() . '.webp';
+			$shellthumb = escapeshellarg($this->filecache . '/' . $thumbnailfile);
+			$tmpthumb = $this->filecache . '/tmpthumb_' . getmypid() . '.webp';
 			$tmpshellthumb = escapeshellarg($tmpthumb);
 			$formatflags = "";
 
@@ -1540,20 +1568,11 @@ class Fastback {
 					$formatflags = ' -f image2 -c png ';
 				}
 
-				$cmd = "{$this->_ffmpeg} -y -ss 10 -i $shellfile -vframes 1 $formatflags $tmpshellthumb 2> /dev/null";
-				$res = `$cmd`;
+				$timestamps = array('10',2,'00:00:00');
 
-				if ( $print_to_stdout && $res !== NULL) {
-					header("Content-Type: image/webp");
-					header("Last-Modified: " . filemtime($file));
-					header('Cache-Control: max-age=86400');
-					header('Etag: ' . md5_file($file));
-					print($res);
-					exit();
-				}
+				foreach($timestamps as $timestamp) {
 
-				if ( !file_exists($tmpthumb) || filesize($tmpthumb) == 0 ) {
-					$cmd = "{$this->_ffmpeg} -y -ss 2 -i $shellfile -vframes 1 $formatflags $tmpshellthumb 2> /dev/null";
+					$cmd = "{$this->_ffmpeg} -y -ss $timestamp -i $shellfile -vframes 1 $formatflags $tmpshellthumb 2> /dev/null";
 					$res = `$cmd`;
 
 					if ( $print_to_stdout && $res !== NULL) {
@@ -1561,22 +1580,13 @@ class Fastback {
 						header("Last-Modified: " . filemtime($file));
 						header('Cache-Control: max-age=86400');
 						header('Etag: ' . md5_file($file));
-						print($res);
+						print($res); // Can't use passthru because we need to check if the command worked
 						exit();
 					}
-				}
 
-				if ( !file_exists($tmpthumb) || filesize($tmpthumb) == 0 ) {
-					$cmd = "{$this->_ffmpeg} -y -ss 00:00:00 -i $shellfile -frames:v 1 $formatflags $tmpshellthumb 2> /dev/null";
-					$res = `$cmd`;
-					if ( $print_to_stdout && $res !== NULL) {
-						header("Content-Type: image/png");
-						header("Last-Modified: " . filemtime($file));
-						header('Cache-Control: max-age=86400');
-						header('Etag: ' . md5_file($file));
-						print($res);
-						exit();
-					} 
+					if ( file_exists($tmpthumb) && filesize($tmpthumb) > 0 ) {
+						break;
+					}
 				}
 
 				clearstatcache();
@@ -1590,29 +1600,17 @@ class Fastback {
 						$res = `$cmd`;
 						unlink($tmpthumb);
 					} else {
-						@rename($tmpthumb,$thumbnailfile);
+						@rename($tmpthumb,$this->filecache . '/' . $thumbnailfile);
 					}
 				}
-				if ( file_exists($thumbnailfile) ) {
+
+				if ( file_exists($this->filecache . '/' . $thumbnailfile) ) {
+
 					return $thumbnailfile;
 				}
 			}
 
-			@copy(__DIR__ . '/image/movie.webp',$thumbnailfile);
-
-			if ( file_exists($thumbnailfile) ) {
-				if ( $print_to_stdout ) {
-					$this->util_readfile($thumbnailfile);
-					exit();
-				} 
-
-				return $thumbnailfile;
-			}
-
-			if ( $print_to_stdout ) {
-				$this->util_readfile(__DIR__ . '/image/movie.webp');
-				exit();
-			}
+			return false;
 	}
 
 	/**
@@ -1935,10 +1933,11 @@ class Fastback {
 			'status' => 'Pending first run',
 		);
 
-		foreach($this->cronjobs as $job){
+		$allowed_actions = array('find_new_files','make_csv','process_exif','get_exif','make_thumbs','remove_deleted','clear_locks','status');
+		foreach($allowed_actions as $job){
 			$cron_status[$job] = $template;
+			$cron_status[$job]['job'] = $job;
 		}
-
 
 		if ( empty($res) ) {
 			$cron_status['queue'] = array();
