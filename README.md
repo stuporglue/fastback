@@ -10,7 +10,7 @@ Core features:
  * Navigate timeline quickly, both linearly (scrolling) and direct jumping (date picker)
  * Show all photos taken on today's date in previous years
  * Use map to find photos taken in a specific location
- * Use photo tags to see all photos of specific people [NOT YET IMPLEMENTED]
+ * Use photo tags to see all photos of specific people
 
 Additional features:
  * Mobile friendly
@@ -18,6 +18,7 @@ Additional features:
  * Easy photo sharing
  * Password protection
  * Easy to set up (for a web app)
+ * Reads exif data from xmp sidecar files
 
 Requirements
 -------------
@@ -74,8 +75,8 @@ cp fastabck/index.php .
 ```
 * Edit index.php and mdify the variables of the Fastback object.  
 
-Settings
---------
+Configuration
+-------------
 Sometimes the best documentation is code. See fastback.php for 
 all options. They are pretty well documented. Some options you might
 want to set include: 
@@ -113,6 +114,39 @@ $fb->supported_photo_types[] = 'tiff';
 
 $fb->run();
 ```
+
+Usage
+-----
+
+### Basics
+Once it is installed you should be able to just use the site. A fake cron job 
+gets kicked off 30 seconds after every page load and runs every 5 minutes while
+the page is open. 
+
+The cron job finds new files, loads metadata from the files exif info and 
+detects deleted photos. Cron jobs run for up to 120 seconds at a time and on
+up to 1/4 of the cores on your server.
+
+The first page load may take a minutes or two to load as a list of files is found. 
+
+### Behind the scenes
+Extracting exif data is a very slow process since every file must be read. Until
+exif data has been read photos will sort based on the file modification time
+instead of the time stored in the files metadata. The same is true for tag
+filtering and geolocation. 
+
+Thumbnails are generated on first access.
+
+### Running cron on the command line
+If you want to handle these processes more quickly, you can run `php index.php`
+on the command line. This will run without timing out.
+
+The make_thumbs cronjob is disabled by default. You can enable it in index.php 
+(`$fb->cronjob[] = 'make_thumbs';`) and build all thumbs at the cost of disk space.
+
+### Debugging
+Set `$fb->debug = true;` and quite verbose logging will be sent to `$fb->filecache/fastback.log`. 
+
 
 License, Credits and Thanks
 ----------------------------

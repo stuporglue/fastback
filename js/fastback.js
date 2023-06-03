@@ -151,7 +151,6 @@ Fastback = class Fastback {
 	 * Our default properties.
 	 */
 	setProps() {
-		this.photourl = "./";
 		this.fastbackurl = "./";
 		this.csv_error_load = false;
 
@@ -541,19 +540,19 @@ Fastback = class Fastback {
 		}
 		var imgsrc = photo.file;
 		var basename = imgsrc.replace(/.*\//,'');
-			var fullsize = this.photourl + imgsrc;
+			var directlink = this.fastbackurl + '?download=' + encodeURIComponent(imgsrc);
 
 			// File type not found, proxy a jpg instead
-			var supported_type = (this.browser_supported_file_types.indexOf(fullsize.replace(/.*\./,'').toLowerCase()) != -1);
+			var supported_type = (this.browser_supported_file_types.indexOf(imgsrc.replace(/.*\./,'').toLowerCase()) != -1);
 			if ( !supported_type ) {
-				fullsize = this.fastbackurl + '?proxy=' + encodeURIComponent(imgsrc);	
+				directlink = this.fastbackurl + '?proxy=' + encodeURIComponent(imgsrc);	
 			}
-			var share_uri = this.fastbackurl + '?file=' + encodeURIComponent(imgsrc).replaceAll('%2F','/') + '&?share=' + md5(fullsize);
+			var share_uri = this.fastbackurl + '?file=' + encodeURIComponent(imgsrc).replaceAll('%2F','/') + '&?share=' + md5(imgsrc);
 
 			if (photo.isvideo && supported_type){
-				imghtml = '<video controls poster="' + encodeURI(this.fastbackurl + '?thumbnail=' +  imgsrc) + '"><source src="' + fullsize + '#t=0.0001">Your browser does not support this video format.</video>';
+				imghtml = '<video controls poster="' + encodeURI(this.fastbackurl + '?thumbnail=' +  imgsrc) + '"><source src="' + directlink + '#t=0.0001">Your browser does not support this video format.</video>';
 			} else {
-				imghtml = '<img src="' + fullsize +'"/>';
+				imghtml = '<img src="' + directlink + '"/>';
 			}
 		jQuery('#thumbcontent').html(imghtml);
 		jQuery('#thumbinfo').html('<div id="infowrap">' + photo['file'] + '</div>');
@@ -1220,7 +1219,7 @@ Fastback = class Fastback {
 		var url = this.fastbackurl + '?cron=now';
 		var self = this;
 		$.get(url).then(function() {
-			setTimeout(self.cron.bind(self),1001 * 5 * 60);
+			setTimeout(self.cron.bind(self),1000 * 5 * 60);
 		});
 	}
 }

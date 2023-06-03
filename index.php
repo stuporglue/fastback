@@ -19,8 +19,12 @@ $fb = new Fastback();
 // Specify where the sqlite file is located. The file must be read-write.
 // $fb->sqlitefile = '/mount/fastdisk/fastback_gallery.sqlite';
 
-// Specify where the csv file is saved. The location must be read-write.
-// $fb->csvfile = '/mount/fastdisk/fastback_cache.csv';
+// Specify the cache directory. Technically the cache doesn't have to be writable, we can serve everything dynamically (other than the sqlite file)
+// $fb->filecache= '/mount/fastdisk/cachedir';
+
+// Specify where the csv file is saved. The location must be read-write if we're going to use it. It's much faster to have this than to not to.
+// Defaults to $fb->filecache/fastback.csv
+// $fb->csvfile = '/mount/fastdisk/cachedirfastback_cache.csv';
 
 // Directory regex used to find photos
 // $fb->photodirregex = './[0-9]\{4\}/[0-9]\{2\}/[0-9]\{2\}/'; 

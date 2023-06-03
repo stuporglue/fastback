@@ -58,7 +58,9 @@ self.addEventListener('fetch', event => {
 					cache_this = true;
 				} else if ( event.request.url.indexOf('?csv=get') !== -1 ) {
 					cache_this = true;
-				} else if ( cleaned_url.indexOf('fastback/') === 0) {
+				} else if ( event.request.url.indexOf('?download=') !== -1 ) {
+					cache_this = true;
+				} else if ( cleaned_url.indexOf('fastback/') === 1) {
 					cache_this = true;
 				} 
 
@@ -92,3 +94,4 @@ self.addEventListener('activate', event => {
     })
   );
 });
+

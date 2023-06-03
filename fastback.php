@@ -34,7 +34,7 @@ class Fastback {
 													*/
 	var $precachethumbs = false;					// Should thumbnails be created for all photos in the cron task? Default is to generated them on the fly as needed.
 	var $sqlitefile = __DIR__ . '/fastback.sqlite';	// Path to .sqlite file, Optional, defaults to fastback/fastback.sqlite
-	var $csvfile = __DIR__ . '/cache/fastback.csv';	// Path to .csv file, Optional, will use fastback/cache/fastback.sqlite by default
+	var $csvfile;									// Path to .csv file, Optional, will use $this->filecache/fastback.sqlite by default
 	var $cronjobs = array(							// These are the cron jobs we will try to run, in the order we try to complete them.
 		'find_new_files',							// If you don't want them all to run, for example if you don't want to generate thumbnails, then you could change this.
 		'make_csv',
@@ -108,6 +108,7 @@ class Fastback {
 	 */
 	public function __construct() {
 		$this->photourl = $this->util_base_url();
+		$this->csvfile = $this->filecache . '/fastback.csv';
 
 		if (php_sapi_name() !== 'cli') {
 			// Dothis after cli handling so that cli error log still goes to stdout
@@ -133,10 +134,15 @@ class Fastback {
 			touch($this->filecache . '/index.php');
 		}
 
+		$this->csvfile = $this->filecache . '/fastback.csv';
+
 		// CLI stuff doesn't need auth
 		if (php_sapi_name() === 'cli') {
 			$this->util_handle_cli();
 			exit();
+		} else  {
+			// Dothis after cli handling so that cli error log still goes to stdout
+			ini_set('error_log', $this->filecache . '/fastback.log'); 
 		}
 
 		// PWA stuff doesn't need auth
@@ -222,7 +228,9 @@ class Fastback {
 				return;
 			} 
 
-			if ( in_array($argv[1],$this->cronjobs) ) {
+			$allowed_actions = array('find_new_files','make_csv','process_exif','get_exif','make_thumbs','remove_deleted','clear_locks','status');
+
+			if ( in_array($argv[1],$allowed_actions) ) {
 				$this->log("Running {$argv[1]}");
 				$func = "cron_" . $argv[1];
 				$this->$func();
@@ -580,7 +588,6 @@ class Fastback {
 		$html .= '<script>
 			fastback = new Fastback({
 				csvurl: "' . $this->util_base_url() . '?csv=get&ts=' . $csvmtime . '",
-				photourl:    "' . $this->photourl .'",
 				fastbackurl: "' . $this->util_base_url() . $base_script . '",
 				photocount: ' . $this->sql_query_single("SELECT COUNT(*) FROM fastback") . ',
 				basemap: ' . $this->basemap . '
@@ -762,7 +769,6 @@ class Fastback {
 		} else if ( $_GET['pwa'] == 'sw' ) {
 			header("Content-Type: application/javascript; charset=UTF-8");
 			header("Content-Transfer-Encoding: Binary");
-			header("Content-Length: ".filesize(__DIR__ . '/js/fastback-sw.js'));
 			header("Content-Disposition: inline; filename=\"fastback-sw.js\"");
 			$sw = file_get_contents(__DIR__ . '/js/fastback-sw.js');
 			$sw = str_replace('SW_FASTBACK_BASEURL',$this->util_base_url(),$sw);
@@ -1962,7 +1968,11 @@ class Fastback {
 		}
 
 		if ( array_key_exists('find_new_files',$cron_status) ) {
-			$cron_status['find_new_files']['percent_complete'] = ($cron_status['find_new_files']['last_completed'] ? '100%' : '0%');
+			$cron_status['find_new_files']['percent_complete'] = ($cron_status['find_new_files']['last_completed'] ? '100.00%' : '0.00%');
+		}
+
+		if ( array_key_exists('find_new_files',$cron_status) ) {
+			$cron_status['make_csv']['percent_complete'] = ($cron_status['make_csv']['last_completed'] ? '100.00%' : '0.00%');
 		}
 
 		$total_rows = $this->sql_query_single("SELECT COUNT(*) FROM fastback");
@@ -1970,39 +1980,88 @@ class Fastback {
 
 		if ( $total_rows > 0 ) {
 			if ( array_key_exists('get_exif',$cron_status) ) {
-				$cron_status['get_exif']['percent'] = round( $exif_rows / $total_rows,4) * 100 . '%';
+				$cron_status['get_exif']['percent_complete'] = round( $exif_rows / $total_rows,4) * 100 . '%';
 			}
 			if ( array_key_exists('make_thumbs',$cron_status) ) {
-				$cron_status['make_thumbs']['percent'] = round($this->sql_query_single("SELECT COUNT(*) FROM FASTBACK WHERE flagged OR thumbnail IS NOT NULL") / $total_rows,4) * 100 . '%';
+				$cron_status['make_thumbs']['percent_complete'] = round($this->sql_query_single("SELECT COUNT(*) FROM FASTBACK WHERE flagged OR thumbnail IS NOT NULL") / $total_rows,4) * 100 . '%';
 			}
 		} else {
 			if ( array_key_exists('get_exif',$cron_status) ) {
-				$cron_status['get_exif']['percent'] = '0%';
+				$cron_status['get_exif']['percent_complete'] = '0%';
 			}
 			if ( array_key_exists('make_thumbs',$cron_status) ) {
-				$cron_status['make_thumbs']['percent'] = '0%';
+				$cron_status['make_thumbs']['percent_complete'] = '0%';
 			}
 		}
 
 		if ( $exif_rows > 0 ) {
 			if ( array_key_exists('process_exif',$cron_status) ) {
-				$cron_status['process_exif']['percent'] = round($this->sql_query_single("SELECT COUNT(*) FROM FASTBACK WHERE flagged OR sorttime IS NOT NULL") / $exif_rows,4) * 100 . '%';
+				$cron_status['process_exif']['percent_complete'] = round($this->sql_query_single("SELECT COUNT(*) FROM FASTBACK WHERE flagged OR sorttime IS NOT NULL") / $exif_rows,4) * 100 . '%';
 			}
 		} else {
 			if ( array_key_exists('process_exif',$cron_status) ) {
-				$cron_status['process_exif']['percent'] =  '0%';
+				$cron_status['process_exif']['percent_complete'] =  '0%';
 			}
 		}
 
 		if ( array_key_exists('remove_deleted',$cron_status) ) {
-			$cron_status['remove_deleted']['percent'] = ($cron_status['remove_deleted']['last_completed'] == 'Task not complete' ? '0%' : '100%');
+			$cron_status['remove_deleted']['percent_complete'] = ($cron_status['remove_deleted']['last_completed'] == 'Task not complete' ? '0.00%' : '100%');
 		}
 		
 		unset($cron_status['clear_locks']);
 
 		if (!$return) {
-			header("Content-Type: application/json");
-			print json_encode($cron_status);
+
+			// Pretty print for cli
+			if (php_sapi_name() == 'cli') {
+
+				if ( count($cron_status) == 0 ) {
+					print("No cron info found");
+				}
+
+				$cols = array();
+
+				foreach($cron_status as $job => $status){
+					foreach($status as $st => $val) {
+						if ( empty($cols[$st]) ) {
+							$cols[$st] = strlen($st);
+						}
+						$cols[$st] = max($cols[$st],strlen($val));
+					}
+				}
+
+				$col_order = array('job','status','updated','percent_complete','last_completed');
+				foreach($col_order as $col) {
+					$len = $cols[$col];
+					print(str_pad($col,$len) . " | ");
+				}
+				print("\n");
+				foreach($col_order as $col) {
+					$len = $cols[$col];
+					print(str_pad('-',$len,'-') . " | ");
+				}
+				print("\n");
+				foreach($cron_status as $job => $status){
+					foreach($col_order as $col) {
+						$len = $cols[$col];
+						if ( array_key_exists($col,$status) ) {
+							$dir = STR_PAD_RIGHT;
+							if ( $col == 'percent_complete' ) {
+								$dir = STR_PAD_LEFT;
+							}
+							print(str_pad($status[$col],$len,' ',$dir) . ' | ');
+						} else {
+							print(str_pad('',$len) . ' | ');
+						}
+					}
+					print("\n");
+				}
+
+
+			} else {
+				header("Content-Type: application/json");
+				print json_encode($cron_status);
+			}
 		} else {
 			return $cron_status;
 		}
