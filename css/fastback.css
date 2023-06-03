@@ -558,17 +558,44 @@ only screen and (min-device-pixel-ratio : 1.5) {
 	cursor: pointer;
 }
 
-.onetag:hover, .onetag.active:hover {
+.onetag.active {
+	background-color: #ffbc03;
+}
+
+@keyframes onetaghover {
+  0%{
+    background-color: #ffe08a;
+  }
+  100% {
+    background-color: white;
+  }
+}
+
+@keyframes onetaghoveractive {
+  0%{
+    background-color: #ffe08a;
+  }
+  100% {
+    background-color: #ffbc03;
+  }
+}
+
+
+.onetag:hover {
 	border-style: outset;
 	background-color: #ffe08a;
+	animation: onetaghover 1s ease-out; 
+	animation-iteration-count: 1;
+	animation-fill-mode: forwards;
 }
 
-.onetag.active {
-	background-color: #ffbc03
+.onetag.active:hover {
+	border-style: outset;
+	background-color: #ffe08a;
+	animation: onetaghoveractive 1s ease-out; 
+	animation-iteration-count: 1;
+	animation-fill-mode: forwards;
 }
-
-
-
 .tagtooltoggle {
 	display: inline-block;
 	margin: 4px;
