@@ -413,7 +413,7 @@ Fastback = class Fastback {
 					vidclass = ' vid';
 					errimg = 'movie.webp';
 				} else {
-					errimg = 'noface.webp';
+					errimg = 'picture.webp';
 					vidclass = '';
 				}
 				return '<div class="tn' + vidclass + '"><img data-photoid="' + p['id'] + '" src="' + encodeURI(self.fastbackurl + '?thumbnail=' + p['file']) + '" onerror="this.onerror=null;this.src=\'fastback/img/' + errimg + '\';"/></div>';
