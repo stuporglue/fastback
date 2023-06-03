@@ -593,11 +593,13 @@ class Fastback {
 				fastbackurl: "' . $this->util_base_url() . $base_script . '",
 				photocount: ' . $this->sql_query_single("SELECT COUNT(*) FROM fastback") . ',
 				basemap: ' . $this->basemap . '
-		});
-		if("serviceWorker" in navigator) {
+		});';
+
+		$html .= 'if("serviceWorker" in navigator) {
 			navigator.serviceWorker.register("?pwa=sw", { scope: "' . $this->util_base_url() . '" });
-		}
-			</script>';
+		}';
+
+		$html .= '</script>';
 		$html .= '</body></html>';
 
 		print $html;
@@ -801,12 +803,10 @@ class Fastback {
 
 			$html .= '<body>If you\'re seeing this, then ' . $this->util_base_url() . ' is in accessable. Maybe it\'s down? You could also be offline, or the site could be an IPV6 site and you\'re on an IPV4 only network.';
 
-			if ( !$this->debug) {
 			$html .= '<script>
 				if("serviceWorker" in navigator) {
 					navigator.serviceWorker.register("' . $this->util_base_url() . '?pwa=sw", { scope: "' . $this->util_base_url() . '" });
 				}';
-			}
 
 			$html .= '</script>';
 			$html .= '</body</html>';
@@ -1259,7 +1259,7 @@ class Fastback {
 				$thumbnailfile = $this->_make_a_thumb($file,true);
 
 				// If we've got the file, we're good
-				if ( file_exists($thumbnailfile) ) {
+				if ( file_exists($this->filecache . '/' . $thumbnailfile) ) {
 					$made_thumbs[$file] = $thumbnailfile;
 				} else {
 					$flag_these[] = $file;
@@ -1370,13 +1370,13 @@ class Fastback {
 			return false;
 		}
 
-		if ( !file_exists( $this->cachedir . '/' . $thumbnailfile ) ) {
+		if ( !file_exists( $this->filecache . '/' . $thumbnailfile ) ) {
 			chdir($origdir);
 			return false;
 		}
 
 		if ( !empty($this->_jpegoptim) ) {
-			$shellthumb = escapeshellarg($this->cachedir . '/' . $thumbnailfile);
+			$shellthumb = escapeshellarg($this->filecache . '/' . $thumbnailfile);
 			$cmd = "jpegoptim --strip-all --strip-exif --strip-iptc $shellthumb";
 			$res = `$cmd`;
 		}
