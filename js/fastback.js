@@ -179,7 +179,7 @@ Fastback = class Fastback {
 		// Anything not in this list will be proxied into a jpg
 		this.browser_supported_file_types = [
 			// videos
-			'mp4','m4v', 'ogg', 'mov', 'webm',
+			'mp4','m4v', 'ogg', 'webm',
 			// images
 			'jpg','jpeg','gif','png','webp' ];
 

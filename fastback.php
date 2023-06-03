@@ -690,6 +690,9 @@ class Fastback {
 			header("Content-Type: image/jpeg");
 			header("Content-Disposition: inline; filename=\"" . basename($file) . ".jpg\"");
 			$cmd = "ffmpeg -ss 00:00:00 -i " . escapeshellarg($file) . " -frames:v 1 -f singlejpeg - ";
+			// Another day I'll try to figure out on-the-fly video conversion
+			// $cmd = "ffmpeg -i " . escapeshellarg($file) . " -c:v libvpx-vp9 -crf 20 -deadline realtime -f webm pipe:1";
+			// $cmd = "ffmpeg -i " . escapeshellarg($file) . "  -c:v libtheora -q:v 7 -c:a libvorbis -q:a 4 -f ogv pipe:1";
 			passthru($cmd);
 			exit();
 		} else {
