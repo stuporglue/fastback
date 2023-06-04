@@ -44,6 +44,8 @@ Hovering over the markers on the map will make the photos in the viewing area fl
 
 Clicking on a marker cluster will Zoom in on the map to expand the cluster. If you are zoomed all the way in, the markers in that loation will "spider" so you can click individual markers. Clicking an individual marker will pop open the large size of that image. 
 
+The map uses Leaflet with free basemaps from Open Street Maps. Please respect [OSM's basemap tile usage policy](https://operations.osmfoundation.org/policies/tiles/). `index.php` includes instructions and a sample of how to change to another basemap provider. Please do so if you are using anything beyond incidental small home usage. 
+
 #### Map view filter
 
 ![](img/screenshots/map_filter.png)
