@@ -205,13 +205,14 @@ body .up10 .tn {width: calc(100vw/10); height: calc(100vw/10); font-size: 2vw;  
 	padding: 0 5px;
 	position: fixed;
 	right: 0;
-	top: 10px;
+	bottom: 40px;
 	height: calc(100% - 60px);
 	-webkit-transform: rotateX(180deg);
 	-moz-transform: rotateX(180deg);
 	-ms-transform: rotateX(180deg);
 	-o-transform: rotateX(180deg);
 	transform: rotateX(180deg);
+	z-index: 10;
 }
 
 #resizer {
@@ -497,6 +498,9 @@ only screen and (min-device-pixel-ratio : 1.5) {
 	body.map #thumb, body.map #tagwindow {
 		height: calc(50% - 30px);
 		width: 100%;
+	}
+	body.map #speedslide {
+		height: calc(50% - 60px);
 	}
 }
 

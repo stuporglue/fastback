@@ -313,9 +313,19 @@ Fastback = class Fastback {
 	}
 
 	geoclick(e) {
+
 		if ( !jQuery('body').hasClass('map') ) {
+			var self = this;
 			this.handle_globe_click();
+
+			if ( this.fmap === undefined ) {
+				setTimeout(function(){
+					self.geoclick(e);
+				},150);
+				return;
+			}
 		}
+
 		var points = $('#thumbgeo').data('coordinates').split(',');
 		this.fmap.lmap.flyTo([points[1],points[0]], this.fmap.lmap.getMaxZoom());
 	}
@@ -917,9 +927,10 @@ Fastback = class Fastback {
 		}
 
 		// Find the first photo that is younger than our target photo
-		var first = this.photos.findIndex(o => o['date'] <= targetdate);
+		// var first = this.photos.findIndex(o => o['date'] <= targetdate);
+		var first = this.photos.find(function(o){return o.date <= targetdate && o.type == 'media'})
 
-		this.scroll_to_photo(first);
+		this.scroll_to_photo(first.id);
 
 		this.refresh_layout();
 	}

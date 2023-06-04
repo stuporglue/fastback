@@ -1,10 +1,13 @@
 Fastback
 ========
 
-Fastback is a tool for navigating a large home collection of photos. Large in 
-this case means it works well with at least up to 200,000 photos. 
+Fastback is a tool for navigating a large home collection of photos and videos. Large in 
+this case means it works well with at least up to 200,000 photos and videos.
 
-Core features: 
+Core features 
+-------------
+
+# Support for large photo collections
 
  * Sort thousands of photos by date
  * Navigate timeline quickly, both linearly (scrolling) and direct jumping (date picker)
@@ -180,6 +183,10 @@ Troubleshooting
     ```
     >$ php index.php make_thumbs
     ```
+    You can also pre-generate the thumbnails through any other method you want. The default size is 256x256, 
+    but any image will work. The thumbnails should put in the cache directory with the same path and name as
+    the original, but in .webp format with .webp appended to the end. So if my original was `/path/to/photos/2023/01/01/new_years.jpg`
+    the thumbnail would be `/path/to/cache/2023/01/01/new_years.jpg.webp`.
 
 * Some thumbnails can be created and some cannot. What's going on? 
     - If you use the command line to run `php index.php make_thumbs` the files and folders will be created
@@ -191,6 +198,9 @@ Troubleshooting
     chown -R www-data /path/to/cachedir
     chmod -R 750 /path/to/cachedir
     ```
+* The photos on my page are smaller at page load than I want
+    - Your browser (and all browsers) have a max element height. Fastback uses hyperlist.js which uses this max height and the number
+    of photos to determine the max width of the thumbnails. 
 
 License, Credits and Thanks
 ----------------------------
@@ -213,6 +223,7 @@ TODO
 * Don't collapse exif tags
 * Prettier pwa offline page and more testing of pwa offline page.
 * Make colors customizable
+* Generate web-friendly videos so any video can be watched
 
 Disclaimers and Design Decisions
 --------------------------------

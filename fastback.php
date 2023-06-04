@@ -17,7 +17,7 @@ class Fastback {
 	 * $fb->run();
 	 *
 	 */ 
-	var $debug = 0;									// Are we debugging
+	var $debug = 1;									// Are we debugging
 	var $sitetitle = "Fastback Photo Gallery";		// Title
 	var $user = array();							// Dictionary of username => password 
 
@@ -262,13 +262,14 @@ class Fastback {
 		// Log out, just end it and redirect
 		if ( isset($_REQUEST['logout']) ) {
 			session_destroy();
-			header("Location: " . $_SERVER['SCRIPT_URL']);
+			print_r($_SERVER);
+			header("Location: " . preg_replace('/\?.*/','',$_SERVER['REQUEST_URI']));
 			setcookie("fastback","", time() - 3600); // Clear cookie
 			return true;
 		}
 
 		// Already active session
-		if ( array_key_exists('authed',$_SESSION) && $_SESSION['authed'] === true ) {
+		if ( array_key_exists('authed',$_SESSION) && $_SESSION['authed'] === true && !empty($_SESSION['user']) ) {
 			if ( !array_key_exists($_SESSION['user'], $this->user ) ) {
 				session_destroy();
 				header("Location: " . $_SERVER['SCRIPT_URL']);
@@ -549,7 +550,7 @@ class Fastback {
 			<div class="fakelink" id="thumbdownload">⬇️</div>
 			<div class="fakelink" id="sharelink"><a href="#">🔗<form id="sharelinkcopy">><input/></form></a></div>
 			<div class="fakelink disabled" id="webshare"><img src="fastback/img/share.png"></div>';
-			if (!empty($this->canflag) && in_array($_SESSION['user'],$this->canflag)){
+			if (!empty($this->canflag) && !empty($_SESSION['user']) && in_array($_SESSION['user'],$this->canflag)){
 				$html .= '<div class="fakelink" id="thumbflag" data-file="#">🚩</div>';
 			}
 			$html .= '<div class="fakelink" id="thumbgeo" data-coordinates="">🌐</div>
@@ -695,9 +696,17 @@ class Fastback {
 			passthru($cmd);
 			exit();
 		} else if ($mime[0] == 'video' ) {
-			header("Content-Type: image/jpeg");
+			if ( !isset($this->_ffmpeg) ) { $this->_ffmpeg = trim(`which ffmpeg`); }
+
+			if ( false && empty($this->ffmpeg) ) {
+				header("Content-Type: image/webp");
+				readfile(__DIR__ . '/img/movie.webp');
+				exit();
+			}
+
+			$cmd = "ffmpeg -ss 00:00:00 -i " . escapeshellarg($file) . " -frames:v 1 -f image2 -c png - ";
+			header("Content-Type: image/png");
 			header("Content-Disposition: inline; filename=\"" . basename($file) . ".jpg\"");
-			$cmd = "ffmpeg -ss 00:00:00 -i " . escapeshellarg($file) . " -frames:v 1 -f singlejpeg - ";
 			// Another day I'll try to figure out on-the-fly video conversion
 			// $cmd = "ffmpeg -i " . escapeshellarg($file) . " -c:v libvpx-vp9 -crf 20 -deadline realtime -f webm pipe:1";
 			// $cmd = "ffmpeg -i " . escapeshellarg($file) . "  -c:v libtheora -q:v 7 -c:a libvorbis -q:a 4 -f ogv pipe:1";
@@ -812,7 +821,7 @@ class Fastback {
 			<link rel="stylesheet" href="fastback/css/fastback.css?ts=' . ($this->debug ? 'debug' : filemtime(__DIR__ . '/css/fastback.css')) . '">
 			</head>';
 
-			$html .= '<body>If you\'re seeing this, then ' . $this->util_base_url() . ' is in accessable. Maybe it\'s down? You could also be offline, or the site could be an IPV6 site and you\'re on an IPV4 only network.';
+			$html .= '<body>If you\'re seeing this, then ' . $this->util_base_url() . ' isn\'t accessable. Maybe it\'s down? You could also be offline, or the site could be an IPV6 site and you\'re on an IPV4 only network.';
 
 			$html .= '<script>
 				if("serviceWorker" in navigator) {
@@ -835,7 +844,7 @@ class Fastback {
 	 * Flagged files are hidden the next time make_csv is run
 	 */
 	public function action_flag_photo(){
-		if (!empty($this->canflag) && in_array($_SESSION['user'],$this->canflag)){
+		if (!empty($this->canflag) && !empty($_SESSION['user']) && in_array($_SESSION['user'],$this->canflag)){
 			$file = SQLite3::escapeString($_GET['flag']);
 			$row = $this->sql_query_single("UPDATE fastback SET flagged=1 WHERE file='$file' RETURNING file,flagged",true);
 		} else {
