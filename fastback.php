@@ -1984,11 +1984,11 @@ class Fastback {
 		}
 
 		if ( array_key_exists('find_new_files',$cron_status) ) {
-			$cron_status['find_new_files']['percent_complete'] = ($cron_status['find_new_files']['last_completed'] ? '100.00%' : '0.00%');
+			$cron_status['find_new_files']['percent_complete'] = ($cron_status['find_new_files']['last_completed'] ? '100%' : '0%');
 		}
 
 		if ( array_key_exists('find_new_files',$cron_status) ) {
-			$cron_status['make_csv']['percent_complete'] = ($cron_status['make_csv']['last_completed'] ? '100.00%' : '0.00%');
+			$cron_status['make_csv']['percent_complete'] = ($cron_status['make_csv']['last_completed'] ? '100%' : '0%');
 		}
 
 		$total_rows = $this->sql_query_single("SELECT COUNT(*) FROM fastback");
@@ -2021,7 +2021,7 @@ class Fastback {
 		}
 
 		if ( array_key_exists('remove_deleted',$cron_status) ) {
-			$cron_status['remove_deleted']['percent_complete'] = ($cron_status['remove_deleted']['last_completed'] == 'Task not complete' ? '0.00%' : '100%');
+			$cron_status['remove_deleted']['percent_complete'] = ($cron_status['remove_deleted']['last_completed'] == 'Task not complete' ? '0%' : '100%');
 		}
 		
 		unset($cron_status['clear_locks']);

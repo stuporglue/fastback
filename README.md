@@ -26,6 +26,7 @@ Requirements
 * Linux PHP server
 * Sqlite3 support
 * find (command line tool)
+* Writable cache directory
 
 Strongly Recommended
 --------------------
@@ -33,12 +34,11 @@ Strongly Recommended
 * PHP-CLI
 * exiftool (required for geo, tagging and date sorting support)
 * ffmpeg (required for video thumbnails)
-* Writable cache directory
 * vipsthumbnail (for best image thumbnails)
     - As a backup Fastback will try to use convert (ImageMagick, command line program) or 
     GD (PHP library)
 * jpegoptim (optional, for smaller thumbs)
-* gzip (for smaller csv over the wire)
+* gzip (optional, for smaller csv over the wire)
 * htaccess support (for more security of your cache files)
 
 Installation and Setup
@@ -194,7 +194,7 @@ Troubleshooting
 
 License, Credits and Thanks
 ----------------------------
-This project is under the [LICENSE](MIT License). 
+This project is under the [LICENSE.txt](MIT License). 
 
 It uses code from many other projects under various Open Source licenses, including: 
  * [https://github.com/tbranyen/hyperlist](hyperlist)
@@ -204,7 +204,7 @@ It uses code from many other projects under various Open Source licenses, includ
  * [https://hammerjs.github.io/](hammer.js)
 
 Many thanks to the maintainers and developers of these projects for making this 
-possible. I couldn't have done it without you.
+possible. I wouldn't have had the time or patience to make it all from scratch.
 
 
 TODO
@@ -212,16 +212,29 @@ TODO
 * Location search input 
 * Don't collapse exif tags
 * Prettier pwa offline page and more testing of pwa offline page.
+* Make colors customizable
 
-Disclaimers and Decisions
--------------------------
+Disclaimers and Design Decisions
+--------------------------------
 
-I'm making this for myself and my family. 
+I'm making this for myself and my family. We have just over 200,000 family photos (1.7 TB). These are from almost 20 years of marriage, plus all the scanned photos and slides that our parents took of us when we were kids. We mostly store our photos in directories structured like YYYY/MM/DD. I organize all new photos with them with a [python script](https://github.com/stuporglue/ImportMedia) I wrote, or by importing them through [Digikam](https://www.digikam.org/).  I have Digikam configured write changes to xmp sidecar files instead of back to the original image. We use Digikam's face detection and tagging features quite a lot. 
 
-Fastback is designed to be simple and for use by a small, trusted group. It is not meant
-for big groups or heavy usage. It is optimized for functionality. 
+This project was creaed with a couple of core needs in mind. First, it had to handle a lot of photos. Second, my wife loves the Facebook Memories feature, looking at photos that were posted on today's date in past years. I also like looking back at photos from trips we have taken, so I wanted some sort of map search functionality. And we both wanted a way to look for photos of our kids with their grandparents or aunts and uncles. So some face tagging support was needed. Lastly, it had to be accessible from anywhere on our phones. 
 
-Basic steps have been taken for security and performance, but it is not hardened or 
-anything like that. 
+Since I couldn't find anything that supported all of those features, I decided to make my own site to host at home. 
+
+Fastback is designed to be simple and for use by a small, trusted group. It is not meant for big groups or heavy usage. It is built to meet our family photo needs. Hopefully it is also useful to you. 
+
+Basic steps have been taken for security and performance, but it is not hardened or anything like that. Steps taken to enhance security and performance include: 
+ * (Performance) Caching file data in an sqlite database instead of reading it live
+ * (Performance) Caching thumbnails and sending those instead of sending large files
+ * (Performance) Creating a CSV file of data instead of JSON (Smaller file)
+ * (Performance) gzipping CSV file to send less data
+ * (Performance) Careful use of setTimeout in script to ensure that UI stays responsive
+ * (Performance) Use of Progressive Web App technology to cache files locally
+ * (Security) Queries escape all user submitted data using SQLite3::escapeString
+ * (Security) All application directories and cache directories have an empty `index.php` to prevent directory listings
+ * (Security) .htaccess files prevent access to application, sqlite and cache files (if .htaccess support is enabled, of course)
+ * (Security) All photo and thumbnail access is routed through Fastback so that permissions can be checked
 
 Please feel free to submit bug reports and feature requests.
