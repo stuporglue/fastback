@@ -1,15 +1,14 @@
 Fastback
 ========
 
-|     |     |
-| Fastback is a tool for navigating a large home collection of photos and videos. Large in this case means it works well with at least up to 200,000 photos and videos. | ![](img/icons/256.png) |
+![](img/icons/256.png) Fastback is a tool for navigating a large home collection of photos and videos. Large in this case means it works well with at least up to 200,000 photos and videos.
 
 Core features 
 -------------
 
 # Support for large photo collections
 
- * Sort thousands of photos by date
+* Sort thousands of photos by date
  * Navigate timeline quickly, both linearly (scrolling) and direct jumping (date picker)
  * Show all photos taken on today's date in previous years
  * Use map to find photos taken in a specific location
