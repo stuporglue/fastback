@@ -72,6 +72,11 @@ Fastback = class Fastback {
 					setTimeout(parser.resume,5);
 				}
 
+				if ( res.data.length < 5 ) {
+					parser.abort();
+					return;
+				}
+
 				if ( res.data[4] !== '' ) {
 					has_geo = true;
 				}
@@ -773,12 +778,12 @@ Fastback = class Fastback {
 		});
 
 		// Scroll to first, if we're all the way zoomed in
-		this.fmap.clusterlayer.on('clusterclick', function (e) {
-			if ( e.layer._map.getZoom() == e.layer._map.getMaxZoom() ) {
-				var id = e.layer.getAllChildMarkers()[0].feature.properties.id
-				self.go_to_photo_id(id);
-			}
-		});
+		// this.fmap.clusterlayer.on('clusterclick', function (e) {
+		// 	if ( e.layer._map.getZoom() == e.layer._map.getMaxZoom() ) {
+		// 		var id = e.layer.getAllChildMarkers()[0].feature.properties.id
+		// 		self.go_to_photo_id(id);
+		// 	}
+		// });
 
 		this.fmap.base_map.addTo(this.fmap.lmap);
 		this.fmap.clusterlayer.addTo(this.fmap.lmap);
