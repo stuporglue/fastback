@@ -50,7 +50,7 @@ Clicking on a marker cluster will Zoom in on the map to expand the cluster. If y
 
 The map can also be used as a filter. The icon on the map will toggle filtering by map view. Only photos which have GPS coordinates on the current map view will be show in the viewing area. 
 
-This filter combines with the all other filters. For example, if Rewind is active and the Map view filter is active, and the map is zoomed to show Wisconsin, then only photos from today's date in previous years, in Wisconsin will appear in the list and on the map.
+This filter combines with the all other filters. For example, if Rewind is active and the Map view filter is active, and the map is zoomed to show Minnesota, then only photos from today's date in previous years, in Minnesota will appear in the list and on the map.
 
 
 ### Filter by tags
@@ -81,20 +81,24 @@ You can also run any task with debug enabled, like so: `php index.php debug make
 This will print additional information to your console. 
 
 
+### Other tools and interactions
+![](img/screenshots/tools.png)
 
-* Sort thousands of photos by date
- * Navigate timeline quickly, both linearly (scrolling) and direct jumping (date picker)
- * Show all photos taken on today's date in previous years
- * Use map to find photos taken in a specific location
- * Use photo tags to see all photos of specific people
+The tools shown are: A slider which changes size of the thumbnails, Map toggle button, Tag window toggle button, Rewind toggle button, Date picker button, log out button. 
 
-Additional features:
- * Mobile friendly
+Not pictured is a vertical scrollbar that lets you quickly scroll through your photos. 
+
+Clicking on an individual thumbnail will open the fullsized-image. When the fullsized-image is open you can tap on the right or left sides or swipe to move to the next or previous photo. 
+
+You can press escape or swipe up to close the fullsized-image display. 
+
+
+### Other features
+
+ * Tested on iOS and Android
  * Convert non-web-friendly image formats on the fly (eg. HEIC)
- * Easy photo sharing
- * Password protection
  * Easy to set up (for a web app)
- * Reads exif data from xmp sidecar files
+ * Reads exif data from xmp sidecar files (if named correnctly, eg. IMG_123.JPG could have sidecar IMG_123.JPG.xmp)
 
 Requirements
 -------------
