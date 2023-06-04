@@ -1,0 +1,34 @@
+# If you want your site to load even faster we can skip PHP for 
+# thumbnails and file downloads. 
+# Copy this file up a directory level and rename it to .htaccess. 
+# It should be next to the index.php that is the entry point for 
+# your site. Or, edit your existing .htaccess and add and modify these lines.
+#
+# WARNING!!! 
+# This will skip the permission checks that Fastback does
+# You will have to secure your photos some other way, if needed.
+#
+# https://httpd.apache.org/docs/2.4/mod/mod_rewrite.html
+
+<IfModule mod_rewrite.c>
+	RewriteEngine On
+
+	# For thumbnail requests...
+	RewriteCond %{QUERY_STRING} thumbnail=([^&]+)
+    # Where the thumbnail already exists on disk...
+	RewriteCond "/path/to/cache/directory/on/disk/%1.webp" -f 
+	# Skip the PHP and serve the file directly
+	RewriteRule .* "/url/to/cache/%1.webp" [QSD,L]
+    # If you're doing this you probably don't need a template... RewriteRule .* "https://otherdomain.com/url/to/cache/%1.webp" [QSD,L]
+
+
+	# For download requests...
+	RewriteCond %{QUERY_STRING} download=([^&]+)
+    # Where the original exists on disk (and it always should)...
+    # Note that files that need to be proxied for the browser like HEIC 
+    # files will not come through here since the proxy request is different
+	RewriteCond "/path/to/fullsized/media/on/disk/%1" -f 
+	# Skip the PHP and serve the file directly
+	RewriteRule .* "/url/to/fullsized/media/%1" [QSD,L]
+    # If you're doing this you probably don't need a template... RewriteRule .* "https://otherdomain.com/url/to/fullsized/media/%1.webp" [QSD,L]
+</IfModule>

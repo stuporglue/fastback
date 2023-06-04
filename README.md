@@ -36,7 +36,7 @@ The Date Picker tool works together with the Rewind tool too. If Rewind is activ
 ### Map view
 ![](img/screenshots/map_view.png)
 
-If GPS coordinates are detected in your photos then the map tool will be enabled. The map shows all photos available with the current filters. By default then, it will show all photos with GPS info. IF you activate the Rewind tool, then all photos from today's date in previous years will show on the map. 
+If GPS coordinates are detected in your photos then the map tool will be enabled. You can then toggle the map view open and closed. The map shows all photos available with the current filters. By default then, it will show all photos with GPS info. If you activate the Rewind tool, then all photos from today's date in previous years will show on the map. 
 
 Photos currently in the scrolling viewing area are shown as a blue circle outline on the map. Hovering over photos in the viewing area will make the blue circle outline flash. 
 
