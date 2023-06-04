@@ -414,6 +414,10 @@ body.map #thumb, body.map #tagwindow {
 	height: 100%;
 	width: 100%;
 	object-fit: contain;
+	background-image: url('../img/loading.png');
+	background-repeat: no-repeat;
+	background-size: 25px 25px;
+	background-position: center center;
 }
 
 /* Hide scrollbar for Chrome, Safari and Opera */

@@ -314,16 +314,17 @@ Fastback = class Fastback {
 
 	geoclick(e) {
 
-		if ( !jQuery('body').hasClass('map') ) {
-			var self = this;
-			this.handle_globe_click();
+		var self = this;
+		if ( this.fmap === undefined ) {
+			this._map_init_action_queue = this._map_init_action_queue || {};
+			this._map_init_action_queue['geoclick'] = function(){
+				this.geoclick(e);
+			}.bind(this);
 
-			if ( this.fmap === undefined ) {
-				setTimeout(function(){
-					self.geoclick(e);
-				},150);
-				return;
-			}
+			this.handle_globe_click();
+			return;
+		} else if ( !jQuery('body').hasClass('map') ) {
+			this.handle_globe_click();
 		}
 
 		var points = $('#thumbgeo').data('coordinates').split(',');
@@ -732,7 +733,8 @@ Fastback = class Fastback {
 		}
 
 		this.fmap.lmap.on({
-			'moveend': this._map_handle_zoom_move_end.bind(self)
+			moveend: this._map_handle_zoom_move_end.bind(self),
+			load: this._map_handle_action_queue.bind(self)
 		});
 
 		L.Control.MapFilter = L.Control.extend({
@@ -771,12 +773,12 @@ Fastback = class Fastback {
 		});
 
 		// Scroll to first, if we're all the way zoomed in
-		// this.fmap.clusterlayer.on('clusterclick', function (e) {
-		// 	if ( e.layer._map.getZoom() == e.layer._map.getMaxZoom() ) {
-		// 		var id = e.layer.getAllChildMarkers()[0].feature.properties.id
-		// 		self.go_to_photo_id(id);
-		// 	}
-		// });
+		this.fmap.clusterlayer.on('clusterclick', function (e) {
+			if ( e.layer._map.getZoom() == e.layer._map.getMaxZoom() ) {
+				var id = e.layer.getAllChildMarkers()[0].feature.properties.id
+				self.go_to_photo_id(id);
+			}
+		});
 
 		this.fmap.base_map.addTo(this.fmap.lmap);
 		this.fmap.clusterlayer.addTo(this.fmap.lmap);
@@ -788,6 +790,15 @@ Fastback = class Fastback {
 			self.map_update_cluster();
 			self.after_render();
 		},200);
+	}
+
+	_map_handle_action_queue(e) {
+		this._map_init_action_queue = this._map_init_action_queue || {};
+		var keys = Object.keys(this._map_init_action_queue);
+		for(var k = 0;k< keys.length;k++){
+			this._map_init_action_queue[keys[k]]();
+			delete this._map_init_action_queue[keys[k]];
+		}
 	}
 
 	_map_handle_zoom_move_end(e) {
@@ -826,7 +837,9 @@ Fastback = class Fastback {
 
 			// If we're handling a user inited map move we don't want to update zoom. Let the user go where they want.
 			if ( self.handling_map_move_end === undefined ) {
-				if ( self.fmap.clusterlayer.getBounds().isValid() ) {
+				if ( self._map_init_action_queue !== undefined && Object.keys(self._map_init_action_queue).length > 0 ) {
+					self._map_handle_action_queue();
+				} else if ( self.fmap.clusterlayer.getBounds().isValid() ) {
 					self.fmap.lmap.fitBounds(self.fmap.clusterlayer.getBounds());
 				} else {
 					self.fmap.lmap.setView([0,0],1);
@@ -939,9 +952,11 @@ Fastback = class Fastback {
 	 * Go to photo id
 	 */
 	go_to_photo_id(id) {
-		this._go_to_photo('id',id);
+		setTimeout(function(){
+			this._go_to_photo('id',id);
+			// this.flash_square_for_id(id); Why flash it? We're going to show the thumb over the top..
+		}.bind(this),100);
 		this.show_thumb_popup(id);
-		this.flash_square_for_id(id);
 	}
 
 	/**
@@ -1118,7 +1133,10 @@ Fastback = class Fastback {
 				setTimeout(this.map_init.bind(this),100);
 			} else {
 				this.fmap.lmap.invalidateSize();
-				if ( this.fmap.clusterlayer.getBounds().isValid() ) {
+
+				if ( this._map_init_action_queue !== undefined && Object.keys(this._map_init_action_queue).length > 0 ) {
+					this._map_handle_action_queue();
+				} else if ( this.fmap.clusterlayer.getBounds().isValid() ) {
 					this.fmap.lmap.fitBounds(this.fmap.clusterlayer.getBounds());
 				} else {
 					this.fmap.lmap.setView([0,0],1);

@@ -1,14 +1,24 @@
 Fastback
 ========
+Fastback is a tool for navigating a large home collection of photos and videos. I am using it with over 250,000 photos and videos and it performs well. 
 
 ![](img/icons/192.png)
-
-Fastback is a tool for navigating a large home collection of photos and videos. Large in this case means it works well with at least up to 200,000 photos and videos.
 
 Core features 
 -------------
 
-# Support for large photo collections
+### Support for large photo collections
+
+
+![](img/screenshots/status_output.png)
+![](img/screenshots/tags.png)
+![](img/screenshots/login_screen.png)
+![](img/screenshots/many_files.png)
+![](img/screenshots/jump_to_date.png)
+![](img/screenshots/index.php)
+![](img/screenshots/map_view.png)
+![](img/screenshots/rewind.png)
+
 
 * Sort thousands of photos by date
  * Navigate timeline quickly, both linearly (scrolling) and direct jumping (date picker)
@@ -225,6 +235,7 @@ TODO
 * Prettier pwa offline page and more testing of pwa offline page.
 * Make colors customizable
 * Generate web-friendly videos so any video can be watched
+* Be able to zoom and pan on single image view
 
 Disclaimers and Design Decisions
 --------------------------------
