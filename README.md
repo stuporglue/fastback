@@ -1,10 +1,7 @@
 Fastback
 ========
 
-
-<p style="float: left">
-<img src="img/icons/192.png" alt="Fastback tire lens logo"/>
-</p>
+![](img/icons/192.png)
 
 Fastback is a tool for navigating a large home collection of photos and videos. Large in this case means it works well with at least up to 200,000 photos and videos.
 
