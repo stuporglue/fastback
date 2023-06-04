@@ -5,20 +5,19 @@ if ( file_exists('fastback') && is_dir('fastback') ) {
 require_once('fastback.php');
 $fb = new Fastback();
 
+/*
+ * About the site
+ */
 // Change the site title
 $fb->sitetitle = "Fastback Photo Gallery";
+
+/*
+ * Directories and Files
+ */
 
 // Specify where full sized photos are located. This can read-only.
 // eg. $fb->photobase = '/mount/bigdisk/photo_album/';
 $fb->photobase = __DIR__;
-
-
-
-// Add a user account
-// $fb->user['Michael'] = 'moore';
-
-// Give the user permission to flag photos
-// $fb->canflag[] = 'Michael';
 
 // Specify where the sqlite file is located. The file must be read-write.
 // $fb->sqlitefile = '/mount/fastdisk/fastback_gallery.sqlite';
@@ -29,6 +28,20 @@ $fb->photobase = __DIR__;
 // Specify where the csv file is saved. The location must be read-write if we're going to use it. It's much faster to have this than to not to.
 // Defaults to $fb->filecache/fastback.csv
 // $fb->csvfile = '/mount/fastdisk/cachedirfastback_cache.csv';
+
+/*
+ * User Permissions
+ */
+
+// Add a user account
+// $fb->user['Michael'] = 'moore';
+
+// Give the user permission to flag photos
+// $fb->canflag[] = 'Michael';
+
+/*
+ * Other Settings
+ */
 
 // Directory regex used to find photos
 // $fb->photodirregex = './[0-9]\{4\}/[0-9]\{2\}/[0-9]\{2\}/'; 

@@ -79,25 +79,11 @@ As you use the site a background worker will run some tasks to extract metadata
 more and more useful. 
 
 
-Advanced Instructions
----------------------
-* Clone fastback into a web server directory
-```
-cd /var/www/html/photos/
-git clone https://github.com/stuporglue/fastback.git
-```
- * Copy fastback/index.php into /var/www/html/photos
-```
-cp fastabck/index.php .
-```
-* Edit index.php and mdify the variables of the Fastback object.  
-
-
-
 Configuration
 -------------
-Sometimes the best documentation is code. See fastback.php for 
-all options. They are pretty well documented. Some options you might
+Basic configuration options are shown with sample values in `index.php`, but commented out.
+
+For a list of all available options see `fastback.php`. They are pretty well documented. Some options you might
 want to set include: 
 
 ```
@@ -105,25 +91,29 @@ $fb = new Fastback();
 // Change the site title
 $fb->sitetitle = "Moore Family Gallery";
 
+// Specify where full sized photos are located. This can read-only. 
+$fb->photobase = '/mount/bigdisk/my_photos/'; 
+
+// Specify where the sqlite file is located. The file itself must be read-write.
+$fb->sqlitefile = '/mount/fastdisk/fastback_gallery.sqlite';
+
+// Specify the cache directory. This needs to be writable by the web server.
+$fb->filecache= '/mount/fastdisk/cachedir';
+
+// Specify where the csv file is saved. The location must be read-write. Defaults the cache directory
+$fb->csvfile = '/mount/fastdisk/fastback_cache.csv';
+
+
 // Add a user account
 $fb->user['Michael'] = 'moore';
 
 // Give the user permission to flag photos
 $fb->canflag[] = 'Michael';
 
-// Specify where full sized photos are located. This can read-only.
-$fb->photobase = '/mount/bigdisk/my_photos/'; 
-
-// Specify where the sqlite file is located. The file must be read-write.
-$fb->sqlitefile = '/mount/fastdisk/fastback_gallery.sqlite';
-
-// Specify where the csv file is saved. The location must be read-write.
-$fb->csvfile = '/mount/fastdisk/fastback_cache.csv';
-
 // Directory regex used to find photos
 $fb->photodirregex = './[0-9]\{4\}/[0-9]\{2\}/[0-9]\{2\}/'; 
 
-// What types of image files should be accepted
+// Add support for tiff files
 $fb->supported_photo_types[] = 'tiff';
 
 // Change to a different basemap
