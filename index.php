@@ -4,17 +4,21 @@ if ( file_exists('fastback') && is_dir('fastback') ) {
 }
 require_once('fastback.php');
 $fb = new Fastback();
+
 // Change the site title
-// $fb->sitetitle = "Moore Family Gallery";
+$fb->sitetitle = "Fastback Photo Gallery";
+
+// Specify where full sized photos are located. This can read-only.
+// eg. $fb->photobase = '/mount/bigdisk/photo_album/';
+$fb->photobase = __DIR__;
+
+
 
 // Add a user account
 // $fb->user['Michael'] = 'moore';
 
 // Give the user permission to flag photos
 // $fb->canflag[] = 'Michael';
-
-// Specify where full sized photos are located. This can read-only.
-// $fb->photobase = '/mount/bigdisk/my_photos/'; 
 
 // Specify where the sqlite file is located. The file must be read-write.
 // $fb->sqlitefile = '/mount/fastdisk/fastback_gallery.sqlite';

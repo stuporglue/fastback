@@ -35,32 +35,48 @@ Strongly Recommended
 * ffmpeg (required for video thumbnails)
 * Writable cache directory
 * vipsthumbnail (for best image thumbnails)
-    - As a backup Fastback will try to use convert (ImageMagick, command line program) or GD (PHP library)
+    - As a backup Fastback will try to use convert (ImageMagick, command line program) or 
+    GD (PHP library)
 * jpegoptim (optional, for smaller thumbs)
 * gzip (for smaller csv over the wire)
 * htaccess support (for more security of your cache files)
 
-Simple Installation
--------------------
- * Put or link your full-sized photos into a directory which is served by your webserver. 
-     - eg. /var/www/html/photos/ 
- * Clone this repository
+Installation and Setup
+----------------------
+ * Clone this repository into a directory on your web server.
 ```
 cd /var/www/html/photos/
 git clone https://github.com/stuporglue/fastback.git
 ```
- * Copy fastback/index.php into /var/www/html/photos
+
+ * Copy `fastback/index.php` up a level into `/var/www/html/photos`
 ```
 cp fastabck/index.php .
 ```
- * Make sure that the fastback is writable by the web server process. Eg. if you 
- are using Apache an it runs as user `www-data`: 
-```
-chgrp -R www-data fastback
-chmod g+w -R www-data fastback
-chmod g+x fastback
-```
- * Visit your site. 
+
+ * If your photo directories are NOT in `/var/www/html/photos` then edit
+ `index.php`. Set `$fb->photobase` to the path to your files. If your photos are 
+ in the same directory as `index.php` you can skip this step.
+ ```
+ $fb->photobase = '/mount/bigdisk/photo_album/';
+
+ * Visit your site at `https://yoursite.com/photos/`
+
+
+First Run
+---------
+The first visit will attempt to create the cache directory and find all photos and videos.
+It will also try to create an sqlite database file and CSV file of the photo info at 
+`cache/fastback.csv`. 
+
+If any of these can't be created, Fastback should log the error display a message on web page.
+
+If they are created you should see your photos right away. 
+
+As you use the site a background worker will run some tasks to extract metadata 
+(photo creation time, coordinates, tags). As this data is processed the site will become
+more and more useful. 
+
 
 Advanced Instructions
 ---------------------
@@ -74,6 +90,8 @@ git clone https://github.com/stuporglue/fastback.git
 cp fastabck/index.php .
 ```
 * Edit index.php and mdify the variables of the Fastback object.  
+
+
 
 Configuration
 -------------
@@ -148,6 +166,41 @@ The make_thumbs cronjob is disabled by default. You can enable it in index.php
 Set `$fb->debug = true;` and quite verbose logging will be sent to `$fb->filecache/fastback.log`. 
 
 
+Troubleshooting
+---------------
+* My photos are out of order
+    - Photos are temporarily sorted by their file modification time. Reading the exif
+    data is a slow process. You can see the status of these tasks by visiting `https://yoursite.com/photos/cron=status`.
+
+* The map feature and tag features aren't showing up on my website
+    - These features are enabled automatically once coordinates (for the map) or tags (for the tags!) are found.
+    If you have a photo that you think has such metadata but it isn't reflected on the site, please send me the photo
+    so I can see how the exif data is structured. I have 200,000+ photos but I'm sure there are other exif formats
+    that Fasback doesn't handle correctly yet. 
+
+* The site freezes up without any thumbnails
+    - By default thumbnails are generated and saved on-demand. This saves on disk space at the cost of performance.
+    You can pre-generate all the thumbnails by enabling the make_thumbs cron job in your index.php file. 
+    ```
+    $fb->cronjobs[] = 'make_thumbs';
+    ```
+    You can also run the job manually from the command line. Running from the command line won't time out like
+    the browser-based cron tasks do. You can run it like so: 
+    ```
+    >$ php index.php make_thumbs
+    ```
+
+* Some thumbnails can be created and some cannot. What's going on? 
+    - If you use the command line to run `php index.php make_thumbs` the files and folders will be created
+    with the permissions of the user you are logged in as. The thumbs created via the web site 
+    will be crated with the permissions of the web server user. Try changing the permissions of the 
+    cache folder after making thumbs on the command line. If your webserver runs as user `www-data`, something
+    like this might work:
+    ```
+    chown -R www-data /path/to/cachedir
+    chmod -R 750 /path/to/cachedir
+    ```
+
 License, Credits and Thanks
 ----------------------------
 This project is under the [LICENSE](MIT License). 
@@ -161,6 +214,7 @@ It uses code from many other projects under various Open Source licenses, includ
 
 Many thanks to the maintainers and developers of these projects for making this 
 possible. I couldn't have done it without you.
+
 
 TODO
 ----

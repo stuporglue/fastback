@@ -128,8 +128,9 @@ class Fastback {
 		if ( !is_dir($this->filecache) ) {
 			@mkdir($this->filecache,0750,TRUE);
 			if ( !is_dir($this->filecache) ) {
-				$this->log("Fastback cache directory {$this->filecache} doesn't exist");
-				die("Fastback setup error. See errors log.");
+				error_log("Fastback cache directory {$this->filecache} doesn't exist and can't be created. Please create it and give the web server write permission.");
+				$this->log("Fastback cache directory {$this->filecache} doesn't exist and can't be created. Please create it and give the web server write permission.");
+				die("Fastback setup error. See error log.");
 			}
 			touch($this->filecache . '/index.php');
 		}
@@ -371,6 +372,7 @@ class Fastback {
 		$whole_url = $http . $ret;
 
 		if ( filter_var($whole_url, FILTER_VALIDATE_URL) === FALSE ) {
+			error_log("Unable to create valid URL: $whole_url");
 			$this->log("Unable to create valid URL: $whole_url");
 			die("Couldn't figure out server URL");
 			return false;
@@ -542,9 +544,11 @@ class Fastback {
 			<div id="thumbclose" class="fakelink">🆇</div>
 			<div class="fakelink" id="thumbdownload">⬇️</div>
 			<div class="fakelink" id="sharelink"><a href="#">🔗<form id="sharelinkcopy">><input/></form></a></div>
-			<div class="fakelink disabled" id="webshare"><img src="fastback/img/share.png"></div>
-			<div class="fakelink ' . (!empty($this->canflag) && !in_array($_SESSION['user'],$this->canflag) ? 'disabled' : '') . '" id="thumbflag" data-file="#">🚩</div>
-			<div class="fakelink" id="thumbgeo" data-coordinates="">🌐</div>
+			<div class="fakelink disabled" id="webshare"><img src="fastback/img/share.png"></div>';
+			if (!empty($this->canflag) && in_array($_SESSION['user'],$this->canflag)){
+				$html .= '<div class="fakelink" id="thumbflag" data-file="#">🚩</div>';
+			}
+			$html .= '<div class="fakelink" id="thumbgeo" data-coordinates="">🌐</div>
 			<div id="thumbinfo"></div>
 			</div>';
 		$html .= '</div>';
@@ -827,8 +831,13 @@ class Fastback {
 	 * Flagged files are hidden the next time make_csv is run
 	 */
 	public function action_flag_photo(){
-		$file = SQLite3::escapeString($_GET['flag']);
-		$row = $this->sql_query_single("UPDATE fastback SET flagged=1 WHERE file='$file' RETURNING file,flagged",true);
+		if (!empty($this->canflag) && in_array($_SESSION['user'],$this->canflag)){
+			$file = SQLite3::escapeString($_GET['flag']);
+			$row = $this->sql_query_single("UPDATE fastback SET flagged=1 WHERE file='$file' RETURNING file,flagged",true);
+		} else {
+			$row = array('error' => 'access denied');
+			http_response_code(403);
+		}
 
 		header("Content-Type: application/json");
 		header("Cache-Control: no-cache");
@@ -845,9 +854,14 @@ class Fastback {
 		}
 
 		if ( !file_exists($this->sqlitefile) ) {
-			$this->_sql = new SQLite3($this->sqlitefile);
-			$this->_sql->busyTimeout($this->_sqlite_timeout * 1001);
-			$this->sql_setup_db();
+			try {
+				$this->_sql = new SQLite3($this->sqlitefile);
+				$this->_sql->busyTimeout($this->_sqlite_timeout * 1001);
+				$this->sql_setup_db();
+			} catch (Exception $e) {
+				$this->log($e->getMessage());
+				die("Fastback setup error. See error log.");
+			}
 		} else {
 			$this->_sql = new SQLite3($this->sqlitefile);
 			$this->_sql->busyTimeout($this->_sqlite_timeout * 1000);
