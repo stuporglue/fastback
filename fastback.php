@@ -1,4 +1,8 @@
 <?php
+/**
+ * Copyright 2021-2023 Michael Moore - stuporglue@gmail.com
+ * Licensed under the MIT License
+ */
 class Fastback {
 	/*
 	 * Settings!

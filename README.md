@@ -225,7 +225,8 @@ Since I couldn't find anything that supported all of those features, I decided t
 
 Fastback is designed to be simple and for use by a small, trusted group. It is not meant for big groups or heavy usage. It is built to meet our family photo needs. Hopefully it is also useful to you. 
 
-Basic steps have been taken for security and performance, but it is not hardened or anything like that. Steps taken to enhance security and performance include: 
+Basic steps have been taken for security and performance, but it is not specifically hardened or anything like that. Steps taken to enhance security and performance include: 
+
  * (Performance) Caching file data in an sqlite database instead of reading it live
  * (Performance) Caching thumbnails and sending those instead of sending large files
  * (Performance) Creating a CSV file of data instead of JSON (Smaller file)
@@ -237,4 +238,4 @@ Basic steps have been taken for security and performance, but it is not hardened
  * (Security) .htaccess files prevent access to application, sqlite and cache files (if .htaccess support is enabled, of course)
  * (Security) All photo and thumbnail access is routed through Fastback so that permissions can be checked
 
-Please feel free to submit bug reports and feature requests.
+Bug reports and feature requests are welcome. Clean, well documented, pull requests are even more welcome. 
