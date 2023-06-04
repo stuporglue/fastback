@@ -644,14 +644,12 @@ class Fastback {
 			return false;
 		}
 		$share = SQLite3::escapeString($_GET['share']);
-		$file = $this->sql_query_single("SELECT file FROM fastback WHERE share_key='$share' RETURNING file");
+		$file = $this->sql_query_single("SELECT file FROM fastback WHERE share_key='$share'");
 
 		if ( !$file ) {
 			http_response_code(404);
 			$this->log("Someone tried to access a shared file with parameters " . print_r($_GET,true));
 			die();
-		} else {
-			$file = $row['file'];
 		}
 
 		if ( !file_exists($this->photobase . $file) ) {

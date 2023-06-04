@@ -299,14 +299,14 @@ Fastback = class Fastback {
 
 	senddownload(e) {
 		var photoid = jQuery('#thumb').data('curphoto');
-		var download = this.fastbackurl + '?download=' + encodeURIComponent(this.orig_photos[photoid]['file']);	
+		var download = encodeURI(this.fastbackurl + '?download=' + this.orig_photos[photoid]['file']);
 		window.open(download, '_blank').focus();
 	}
 
 	flagphoto(e) {
 		var photoid = jQuery('#thumb').data('curphoto');
 		var imgsrc = this.orig_photos[photoid]['file'];
-		var url = this.fastbackurl + '?flag=' + encodeURIComponent(imgsrc);
+		var url = encodeURI(this.fastbackurl + '?flag=' + imgsrc);
 		$.get(url).then(function(){
 			$('#thumbflag').animate({ opacity: 0.3 })
 		});
@@ -336,7 +336,7 @@ Fastback = class Fastback {
 		var orig = this.orig_photos[photoid];
 		var fullsize = orig.file;
 
-		var share_uri = this.fastbackurl + '?file=' + encodeURIComponent(fullsize).replaceAll('%2F','/') + '&share=' + md5(fullsize);
+		var share_uri = encodeURI(this.fastbackurl + '?file=' + fullsize + '&share=' + md5(fullsize));
 		share_uri = new URL(share_uri,document.location).href;
 
 		if ( !orig.isvideo ) {
@@ -561,14 +561,14 @@ Fastback = class Fastback {
 		}
 		var imgsrc = photo.file;
 		var basename = imgsrc.replace(/.*\//,'');
-			var directlink = this.fastbackurl + '?download=' + encodeURIComponent(imgsrc);
+			var directlink = encodeURI(this.fastbackurl + '?download=' + imgsrc);
 
 			// File type not found, proxy a jpg instead
 			var supported_type = (this.browser_supported_file_types.indexOf(imgsrc.replace(/.*\./,'').toLowerCase()) != -1);
 			if ( !supported_type ) {
-				directlink = this.fastbackurl + '?proxy=' + encodeURIComponent(imgsrc);	
+				directlink = encodeURI(this.fastbackurl + '?proxy=' + imgsrc);	
 			}
-			var share_uri = this.fastbackurl + '?file=' + encodeURIComponent(imgsrc).replaceAll('%2F','/') + '&?share=' + md5(imgsrc);
+			var share_uri = encodeURI(this.fastbackurl + '?file=' + imgsrc + '&share=' + md5(imgsrc));
 
 			if (photo.isvideo && supported_type){
 				imghtml = '<video controls poster="' + encodeURI(this.fastbackurl + '?thumbnail=' +  imgsrc) + '"><source src="' + directlink + '#t=0.0001">Your browser does not support this video format.</video>';
