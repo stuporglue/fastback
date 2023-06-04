@@ -59,6 +59,7 @@ cp fastabck/index.php .
  in the same directory as `index.php` you can skip this step.
  ```
  $fb->photobase = '/mount/bigdisk/photo_album/';
+ ```
 
  * Visit your site at `https://yoursite.com/photos/`
 
