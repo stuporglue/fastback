@@ -39,6 +39,10 @@ class Fastback {
 	var $precachethumbs = false;					// Should thumbnails be created for all photos in the cron task? Default is to generated them on the fly as needed.
 	var $sqlitefile = __DIR__ . '/fastback.sqlite';	// Path to .sqlite file, Optional, defaults to fastback/fastback.sqlite
 	var $csvfile;									// Path to .csv file, Optional, will use $this->filecache/fastback.sqlite by default
+	var $maybe_meme_level = 1;						/* Which level of maybe_meme should we filter at? The higher the number the more 
+														likely it is a meme/junk image. Values can be any integer. Current code
+														ends up assigning values between about -2 and +2.
+													*/
 	var $cronjobs = array(							// These are the cron jobs we will try to run, in the order we try to complete them.
 		'find_new_files',							// If you don't want them all to run, for example if you don't want to generate thumbnails, then you could change this.
 		'make_csv',
@@ -439,7 +443,7 @@ class Fastback {
 			FROM fastback 
 			WHERE 
 			flagged IS NOT TRUE 
-			AND (maybe_meme <= 1 OR maybe_meme IS NULL) -- Only display non-memes. Threshold of 1 seems pretty ok
+			AND (maybe_meme <= '" . SQLite3::escapeString($this->maybe_meme_level) . "' OR maybe_meme IS NULL) -- Only display non-memes. Threshold of 1 seems pretty ok
 			ORDER BY filemtime " . $this->sortorder . ",file " . $this->sortorder;
 		$res = $this->_sql->query($q);
 

@@ -90,10 +90,28 @@ The tools shown are: A slider which changes size of the thumbnails, Map toggle b
 
 Not pictured is a vertical scrollbar that lets you quickly scroll through your photos. 
 
-Clicking on an individual thumbnail will open the fullsized-image. When the fullsized-image is open you can tap on the right or left sides or swipe to move to the next or previous photo. 
+Clicking on an individual thumbnail will open the fullsized-image. 
 
-You can press escape or swipe up to close the fullsized-image display. 
+To move between full-sized images you can click on the right or left edges of the full-sized photo. You can also swipe left or right, or use the arrow keys.
 
+To close the full-sized image there is a close button you can click, but you can also swipe up or press escape.
+
+### Flagging a photo
+
+If at least one user has been added, and if the user name is in the `$fb->canflag[]` list, that user will have a little red flag available on every full-sized image screen. 
+
+Clicking the flag will mark the file as **flagged** in the database. Flagged photos will not be included the next time the CSV file is generated. The file is not deleted or anything, but technical users could use the status in the database to perform other actions. 
+
+In our case, our phone photo collections end up with a lot of screenshots or pictures of receitps. Flagging photos makes it so we don't have to look at them, and we can delete them later.
+
+### Auto detecting memes
+
+Fastback tries to detect memes and other low quality type images based on its metadata. If
+you aren't seeing images you expect to, you can try lowering the threashold for exclusion. Eg. `$fb->maybe_meme_level = -10`.
+
+The heuristics are quite basic right now. It checks for small image size, lack of metadata, file type, presence of coordinates, etc.
+
+Since we are dealing with hundreds of thousands of photos, missing a few isn't a big deal for us at the moment and the experience when using the site is improved. 
 
 ### Other features
 
