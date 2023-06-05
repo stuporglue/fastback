@@ -37,6 +37,7 @@ class Fastback {
 													   $filecache doesn't have to be web accessable
 													*/
 	var $precachethumbs = false;					// Should thumbnails be created for all photos in the cron task? Default is to generated them on the fly as needed.
+	var $make_video_streamable  = true;				// Make web optimized mp4s for all videos so that we can stream them.
 	var $sqlitefile = __DIR__ . '/fastback.sqlite';	// Path to .sqlite file, Optional, defaults to fastback/fastback.sqlite
 	var $csvfile;									// Path to .csv file, Optional, will use $this->filecache/fastback.sqlite by default
 	var $maybe_meme_level = 1;						/* Which level of maybe_meme should we filter at? The higher the number the more 
@@ -82,7 +83,7 @@ class Fastback {
 	/*
 	 * These are internal variables you probably shouldn't try to change
 	 */
-	var $supported_photo_types = array( // Photo formats
+	var $supported_photo_types = array( // Photo formats that we will search for
 		'png',
 		'jpg',
 		'heic',
@@ -95,7 +96,7 @@ class Fastback {
 		'webp',
 	);
 
-	var $supported_video_types = array( // Video formats
+	var $supported_video_types = array( // Video formats that we will search for
 		'dv',
 		'3gp',
 		'avi',
@@ -677,46 +678,40 @@ class Fastback {
 	 * Proxy a file type which is not supported by the browser.
 	 */
 	public function send_proxy() {
-		if ( !$file = $this->util_file_is_ok($_GET['proxy']) ) {
+		if ( !($file = $this->util_file_is_ok($_GET['proxy']) ) ) {
 			die();
 		}
 
-		$file = $this->photobase . $file;
+		$video = $this->sql_query_single("SELECT isvideo FROM fastback WHERE file='" . SQLite3::escapeString($file) . "'");
 
-		$mime = mime_content_type($file);
-		$mime = explode('/',$mime);
+		if ( !$video) {
+			if ( !isset($this->_convert) ) { $this->_convert = trim(`which convert`); }
 
-		if ( $mime[1] == 'x-tga' ) {
-			$mime[0] = 'video';
-			$mime[1] = 'mpeg2';
-		}
-
-		if ( $mime[0] == 'image' ) {
-			header("Content-Type: image/jpeg");
-			header("Content-Disposition: inline; filename=\"" . basename($file) . ".jpg\"");
-			$cmd = 'convert ' . escapeshellarg($file) . ' JPG:-';
-			passthru($cmd);
-			exit();
-		} else if ($mime[0] == 'video' ) {
-			if ( !isset($this->_ffmpeg) ) { $this->_ffmpeg = trim(`which ffmpeg`); }
-
-			if ( false && empty($this->ffmpeg) ) {
-				header("Content-Type: image/webp");
-				readfile(__DIR__ . '/img/movie.webp');
+			// We only try convert here because vips is just for thumbnails, and the only formats that GD supports are already supported by the browser.
+			if ( !empty($this->_convert) ) {
+				header("Content-Type: image/jpeg");
+				header("Content-Disposition: inline; filename=\"" . basename($file) . ".jpg\"");
+				$cmd = $this->_convert . ' ' . escapeshellarg($this->photobase . '/' . $file) . ' JPG:-';
+				passthru($cmd);
+				exit();
+			} else {
+				// Fallback to sending the original. Maybe they can figure out what to do with it.
+				header("Location: ?download=$file");
 				exit();
 			}
-
-			$cmd = "ffmpeg -ss 00:00:00 -i " . escapeshellarg($file) . " -frames:v 1 -f image2 -c png - ";
-			header("Content-Type: image/png");
-			header("Content-Disposition: inline; filename=\"" . basename($file) . ".jpg\"");
-			// Another day I'll try to figure out on-the-fly video conversion
-			// $cmd = "ffmpeg -i " . escapeshellarg($file) . " -c:v libvpx-vp9 -crf 20 -deadline realtime -f webm pipe:1";
-			// $cmd = "ffmpeg -i " . escapeshellarg($file) . "  -c:v libtheora -q:v 7 -c:a libvorbis -q:a 4 -f ogv pipe:1";
-			passthru($cmd);
-			exit();
 		} else {
-			$this->util_readfile($file);
-			exit();
+			if ( file_exists($this->filecache . '/' . $file . '.mp4') ) {
+				header("Content-Type: video/mp4");
+				header("Content-Disposition: inline; filename=\"" . basename($file) . ".mp4\"" );
+				header("Content-Length: ".filesize($this->filecache . '/' . $file . '.mp4'));
+				header("Last-Modified: " . filemtime($this->filecache . '/' . $file . '.mp4'));
+				header('Cache-Control: max-age=86400');
+				header('Etag: ' . md5_file($this->filecache . '/' . $file . '.mp4'));
+				readfile($this->filecache . '/' . $file . '.mp4');
+				exit();
+			} else {
+				header("Location: ?download=$file");
+			}
 		}
 	}
 
@@ -1345,7 +1340,6 @@ class Fastback {
 			if ( $print_if_not_write ) {
 				$print_to_stdout = true;
 			} else {
-				chdir($origdir);
 				return false;
 			}
 		}
@@ -1359,7 +1353,6 @@ class Fastback {
 				if ( $print_if_not_write ) {
 					$print_to_stdout = true;
 				} else {
-					chdir($origdir);
 					return false;
 				}
 			} else {
@@ -1382,28 +1375,32 @@ class Fastback {
 
 			if ( $res === false ) {
 				$this->log("Unable to make a thumbnail for $file");
-				chdir($origdir);
 				return false;
 			}
 
 		} else if ( in_array(strtolower($pathinfo['extension']),$this->supported_video_types) ) {
 
+			$videothumb = ltrim($file,'./') . '.mp4';
+			$vidres = $this->_make_video_streamable($file,$videothumb,$print_to_stdout);
+
+			// Only make a thumb on disk if we have made the video
+			if ( $vidres === false && !$print_to_stdout ) {
+				return false;
+			}
+
 			$res = $this->_make_video_thumb($file,$thumbnailfile,$print_to_stdout);
 
 			if ( $res === false ) {
 				$this->log("Unable to make a thumbnail for $file");
-				chdir($origdir);
 				return false;
 			}
 		} else {
 			$this->log("What do I do with ");
 			$this->log(print_r($pathinfo,TRUE));
-			chdir($origdir);
 			return false;
 		}
 
 		if ( !file_exists( $this->filecache . '/' . $thumbnailfile ) ) {
-			chdir($origdir);
 			return false;
 		}
 
@@ -1417,7 +1414,6 @@ class Fastback {
 			$this->sql_query_single("UPDATE fastback SET thumbnail='" . SQLite3::escapeString($thumbnailfile) . "' WHERE file='" . SQLite3::escapeString($file) . "'");
 		}
 
-		chdir($origdir);
 		return $thumbnailfile;
 	}
 
@@ -1437,10 +1433,7 @@ class Fastback {
 			return $thumbnailfile;
 		}
 
-		$origdir = getcwd();
-		chdir($this->photobase);
-
-		$shellfile = escapeshellarg($file);
+		$shellfile = escapeshellarg($this->photobase . '/' . $file);
 		$shellthumb = escapeshellarg($this->filecache . '/' . $thumbnailfile);
 
 		if ( !isset($this->_vipsthumbnail) ) { $this->_vipsthumbnail = trim(`which vipsthumbnail`); }
@@ -1454,18 +1447,16 @@ class Fastback {
 
 			if ( $print_to_stdout ) {
 				header("Content-Type: image/webp");
-				header("Last-Modified: " . filemtime($file));
+				header("Last-Modified: " . filemtime($this-> photobase . '/' . $file));
 				header('Cache-Control: max-age=86400');
-				header('Etag: ' . md5_file($file));
+				header('Etag: ' . md5_file($this->photobase . '/' . $file));
 				passthru($cmd);
-				chdir($origdir);
 				exit();
 			} else {
 				$res = `$cmd`;
 			}
 
 			if ( file_exists($this->filecache . '/' . $thumbnailfile) ) {
-				chdir($origdir);
 				return $thumbnailfile;
 			}
 		}
@@ -1482,18 +1473,16 @@ class Fastback {
 
 			if ( $print_to_stdout ) {
 				header("Content-Type: image/webp");
-				header("Last-Modified: " . filemtime($file));
+				header("Last-Modified: " . filemtime($this->photobase . '/' . $file));
 				header('Cache-Control: max-age=86400');
-				header('Etag: ' . md5_file($file));
+				header('Etag: ' . md5_file($this->photobase . '/' . $file));
 				passthru($cmd);
-				chdir($origdir);
 				exit();
 			} else {
 				$res = `$cmd`;
 			}
 
 			if ( file_exists($thumbnailfile) ) {
-				chdir($origdir);
 				return $thumbnailfile;
 			}
 		}
@@ -1501,16 +1490,16 @@ class Fastback {
 		// looks like vips didn't work
 		if (extension_loaded('gd') || function_exists('gd_info')) {
 			try {
-					$image_info = getimagesize($file);
+					$image_info = getimagesize($this->photobase . '/' . $file);
 					switch($image_info[2]){
 					case IMAGETYPE_JPEG:
-						$img = imagecreatefromjpeg($file);
+						$img = imagecreatefromjpeg($this->photobase . '/' . $file);
 						break;
 					case IMAGETYPE_GIF:
-						$img = imagecreatefromgif($file);
+						$img = imagecreatefromgif($this->photobase . '/' . $file);
 						break;
 					case IMAGETYPE_PNG:
-						$img = imagecreatefrompng($file);
+						$img = imagecreatefrompng($this->photobase . '/' . $file);
 						break;
 					default:
 						$img = FALSE;
@@ -1540,9 +1529,9 @@ class Fastback {
 						imagecopyresampled($tmpimg, $img, 0, 0, $srcx, $srcy, $newwidth, $newheight, $width, $height );
 						if ( $print_to_stdout ) {
 							header("Content-Type: image/webp");
-							header("Last-Modified: " . filemtime($file));
+							header("Last-Modified: " . filemtime($this->photobase . '/' . $file));
 							header('Cache-Control: max-age=86400');
-							header('Etag: ' . md5_file($file));
+							header('Etag: ' . md5_file($this->photobase . '/' . $file));
 							imagewebp($tmpimg);
 						} else {
 							imagewebp($tmpimg, $this->filecache . '/' . $thumbnailfile);
@@ -1552,7 +1541,6 @@ class Fastback {
 					}
 
 					if(file_exists($this->filecache . '/' . $thumbnailfile)){
-						chdir($origdir);
 						return $thumbnailfile;
 					}   
 				} catch (Exception $e){
@@ -1562,8 +1550,42 @@ class Fastback {
 			$this->log("No GD here");
 		}
 
-		chdir($origdir);
 		return false;
+	}
+
+	private function _make_video_streamable($file,$videothumb,$print_to_stdout) {
+
+		if ( !$this->make_video_streamable ) {
+			return true;
+		}
+
+		if ( $print_to_stdout ) {
+			return true; // We can't send videos to stdout, so just skip it for now
+		}
+
+		if ( file_exists($this->filecache . '/' . $videothumb) ) {
+			return $videothumb;
+		}
+
+		if ( !file_exists($this->photobase . '/' . $file) ) {
+			return false;
+		}
+
+		if ( !isset($this->_ffmpeg) ) { $this->_ffmpeg = trim(`which ffmpeg`); }
+
+		$shellfile = escapeshellarg($this->photobase . '/' . $file);
+		$shellthumb = escapeshellarg($this->filecache . '/' . $videothumb);
+		$shellthumbvid = escapeshellarg($this->filecache . '/' . $videothumb);
+
+		// https://gist.github.com/jaydenseric/220c785d6289bcfd7366
+		$cmd = $this->_ffmpeg . ' -i ' . $shellfile . ' -c:v libx264 -pix_fmt yuv420p -profile:v baseline -level 3.0 -crf 22 -maxrate 2M -bufsize 4M -preset medium -vf "scale=\'min(1024,iw)\':-2" -c:a aac -strict experimental -movflags +faststart -threads 1 ' . $shellthumbvid . ' 2>/dev/null';
+		$res = `$cmd`;
+
+		if ( file_exists($this->filecache . '/' . $videothumb) ) {
+			return true;
+		} else {
+			return false;
+		}
 	}
 
 	/**
@@ -1584,62 +1606,60 @@ class Fastback {
 
 			if ( !isset($this->_ffmpeg) ) { $this->_ffmpeg = trim(`which ffmpeg`); }
 
-			$origdir = getcwd();
-			chdir($this->photobase);
+			if ( empty($this->_ffmpeg) ) {
+				return false;
+			}
 
-			$shellfile = escapeshellarg($file);
+			$shellfile = escapeshellarg($this->photobase . '/' . $file);
 			$shellthumb = escapeshellarg($this->filecache . '/' . $thumbnailfile);
 			$tmpthumb = $this->filecache . '/tmpthumb_' . getmypid() . '.webp';
+			$shellthumbvid = escapeshellarg($this->filecache . '/' . $thumbnailfile . '.mp4');
 			$tmpshellthumb = escapeshellarg($tmpthumb);
 			$formatflags = "";
 
-			if ( !empty($this->_ffmpeg) ) {
+			if ( $print_to_stdout ) {
+				$tmpshellthumb = '-';
+				$formatflags = ' -f image2 -c png ';
+			}
 
-				if ( $print_to_stdout ) {
-					$tmpshellthumb = '-';
-					$formatflags = ' -f image2 -c png ';
+			$timestamps = array('10',2,'00:00:00');
+
+			foreach($timestamps as $timestamp) {
+
+				$cmd = "{$this->_ffmpeg} -y -ss $timestamp -i $shellfile -vframes 1 $formatflags $tmpshellthumb 2> /dev/null";
+				$res = `$cmd`;
+
+				if ( $print_to_stdout && $res !== NULL) {
+					header("Content-Type: image/webp");
+					header("Last-Modified: " . filemtime($file));
+					header('Cache-Control: max-age=86400');
+					header('Etag: ' . md5_file($file));
+					print($res); // Can't use passthru because we need to check if the command worked
+					exit();
 				}
 
-				$timestamps = array('10',2,'00:00:00');
+				if ( file_exists($tmpthumb) && filesize($tmpthumb) > 0 ) {
+					break;
+				}
+			}
 
-				foreach($timestamps as $timestamp) {
+			clearstatcache();
 
-					$cmd = "{$this->_ffmpeg} -y -ss $timestamp -i $shellfile -vframes 1 $formatflags $tmpshellthumb 2> /dev/null";
+			if ( file_exists($tmpthumb) && filesize($tmpthumb) !== 0) {
+
+				if ( !isset($this->_vipsthumbnail) ) { $this->_vipsthumbnail = trim(`which vipsthumbnail`); }
+
+				if ( !empty($this->_vipsthumbnail) ) {
+					$cmd = "$this->_vipsthumbnail --size={$this->_thumbsize} --output=$shellthumb --smartcrop=attention $tmpshellthumb";
 					$res = `$cmd`;
-
-					if ( $print_to_stdout && $res !== NULL) {
-						header("Content-Type: image/webp");
-						header("Last-Modified: " . filemtime($file));
-						header('Cache-Control: max-age=86400');
-						header('Etag: ' . md5_file($file));
-						print($res); // Can't use passthru because we need to check if the command worked
-						exit();
-					}
-
-					if ( file_exists($tmpthumb) && filesize($tmpthumb) > 0 ) {
-						break;
-					}
+					unlink($tmpthumb);
+				} else {
+					@rename($tmpthumb,$this->filecache . '/' . $thumbnailfile);
 				}
+			}
 
-				clearstatcache();
-
-				if ( file_exists($tmpthumb) && filesize($tmpthumb) !== 0) {
-
-					if ( !isset($this->_vipsthumbnail) ) { $this->_vipsthumbnail = trim(`which vipsthumbnail`); }
-
-					if ( !empty($this->_vipsthumbnail) ) {
-						$cmd = "$this->_vipsthumbnail --size={$this->_thumbsize} --output=$shellthumb --smartcrop=attention $tmpshellthumb";
-						$res = `$cmd`;
-						unlink($tmpthumb);
-					} else {
-						@rename($tmpthumb,$this->filecache . '/' . $thumbnailfile);
-					}
-				}
-
-				if ( file_exists($this->filecache . '/' . $thumbnailfile) ) {
-
-					return $thumbnailfile;
-				}
+			if ( file_exists($this->filecache . '/' . $thumbnailfile) ) {
+				return $thumbnailfile;
 			}
 
 			return false;

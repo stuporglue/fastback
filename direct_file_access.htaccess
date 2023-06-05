@@ -18,9 +18,17 @@
     # Where the thumbnail already exists on disk...
 	RewriteCond "/path/to/cache/directory/on/disk/%1.webp" -f 
 	# Skip the PHP and serve the file directly
-	RewriteRule .* "/url/to/cache/%1.webp" [QSD,L]
+	RewriteRule .* "/url/to/cache/%1.webp" [R=302,QSD,L]
     # If you're doing this you probably don't need a template... RewriteRule .* "https://otherdomain.com/url/to/cache/%1.webp" [QSD,L]
 
+	# For proxied videos, which we have pre-rendered
+	RewriteCond %{QUERY_STRING} proxy=([^&]+)
+    # Where the original exists on disk (and it always should)...
+    # Note that files that need to be proxied for the browser like HEIC 
+    # files will not come through here since the proxy request is different
+	RewriteCond "/path/to/cache/directory/on/disk/%1.mp4" -f 
+	# Skip the PHP and serve the file directly
+	RewriteRule .* "/url/to/cache/%1.mp4" [R=302,QSD,L]
 
 	# For download requests...
 	RewriteCond %{QUERY_STRING} download=([^&]+)
@@ -29,6 +37,13 @@
     # files will not come through here since the proxy request is different
 	RewriteCond "/path/to/fullsized/media/on/disk/%1" -f 
 	# Skip the PHP and serve the file directly
-	RewriteRule .* "/url/to/fullsized/media/%1" [QSD,L]
+	RewriteRule .* "/url/to/fullsized/media/%1" [QSD,QSD,L]
     # If you're doing this you probably don't need a template... RewriteRule .* "https://otherdomain.com/url/to/fullsized/media/%1.webp" [QSD,L]
+
+	# For CSV requests...
+	RewriteCond %{QUERY_STRING} csv=([^&]+)
+    # Where the thumbnail already exists on disk...
+	RewriteCond "/path/to/cache/directory/on/disk/fastback.csv" -f 
+	# Skip the PHP and serve the file directly
+	RewriteRule .* "/url/to/cache_directory/fastback.csv" [R=302,QSD,L]
 </IfModule>

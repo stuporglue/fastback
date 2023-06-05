@@ -8,23 +8,26 @@ Fastback = class Fastback {
 	 */
 	constructor(args) {
 		var progressbar = jQuery('#loadingprogress');
-		this.setProps();
+		this.setup_setProps();
 		jQuery.extend(this,args);
 		var self = this;
 
-		jQuery('#speedslide').on('input',this.speed_slide.bind(this));
-		jQuery('#zoom').on('change',this.zoom_change.bind(this));
+		// Set up handlers
+		jQuery('#speedslide').on('input',this.handle_speed_slide.bind(this));
+		jQuery('#zoom').on('change',this.handle_zoom_change.bind(this));
 		jQuery('#photos').on('click','.tn',this.handle_thumb_click.bind(this));
-
-		/* Nav action handlers stuff */
 		jQuery('#thumbright').on('click',this.handle_thumb_next.bind(this));
 		jQuery('#thumbleft').on('click',this.handle_thumb_prev.bind(this));
-		jQuery('#thumbclose').on('click',this.hide_thumb.bind(this));
 		jQuery('#tagon,#tagoff').on('click',this.handle_tag_state.bind(this));
 		jQuery('#tagor,#tagand').on('click',this.handle_tag_state.bind(this));
 		jQuery('#thetags').on('click','.onetag',this.handle_onetag_click.bind(this));
+		jQuery(document).on('keydown',this.handle_keydown.bind(this));
+		jQuery('#thumbgeo').on('click',this.handle_geoclick.bind(this));
+		jQuery('#thumbflag').on('click',this.handle_flagphoto.bind(this));
+		jQuery('#sharelink').on('click',this.handle_shareclick.bind(this));
+		jQuery('#webshare').on('click',this.handle_shareclick.bind(this));
+		jQuery('#thumbdownload').on('click',this.handle_send_download.bind(this));
 
-		jQuery(document).on('keydown',this.keydown_handler.bind(this));
 		// Touch stuff
 		jQuery('#thumb').hammer({recognizers: [ 
 			[Hammer.Swipe,{ direction: Hammer.DIRECTION_ALL }],
@@ -33,13 +36,9 @@ Fastback = class Fastback {
 		// Map interations
 		jQuery('#hyperlist_wrap').on('mouseenter','.tn',this.handle_tn_mouseover.bind(this));
 
+
 		// Thumb buttons
-		// jQuery('#thumbdownload a').on('click',this.sendbyajax.bind(this));
-		jQuery('#thumbdownload').on('click',this.senddownload.bind(this));
-		jQuery('#thumbflag').on('click',this.flagphoto.bind(this));
-		jQuery('#thumbgeo').on('click',this.geoclick.bind(this));
-		jQuery('#sharelink').on('click',this.shareclick.bind(this));
-		jQuery('#webshare').on('click',this.shareclick.bind(this));
+		jQuery('#thumbclose').on('click',this.ui_hide_thumb.bind(this));
 
 		if (typeof navigator.share === 'function') {
 			jQuery('#webshare').removeClass('disabled');
@@ -48,13 +47,13 @@ Fastback = class Fastback {
 		progressbar.css('width','5%');
 
 		// Do setTimeout so the screen has time to repaint
-		setTimeout(this.asyncCSV.bind(this),100);
+		setTimeout(this.setup_asyncCSV.bind(this),100);
 	}
 
 	/*
 	 * Our default properties.
 	 */
-	setProps() {
+	setup_setProps() {
 		this.fastbackurl = "./";
 		this.csv_error_load = false;
 
@@ -67,24 +66,13 @@ Fastback = class Fastback {
 		this.dirty_filters = false;
 		this.active_tags = [];
 
-		// Browser type
-		this.isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
-
-		this.is_mobile_browser();
-
 		// Browser supported file types - will be shown directly. 
 		// Anything not in this list will be proxied into a jpg
 		this.browser_supported_file_types = [
 			// videos
-			'mp4','m4v', 'ogg', 'webm',
+			'mp4','m4v', 'webm',
 			// images
 			'jpg','jpeg','gif','png','webp' ];
-
-		if ( this.isSafari ) {
-			// this.browser_supported_file_types.push('heic');
-			this.browser_supported_file_types.push('mov');
-			this.browser_supported_file_types.push('mpg');
-		}
 
 		this.flashstyle = {
 			radius: 15,
@@ -104,7 +92,7 @@ Fastback = class Fastback {
 	/*
 	 * Run the papaparse routine inside a setTimeout to try to get the browser to paint the progress bar
 	 */
-	asyncCSV() {
+	setup_asyncCSV() {
 		var has_geo = false;
 		var has_tag = false;
 
@@ -181,33 +169,33 @@ Fastback = class Fastback {
 					self.csv_error_load = true;
 					// If we got an error we want to start cron right away
 					// Cron should run on its own
-					setTimeout(self.cron.bind(self),1);
+					setTimeout(self.util_cron.bind(self),1);
 				} else {
 					// Cron should run on its own
-					setTimeout(self.cron.bind(self),1000 * 30);
+					setTimeout(self.util_cron.bind(self),1000 * 30);
 				}
 
-				self.orig_photos = self.add_date_blocks(self.photos);
+				self.orig_photos = self.util_add_date_blocks(self.photos);
 				self.photos = self.orig_photos;
 
 				// These three processes can run almost concurrently off of the main thread to allow screen repainting
 				setTimeout(function(){
-					self.make_tags();
+					self.setup_make_tags();
 					progressbar.css('width','90%');
 				},5);
 				setTimeout(function(){
-					self.load_nav();
+					self.setup_load_nav();
 					progressbar.css('width','95%');
 				},15);
 				setTimeout(function(){
-					self.hyperlist_init();
+					self.setup_hyperlist_init();
 					progressbar.css('width','100%');
 				},20);
 			}, error: function(err, file, inputElem, reason) {
 				// Whatever error we get, we assume 
 				self.csv_error_load = true;
 				// Cron should run on its own
-				setTimeout(self.cron.bind(self),1);
+				setTimeout(self.util_cron.bind(self),1);
 			}
 		});
 	}
@@ -215,7 +203,7 @@ Fastback = class Fastback {
 	/*
 	 * Initiate the hyperlist
 	 */
-	hyperlist_init() {
+	setup_hyperlist_init() {
 		var self = this;
 
 		// Browsers can only support an object so big, so we can only use so many rows.
@@ -233,18 +221,18 @@ Fastback = class Fastback {
 			total: Math.ceil(this.photos.length / this.cols),
 			scrollerTagName: 'div',
 			fastback: this,
-			generate: this.generate_row.bind(this),
-			afterRender: this.after_render.bind(this)
+			generate: this.util_generate_row.bind(this),
+			afterRender: this.util_after_render.bind(this)
 		};
 
 		this.hyperlist = HyperList.create(this.hyperlist_container[0], this.hyperlist_config);
 
-		window.onresize = this.refresh_layout.bind(this);
-		window.ontouchmove = this.refresh_layout.bind(this);
+		window.onresize = this.ui_refresh_layout.bind(this);
+		window.ontouchmove = this.ui_refresh_layout.bind(this);
 
 		this.hyperlist_container.addClass("container");
 
-		this.refresh_layout();
+		this.ui_refresh_layout();
 	}
 
 	/*
@@ -253,7 +241,7 @@ Fastback = class Fastback {
 	 * * Calendar / datepicker
 	 * * Rewind / onthisday
 	 */
-	load_nav() {
+	setup_load_nav() {
 		var self = this;
 		// first date (in tags list) -- The default is Descending view, so this should be the greatest date
 		var fd,ld;
@@ -289,9 +277,114 @@ Fastback = class Fastback {
 	}
 
 	/*
+	 * Kick off the map. This may be slow, so it should only get called the first time the div is visible.
+	 */
+	setup_map() {
+		var self = this;
+
+		this.fmap = {
+			'lmap':  L.map('map').setView([0,0], 2),
+			'base_map':  this.basemap,
+			'clusterlayer': L.markerClusterGroup({
+				spiderfyOnMaxZoom: true,
+				maxClusterRadius: 40
+			}),
+			'flashlayer': L.geoJSON(null,{
+				pointToLayer: function (feature, latlng) {
+					return L.circleMarker(latlng, self.flashstyle);
+				},
+				onEachFeature: function (feature, layer) {
+					layer.on('mouseover', function (e) {
+						var pixel = self.fmap.lmap.latLngToContainerPoint(layer.getLatLng())
+						self.fmap.flashlayer.eachLayer(function(l){
+							var mypixel = self.fmap.lmap.latLngToContainerPoint(l.getLatLng())
+							if (Math.abs(pixel.x - mypixel.x) <= 10 && Math.abs(pixel.y - mypixel.y) <= 10 ){
+								self.ui_flash_map_for_id(l.feature.properties.id);
+							}
+						});
+						return true;
+					});
+				}
+			})
+		}
+
+		this.fmap.lmap.on({
+			moveend: this.handle_map_zoom_move_end.bind(self)
+		});
+
+		L.Control.MapFilter = L.Control.extend({
+			onAdd: function(map) {
+				self.fmap.mapfilter_button = jQuery('<div id="mapfilter">🛰</div>');
+				self.fmap.mapfilter_button.on('click', self.ui_toggle_map_filter.bind(self));
+				return self.fmap.mapfilter_button[0];
+			}
+		});
+
+		L.control.mapfilter = function(opts) {
+			return new L.Control.MapFilter(opts);
+		}
+
+		// We want to flash photos in the moused cluster
+		this.fmap.clusterlayer.on('clustermouseover',function(e){
+			var pixel = e.layerPoint;
+			self.fmap.flashlayer.eachLayer(function(l){
+				var mypixel = self.fmap.lmap.latLngToContainerPoint(l.getLatLng());
+				if (Math.abs(pixel.x - mypixel.x) <= 10 && Math.abs(pixel.y - mypixel.y) <= 10 ){
+					self.ui_flash_map_for_id(l.feature.properties.id);
+				}
+			});
+		});
+
+		// Handle click on individual markers
+		this.fmap.clusterlayer.on('click',function(e){
+			var id = e.layer.feature.properties.id
+			self.ui_go_to_photo_id(id);
+		});
+
+		// Scroll to first, if we're all the way zoomed in
+		// this.fmap.clusterlayer.on('clusterclick', function (e) {
+		// 	if ( e.layer._map.getZoom() == e.layer._map.getMaxZoom() ) {
+		// 		var id = e.layer.getAllChildMarkers()[0].feature.properties.id
+		// 		self.go_to_photo_id(id);
+		// 	}
+		// });
+
+		this.fmap.base_map.addTo(this.fmap.lmap);
+		this.fmap.clusterlayer.addTo(this.fmap.lmap);
+		this.fmap.flashlayer.addTo(this.fmap.lmap);
+		L.control.mapfilter({ position: 'topleft' }).addTo(this.fmap.lmap);
+
+		// These two make the map freeze for a while. We can use setTimeout at least during page load.
+		setTimeout(function(){
+			self.ui_update_cluster();
+			self.util_after_render();
+		},200);
+	}
+
+	/*
+	 * Make the tags interface.
+	 */
+	setup_make_tags() {
+		var thetags = $('#thetags');
+		var htmltag,t;
+		var tagnames = [];
+
+		for(t in this.tags) {
+			tagnames.push(t);
+		}
+
+		tagnames.sort();
+
+		for(var t = 0; t < tagnames.length; t++ ) {
+			htmltag = tagnames[t].replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+				thetags.append('<div class="onetag" data-tag="' + tagnames[t] + '">' + htmltag + ' (' + this.tags[tagnames[t]] + ')</div>');
+			}
+	}
+
+	/*
 	 * Handle the speed slide. The speed slide is an input with 100 increments so you can quickly get through a large photo set.
 	 */
-	speed_slide(e) {
+	handle_speed_slide(e) {
 		var totalheight = jQuery('#photos > div').first().height();
 		jQuery('#photos').first()[0].scrollTop = totalheight * (e.target.value / 100);
 	}
@@ -299,16 +392,16 @@ Fastback = class Fastback {
 	/*
 	 * Handle the slider changes.
 	 */
-	zoom_change() {
+	handle_zoom_change() {
 		var val = jQuery('#zoom').val();
 		this.cols = Math.max(this.maxzoom, parseInt(val));
-		this.refresh_layout();
+		this.ui_refresh_layout();
 	}
 
 	/*
 	 * Download a specific file. Opens a new window with the downloaded image as the source. 
 	 */
-	senddownload(e) {
+	handle_send_download(e) {
 		var photoid = jQuery('#thumb').data('curphoto');
 		var download = encodeURI(this.fastbackurl + '?download=' + this.orig_photos[photoid]['file']);
 		window.open(download, '_blank').focus();
@@ -317,7 +410,7 @@ Fastback = class Fastback {
 	/*
 	 * Flag the current photo
 	 */
-	flagphoto(e) {
+	handle_flagphoto(e) {
 		var photoid = jQuery('#thumb').data('curphoto');
 		var imgsrc = this.orig_photos[photoid]['file'];
 		var url = encodeURI(this.fastbackurl + '?flag=' + imgsrc);
@@ -330,12 +423,12 @@ Fastback = class Fastback {
 	 * Handle a click on the globe shown on the full-sized image view. 
 	 * This initializes or opens the map page if needed then zooms to the photo's location
 	 */
-	geoclick(e) {
+	handle_geoclick(e) {
 		var self = this;
 		if ( this.fmap === undefined ) {
 			this._map_init_action_queue = this._map_init_action_queue || {};
 			this._map_init_action_queue['geoclick'] = function(){
-				this.geoclick(e);
+				this.handle_geoclick(e);
 			}.bind(this);
 
 			this.handle_globe_click();
@@ -353,7 +446,7 @@ Fastback = class Fastback {
 	 * The sharelink icon copies the sharing link to the clipboard.
 	 * The webshare icon opens a phone's sharing dialog. 
 	 */
-	shareclick(e) {
+	handle_shareclick(e) {
 		var photoid = jQuery('#thumb').data('curphoto');
 		var orig = this.orig_photos[photoid];
 		var fullsize = orig.file;
@@ -388,14 +481,284 @@ Fastback = class Fastback {
 						text: 'Someone is sharing a ' + basename + ' from ' + document.title + ' with you',
 						url: share_uri
 					});
-				break;
+					break;
 			}
+	}
+
+	/*
+	 * Handle when a thumbnail is clicked.
+	 */
+	handle_thumb_click(e) {
+		var photoid = jQuery(e.target).closest('div.tn').find('img').data('photoid');
+		this.ui_show_fullsized(photoid);
+	}
+
+	/*
+	 * Go to the next thumbnail. This is the handler for clicks, swipes and arrow keys
+	 */
+	handle_thumb_next(e) {
+		var photoid = jQuery('#thumb').data('curphoto');
+
+		var photo = this.orig_photos.find(function(p){return p.id == photoid && p.type == 'media';});
+
+		if ( photo === undefined ) {
+			return false;
+		}
+
+		photoid = photo.id;
+
+		while(true) {
+			photoid++;
+			// Found the next photo that is in the photos array
+			var found = this.photos.find(function(p){return p.id == photoid && p.type == 'media';});
+
+			if ( found !== undefined ) {
+				// Scroll to photo
+				this.ui_scroll_to_photo(photoid);
+				this.ui_show_fullsized(found.id);				
+				return true;
+			}
+
+			if ( photoid === this.orig_photos.length ) {
+				return false;
+			}
+		}
+	}
+
+	/*
+	 * Go to the previous thumbnail. This is the handler for clicks, swipes and arrow keys
+	 */
+	handle_thumb_prev(e) {
+		var photoid = jQuery('#thumb').data('curphoto');
+
+		var photo = this.orig_photos.find(function(p){return p.id == photoid && p.type == 'media';});
+
+		if ( photo === undefined ) {
+			return false;
+		}
+
+		photoid = photo.id;
+
+		while(true) {
+			photoid--;
+			// Found the next photo that is in the photos array
+			var found = this.photos.find(function(p){return p.id == photoid && p.type == 'media';});
+
+			if ( found !== undefined ) {
+				// Scroll to photo
+				this.ui_scroll_to_photo(photoid);
+				this.ui_show_fullsized(found.id);				
+				return true;
+			}
+
+			if ( photoid === 0 ) {
+				return false;
+			}
+		}
+	}
+
+	/*
+	 * Handle key presses and turn them into actions
+	 */
+	handle_keydown(e) {
+		switch(e.key){
+			case 'Escape':
+				this.ui_hide_thumb();
+				this.ui_hide_tags();
+				break;
+			case 'ArrowRight':
+				this.handle_thumb_next();
+				break;
+			case 'ArrowLeft':
+				this.handle_thumb_prev();
+				break;
+		}
+	}
+
+	/*
+	 * Swipe actions for photos
+	 */
+	handle_thumb_swipe(e) {
+		if ( e.type == 'swiperight' ) {
+			this.handle_thumb_next();
+		} else if ( e.type == 'swipeleft' ) {
+			this.handle_thumb_prev();
+		} else if ( e.type == 'swipeup' ) {
+			this.ui_hide_thumb();
+			this.ui_hide_tags();
+		}
+	}
+
+	/*
+	 * Show or hide the calendar
+	 */
+	handle_datepicker_toggle(){
+		if ( $('#ui-datepicker-div').is(':visible') ) {
+			$('#datepicker').datepicker('hide');
+		} else {
+			$('#datepicker').datepicker('show');
+		}
+	}
+
+	/*
+	 * Handle the datepicker change
+	 */
+	handle_datepicker_change(date){
+		var targetdate = new Date(date.replaceAll('-','/') + ' 23:59:59'); // Use the very end of day so that our findIndex works later
+
+		if ( jQuery('#rewindicon').hasClass('active') ) {
+			this.util_setup_new_rewind_date(targetdate);	
+		}
+
+		// Find the first photo that is younger than our target photo
+		// var first = this.photos.findIndex(o => o['date'] <= targetdate);
+		var first = this.photos.find(function(o){return o.date <= targetdate && o.type == 'media'})
+
+		this.ui_scroll_to_photo(first.id);
+
+		this.ui_refresh_layout();
+	}
+
+	/*
+	 * Handle the rewind / memories icon click
+	 */
+	handle_rewind_click() {
+		var icon = jQuery('#rewindicon');
+
+		if ( icon.hasClass('active') ) {
+			icon.removeClass('active');
+			delete this.active_filters.rewind;
+			this.dirty_filters = true;
+		} else {
+			icon.addClass('active');
+			this.rewind_date = new Date();
+			this.util_setup_new_rewind_date();
+		}
+
+		this.ui_refresh_layout();
+		this.hyperlist_container.prop('scrollTop',0);
+	}
+
+	/*
+	 * Handle logout
+	 */
+	handle_exit_click() {
+		window.location = this.fastbackurl + '?logout=true';
+	}
+
+	/*
+	 * Handle tag click
+	 */
+	handle_tag_click() {
+		this.ui_hide_thumb();
+		if ( $('#tagwindow').hasClass('disabled') ) {
+
+			this.tag_state = JSON.stringify({
+				'tags' : this.active_tags,
+				'andor': $('#tagand').hasClass('active'),
+				'tagson': $('#tagon').hasClass('active')
+			});
+
+			$('#tagwindow').removeClass('disabled');
+			return;
+		} else {
+			this.ui_hide_tags();
+		}
+	}
+
+	/*
+	 * Handle globe icon click
+	 */
+	handle_globe_click() {
+		var icon = jQuery('#globeicon');
+
+		if ( jQuery('body').hasClass('map') ) {
+			icon.removeClass('active');
+			jQuery('body').removeClass('map');
+		} else {
+			jQuery('body').addClass('map');
+			icon.addClass('active');
+
+			if ( this.fmap === undefined ) {
+				setTimeout(this.setup_map.bind(this),100);
+			} else {
+				this.fmap.lmap.invalidateSize();
+
+				if ( this._map_init_action_queue !== undefined && Object.keys(this._map_init_action_queue).length > 0 ) {
+					this.util_map_action_queue();
+				} else if ( this.fmap.clusterlayer.getBounds().isValid() ) {
+					this.fmap.lmap.fitBounds(this.fmap.clusterlayer.getBounds());
+				} else {
+					this.fmap.lmap.setView([0,0],1);
+				}
+			}
+		}
+		this.ui_refresh_layout();
+	}
+
+	/*
+	 * Interact with map on mouse over
+	 */
+	handle_tn_mouseover(e){
+		var photoid = jQuery(e.target).closest('.tn').find('img').first().data('photoid');
+		this.ui_flash_map_for_id(photoid);
+	}
+
+	/*
+	 * Make the tag filtering controls look how they should
+	 */
+	handle_tag_state(e) {
+		if ( e.target.id == 'tagoff' ) {
+			$('#tagon').removeClass('active');
+			$('#tagoff').addClass('active');
+			$('#tagicon').removeClass('active');
+		} else if ( e.target.id == 'tagon' ) {
+			$('#tagon').addClass('active');
+			$('#tagoff').removeClass('active');
+			$('#tagicon').addClass('active');
+		} else if ( e.target.id == 'tagand' ) {
+			$('#tagand').addClass('active');
+			$('#tagor').removeClass('active');
+		} else if ( e.target.id == 'tagor' ) {
+			$('#tagor').addClass('active');
+			$('#tagand').removeClass('active');
+		}
+	}
+
+	/*
+	 * Add or remove a tag from the tag filter list
+	 */
+	handle_onetag_click(e) {
+		var tag = $(e.target).data('tag');
+		var idx = this.active_tags.indexOf(tag);
+		if (  idx === -1 ) {
+			this.active_tags.push(tag);
+			$(e.target).addClass('active');
+		} else {
+			this.active_tags.splice(idx,1);
+			$(e.target).removeClass('active');
+		}
+	}
+
+	/*
+	 * When the map is done moving, we might need to adjust filters
+	 */
+	handle_map_zoom_move_end(e) {
+		this.handling_map_move_end = true;
+
+		// Moving the map only dirties our filters if we're doing map based filtering.
+		if ( this.active_filters.map !== undefined ) {
+			this.dirty_filters = true;
+			this.ui_refresh_layout();
+		}
+
+		delete this.handling_map_move_end;
 	}
 
 	/*
 	 * Add colored date blocks to a photos array
 	 */
-	add_date_blocks(photos) {
+	util_add_date_blocks(photos) {
 		var prev_date = null;
 		var cur_date;
 		for(var i = 0; i<photos.length; i++){
@@ -432,7 +795,7 @@ Fastback = class Fastback {
 	 *
 	 * @row - Which row to use. 
 	 */
-	generate_row(row) {
+	util_generate_row(row) {
 		var self = this;
 		var slice_from = (row * this.cols);
 		var slice_to = (row * this.cols) + this.cols;
@@ -468,372 +831,39 @@ Fastback = class Fastback {
 	}
 
 	/*
-	 * Only apply filters to data strctures, no redraws.
+	 * For an optional date object, set up a new rewind view
 	 */
-	apply_filters() {
-		// We never want to get stuck in an applying_filters loop
-		if ( this.applying_filters === true ) {
-			return;
-		}
-
-		this.applying_filters = true;
-		if ( this.dirty_filters ) {
-			var self = this;
-			this.photos = this.orig_photos.filter(function(item) { return item.type === 'media'; });
-
-			for(var filter in self.active_filters) {
-				self.active_filters[filter]();
-			}
-
-			this.photos = this.add_date_blocks(this.photos);
-			this.map_update_cluster();
-			this.dirty_filters = false;
-		}
-		delete this.applying_filters;
-	}
-
-	/*
-	 * Refresh the page layout, including accounting for changed row nums or page resize.
-	 *
-	 * Called manually and by hyperlist
-	 */
-	refresh_layout() {
-		jQuery('body').css('height',window.innerHeight);
-
-		this.apply_filters();
-
-		// Browsers can only support an object so big, so we can only use so many rows.
-		// Calculate the new max zoom
-		this.maxzoom = Math.ceil(Math.sqrt(this.hyperlist_container.width() * this.photos.length / this.hyperlist._maxElementHeight));
-
-		// Make sure our new cols doesn't go over the max zoom
-		this.cols = Math.max(this.maxzoom, this.cols);
-
-		if ( !this.hyperlist_container.hasClass('up' + this.cols) ) {
-			this.hyperlist_container.removeClass('up1 up2 up3 up4 up5 up6 up7 up8 up9 up10'.replace('up' + this.cols,' '));
-			this.hyperlist_container.addClass('up' + this.cols);
-		}
-
-		// Set the slider size
-		var zoomval = jQuery('#zoom').val();
-		jQuery('#resizer input').prop('min',this.maxzoom);
-
-		// Update hyperlist config
-		this.hyperlist_config.height = this.hyperlist_container.parent().height();
-		this.hyperlist_config.itemHeight = (this.hyperlist_container.width() / this.cols);
-		this.hyperlist_config.total = Math.ceil(this.photos.length / this.cols);
-
-
-		// propagate changes
-		this.hyperlist.refresh(this.hyperlist_container[0], this.hyperlist_config);
-
-		if ( this.photos.length == 0 ) {
-			jQuery('#photos > div').css('opacity',1);
-			var html = '<div id="nophotos"><p>No photos are available for this view. Try changing your filters.</p>';
-			if (this.csv_error_load) {
-				html += '<p>A new install will need a few minutes to populate the database.</p>';
-			}
-			html += '</div>';
-			jQuery('#photos > div').html(html);
-		}
-	}
-
-	/*
-	 * Called after a hyperlist chunk is rendered
-	 */
-	after_render() {
-		// Non-map render
-		var totalheight = Math.ceil(this.photos.length / this.cols) * this.hyperlist_config.itemHeight
-		jQuery('#speedslide').val(this.hyperlist_container[0].scrollTop / totalheight * 100);
-
-		if ( this.fmap === undefined ) {
-			// No map, no need.
-			return;
-		}
-
+	util_setup_new_rewind_date(date_to_use) {
 		var self = this;
-
-		// Refresh the map flash layer
-		var rows = jQuery('.photorow:visible').toArray().filter(function(r){return jQuery(r).position().top < window.innerHeight;})
-		var tnsar =	rows.map(function(f){ return jQuery(f).find('.tn img').toArray(); });
-		var tns = jQuery.map(tnsar,function(f){return f;});
-		var photos = tns.map(function(f){return self.photos.find(function(p){return p.id == $(f).data('photoid');})});
-		var geojson = this.build_geojson(photos);
-		this.fmap.flashlayer.clearLayers();
-		this.fmap.flashlayer.addData(geojson);
-	}
-
-	/*
-	 * Handle when a thumbnail is clicked.
-	 */
-	handle_thumb_click(e) {
-		var photoid = jQuery(e.target).closest('div.tn').find('img').data('photoid');
-		this.show_thumb_popup(photoid);
-	}
-
-	/*
-	 * For a given photo ID, show the thumb popup. 
-	 *
-	 * We assume that the correct ID has been found by now, even though photos may have scrolled or shifted in the background somehow
-	 *
-	 * Returns false if couldn't show thumb
-	 */
-	show_thumb_popup(photoid) {
-		var imghtml;
-		var photo = this.orig_photos.find(function(p){return p.id == photoid && p.type == 'media';});
-		if ( photo === undefined ) {
-			return false;
-		}
-		var imgsrc = photo.file;
-		var basename = imgsrc.replace(/.*\//,'');
-			var directlink = encodeURI(this.fastbackurl + '?download=' + imgsrc);
-
-			// File type not found, proxy a jpg instead
-			var supported_type = (this.browser_supported_file_types.indexOf(imgsrc.replace(/.*\./,'').toLowerCase()) != -1);
-			if ( !supported_type ) {
-				directlink = encodeURI(this.fastbackurl + '?proxy=' + imgsrc);	
-			}
-			var share_uri = encodeURI(this.fastbackurl + '?file=' + imgsrc + '&share=' + md5(imgsrc));
-
-			if (photo.isvideo && supported_type){
-				imghtml = '<video controls poster="' + encodeURI(this.fastbackurl + '?thumbnail=' +  imgsrc) + '"><source src="' + directlink + '#t=0.0001">Your browser does not support this video format.</video>';
-			} else {
-				imghtml = '<img src="' + directlink + '"/>';
-			}
-		jQuery('#thumbcontent').html(imghtml);
-		jQuery('#thumbinfo').html('<div id="infowrap">' + photo['file'] + '</div>');
-		jQuery('#thumbgeo').attr('data-coordinates',( photo.coordinates == null ? "" : photo.coordinates ));
-		jQuery('#thumbflag').css('opacity',1);
-		jQuery('#sharelink a').attr('href',share_uri);
-		jQuery('#thumb').data('curphoto',photo.id);
-		jQuery('#thumb').removeClass('disabled');
-
-		return true;
-	}
-
-	/*
-	 * Go to the next thumbnail. This is the handler for clicks, swipes and arrow keys
-	 */
-	handle_thumb_next(e) {
-		var photoid = jQuery('#thumb').data('curphoto');
-
-		var photo = this.orig_photos.find(function(p){return p.id == photoid && p.type == 'media';});
-
-		if ( photo === undefined ) {
-			return false;
-		}
-
-		photoid = photo.id;
-
-		while(true) {
-			photoid++;
-			// Found the next photo that is in the photos array
-			var found = this.photos.find(function(p){return p.id == photoid && p.type == 'media';});
-
-			if ( found !== undefined ) {
-				// Scroll to photo
-				this.scroll_to_photo(photoid);
-				this.show_thumb_popup(found.id);				
-				return true;
-			}
-
-			if ( photoid === this.orig_photos.length ) {
-				return false;
-			}
-		}
-	}
-
-	/*
-	 * Go to the previous thumbnail. This is the handler for clicks, swipes and arrow keys
-	 */
-	handle_thumb_prev(e) {
-		var photoid = jQuery('#thumb').data('curphoto');
-
-		var photo = this.orig_photos.find(function(p){return p.id == photoid && p.type == 'media';});
-
-		if ( photo === undefined ) {
-			return false;
-		}
-
-		photoid = photo.id;
-
-		while(true) {
-			photoid--;
-			// Found the next photo that is in the photos array
-			var found = this.photos.find(function(p){return p.id == photoid && p.type == 'media';});
-
-			if ( found !== undefined ) {
-				// Scroll to photo
-				this.scroll_to_photo(photoid);
-				this.show_thumb_popup(found.id);				
-				return true;
-			}
-
-			if ( photoid === 0 ) {
-				return false;
-			}
-		}
-	}
-
-	/*
-	 * Hide the fullsized image, pausing the video if applicable.
-	 */
-	hide_thumb() {
-		if ( jQuery('#thumb').hasClass('disabled') ) {
-			return;
-		}
-
-		jQuery('#thumb').addClass('disabled');
-		if ( jQuery('#thumb video').length > 0 ) {
-			jQuery('#thumb video')[0].pause();
-		}
-	}
-
-	/*
-	 * Handle key presses and turn them into actions
-	 */
-	keydown_handler(e) {
-		switch(e.key){
-			case 'Escape':
-				this.hide_thumb();
-				this.hide_tags();
-				break;
-			case 'ArrowRight':
-				this.handle_thumb_next();
-				break;
-			case 'ArrowLeft':
-				this.handle_thumb_prev();
-				break;
-		}
-	}
-
-	/*
-	 * Swipe actions for photos
-	 */
-	handle_thumb_swipe(e) {
-		if ( e.type == 'swiperight' ) {
-			this.handle_thumb_next();
-		} else if ( e.type == 'swipeleft' ) {
-			this.handle_thumb_prev();
-		} else if ( e.type == 'swipeup' ) {
-			this.hide_thumb();
-			this.hide_tags();
-		}
-	}
-
-	/*
-	 * Click a link but do it with ajax
-	 */
-	sendbyajax(link) {
-		var thelink = link;
-
-		if ( thelink.href === undefined && link.target instanceof Node ) {
-			thelink = link.target;
-		}
-
-		jQuery.get(thelink.href).then(function(){
-			jQuery(thelink).hide();
-		});
-		return false;
-	}
-
-	/*
-	 * Kick off the map. This may be slow, so it should only get called the first time the div is visible.
-	 */
-	map_init() {
-		var self = this;
-
-		this.fmap = {
-			'lmap':  L.map('map').setView([0,0], 2),
-			'base_map':  this.basemap,
-			'clusterlayer': L.markerClusterGroup({
-				spiderfyOnMaxZoom: true,
-				maxClusterRadius: 40
-			}),
-			'flashlayer': L.geoJSON(null,{
-				pointToLayer: function (feature, latlng) {
-					return L.circleMarker(latlng, self.flashstyle);
-				},
-				onEachFeature: function (feature, layer) {
-					layer.on('mouseover', function (e) {
-						var pixel = self.fmap.lmap.latLngToContainerPoint(layer.getLatLng())
-						self.fmap.flashlayer.eachLayer(function(l){
-							var mypixel = self.fmap.lmap.latLngToContainerPoint(l.getLatLng())
-							if (Math.abs(pixel.x - mypixel.x) <= 10 && Math.abs(pixel.y - mypixel.y) <= 10 ){
-								self.flash_map_for_id(l.feature.properties.id);
-							}
-						});
-						return true;
-					});
-				}
-			})
-		}
-
-		this.fmap.lmap.on({
-			moveend: this._map_handle_zoom_move_end.bind(self),
-			load: this._map_handle_action_queue.bind(self)
-		});
-
-		L.Control.MapFilter = L.Control.extend({
-			onAdd: function(map) {
-				self.fmap.mapfilter_button = jQuery('<div id="mapfilter">🛰</div>');
-				self.fmap.mapfilter_button.on('click',function(){
-					self.toggle_map_filter();
-				});
-				return self.fmap.mapfilter_button[0];
-			},
-
-			onRemove: function(map) {
-				// Nothing to do here
-			}
-		});
-
-		L.control.mapfilter = function(opts) {
-			return new L.Control.MapFilter(opts);
-		}
-
-		// We want to flash photos in the moused cluster
-		this.fmap.clusterlayer.on('clustermouseover',function(e){
-			var pixel = e.layerPoint;
-			self.fmap.flashlayer.eachLayer(function(l){
-				var mypixel = self.fmap.lmap.latLngToContainerPoint(l.getLatLng());
-				if (Math.abs(pixel.x - mypixel.x) <= 10 && Math.abs(pixel.y - mypixel.y) <= 10 ){
-					self.flash_map_for_id(l.feature.properties.id);
-				}
+		var d = date_to_use || new Date();
+		var month = d.getMonth();
+		var date = d.getDate();
+		this.active_filters.rewind = function() {
+			self.photos = self.photos.filter(function(p){ 
+				return p.date.getMonth() == month && p.date.getDate() == date;
 			});
+		};
+		this.dirty_filters = true;
+	}
+
+	/*
+	 * Run the cron job every 5 minutes. 
+	 *
+	 * The PHP timeout is set to 2 minutes (assuming ini_set can override it) so 5 minutes should give the server some breathing room.
+	 */
+	util_cron() {
+		var url = this.fastbackurl + '?cron=now';
+		var self = this;
+		$.get(url).then(function() {
+			setTimeout(self.util_cron.bind(self),1000 * 5 * 60);
 		});
-
-		// Handle click on individual markers
-		this.fmap.clusterlayer.on('click',function(e){
-			var id = e.layer.feature.properties.id
-			self.go_to_photo_id(id);
-		});
-
-		// Scroll to first, if we're all the way zoomed in
-		// this.fmap.clusterlayer.on('clusterclick', function (e) {
-		// 	if ( e.layer._map.getZoom() == e.layer._map.getMaxZoom() ) {
-		// 		var id = e.layer.getAllChildMarkers()[0].feature.properties.id
-		// 		self.go_to_photo_id(id);
-		// 	}
-		// });
-
-		this.fmap.base_map.addTo(this.fmap.lmap);
-		this.fmap.clusterlayer.addTo(this.fmap.lmap);
-		this.fmap.flashlayer.addTo(this.fmap.lmap);
-		L.control.mapfilter({ position: 'topleft' }).addTo(this.fmap.lmap);
-
-		// These two make the map freeze for a while. We can use setTimeout at least during page load.
-		setTimeout(function(){
-			self.map_update_cluster();
-			self.after_render();
-		},200);
 	}
 
 	/*
 	 * In the case that we need the map to do something after it has been initialized
 	 * we can set up a little callback function and add it to the queue.
 	 */
-	_map_handle_action_queue(e) {
+	util_map_action_queue(e) {
 		this._map_init_action_queue = this._map_init_action_queue || {};
 		var keys = Object.keys(this._map_init_action_queue);
 		for(var k = 0;k< keys.length;k++){
@@ -843,59 +873,9 @@ Fastback = class Fastback {
 	}
 
 	/*
-	 * When the map is done moving, we might need to adjust filters
-	 */
-	_map_handle_zoom_move_end(e) {
-		this.handling_map_move_end = true;
-
-		// Moving the map only dirties our filters if we're doing map based filtering.
-		if ( this.active_filters.map !== undefined ) {
-			this.dirty_filters = true;
-			this.refresh_layout();
-		}
-
-		delete this.handling_map_move_end;
-	}
-
-	/*
-	 * Update the markercluster content
-	 */
-	map_update_cluster() {
-		if ( this.fmap === undefined ) {
-			return;
-		}
-
-		var self = this;
-		// map_update_cluster gets called from update and blocks. 
-		// Separate it out so it can updae cluster on its own
-		setTimeout(function(){
-			var geojson = self.build_geojson();
-
-			var gj = L.geoJson(geojson);
-
-			self.fmap.clusterlayer.clearLayers()
-
-			self.fmap.clusterlayer.addLayer(gj,{
-				'chunkedLoading': true
-			});
-
-			// If we're handling a user inited map move we don't want to update zoom. Let the user go where they want.
-			if ( self.handling_map_move_end === undefined ) {
-				if ( self._map_init_action_queue !== undefined && Object.keys(self._map_init_action_queue).length > 0 ) {
-					self._map_handle_action_queue();
-				} else if ( self.fmap.clusterlayer.getBounds().isValid() ) {
-					self.fmap.lmap.fitBounds(self.fmap.clusterlayer.getBounds());
-				} else {
-					self.fmap.lmap.setView([0,0],1);
-				}
-			}
-		},50);
-	}
-
-	/*
 	 * Take a photos array and build geojson from it
 	 */
-	build_geojson(photos) {
+	util_build_geojson(photos) {
 		photos = photos || this.photos;
 
 		var bbox = [0,0,0,0,0,0];
@@ -943,9 +923,113 @@ Fastback = class Fastback {
 	}
 
 	/*
+	 * Only apply filters to data strctures, no redraws.
+	 */
+	util_apply_filters() {
+		// We never want to get stuck in an applying_filters loop
+		if ( this.applying_filters === true ) {
+			return;
+		}
+
+		this.applying_filters = true;
+		if ( this.dirty_filters ) {
+			var self = this;
+			this.photos = this.orig_photos.filter(function(item) { return item.type === 'media'; });
+
+			for(var filter in self.active_filters) {
+				self.active_filters[filter]();
+			}
+
+			this.photos = this.util_add_date_blocks(this.photos);
+			this.ui_update_cluster();
+			this.dirty_filters = false;
+		}
+		delete this.applying_filters;
+	}
+
+	/*
+	 * Called after a hyperlist chunk is rendered
+	 */
+	util_after_render() {
+		// Non-map render
+		var totalheight = Math.ceil(this.photos.length / this.cols) * this.hyperlist_config.itemHeight
+		jQuery('#speedslide').val(this.hyperlist_container[0].scrollTop / totalheight * 100);
+
+		if ( this.fmap === undefined ) {
+			// No map, no need.
+			return;
+		}
+
+		var self = this;
+
+		// Refresh the map flash layer
+		var rows = jQuery('.photorow:visible').toArray().filter(function(r){return jQuery(r).position().top < window.innerHeight;})
+		var tnsar =	rows.map(function(f){ return jQuery(f).find('.tn img').toArray(); });
+		var tns = jQuery.map(tnsar,function(f){return f;});
+		var photos = tns.map(function(f){return self.photos.find(function(p){return p.id == $(f).data('photoid');})});
+		var geojson = this.util_build_geojson(photos);
+		this.fmap.flashlayer.clearLayers();
+		this.fmap.flashlayer.addData(geojson);
+	}
+
+	/*
+	 * For a given photo ID, show the thumb popup. 
+	 *
+	 * We assume that the correct ID has been found by now, even though photos may have scrolled or shifted in the background somehow
+	 *
+	 * Returns false if couldn't show thumb
+	 */
+	ui_show_fullsized(photoid) {
+		var imghtml;
+		var photo = this.orig_photos.find(function(p){return p.id == photoid && p.type == 'media';});
+		if ( photo === undefined ) {
+			return false;
+		}
+		var imgsrc = photo.file;
+		var basename = imgsrc.replace(/.*\//,'');
+			var directlink = encodeURI(this.fastbackurl + '?download=' + imgsrc);
+
+			// File type not found, proxy a jpg instead
+			var supported_type = (this.browser_supported_file_types.indexOf(imgsrc.replace(/.*\./,'').toLowerCase()) != -1);
+			if ( !supported_type || photo.isvideo ) {
+				directlink = encodeURI(this.fastbackurl + '?proxy=' + imgsrc);	
+			}
+			var share_uri = encodeURI(this.fastbackurl + '?file=' + imgsrc + '&share=' + md5(imgsrc));
+
+			if (photo.isvideo){
+				imghtml = '<video controls poster="' + encodeURI(this.fastbackurl + '?thumbnail=' +  imgsrc) + '"><source src="' + directlink + '#t=0.0001">Your browser does not support this video format.</video>';
+			} else {
+				imghtml = '<img src="' + directlink + '"/>';
+			}
+		jQuery('#thumbcontent').html(imghtml);
+		jQuery('#thumbinfo').html('<div id="infowrap">' + photo['file'] + '</div>');
+		jQuery('#thumbgeo').attr('data-coordinates',( photo.coordinates == null ? "" : photo.coordinates ));
+		jQuery('#thumbflag').css('opacity',1);
+		jQuery('#sharelink a').attr('href',share_uri);
+		jQuery('#thumb').data('curphoto',photo.id);
+		jQuery('#thumb').removeClass('disabled');
+
+		return true;
+	}
+
+	/*
+	 * Hide the fullsized image, pausing the video if applicable.
+	 */
+	ui_hide_thumb() {
+		if ( jQuery('#thumb').hasClass('disabled') ) {
+			return;
+		}
+
+		jQuery('#thumb').addClass('disabled');
+		if ( jQuery('#thumb video').length > 0 ) {
+			jQuery('#thumb video')[0].pause();
+		}
+	}
+
+	/*
 	 * For a given photo ID, scroll to it if it is in the current photos.
 	 */
-	scroll_to_photo(photoid) {
+	ui_scroll_to_photo(photoid) {
 		var photo_idx = this.photos.findIndex(function(p){return p.id == photoid && p.type == 'media';});
 
 		if ( photo_idx === -1 ) {
@@ -960,148 +1044,26 @@ Fastback = class Fastback {
 	}
 
 	/*
-	 * Show or hide the calendar
-	 */
-	handle_datepicker_toggle(){
-		if ( $('#ui-datepicker-div').is(':visible') ) {
-			$('#datepicker').datepicker('hide');
-		} else {
-			$('#datepicker').datepicker('show');
-		}
-	}
-
-	/*
-	 * Handle the datepicker change
-	 */
-	handle_datepicker_change(date){
-		var targetdate = new Date(date.replaceAll('-','/') + ' 23:59:59'); // Use the very end of day so that our findIndex works later
-
-		if ( jQuery('#rewindicon').hasClass('active') ) {
-			this.setup_new_rewind_date(targetdate);	
-		}
-
-		// Find the first photo that is younger than our target photo
-		// var first = this.photos.findIndex(o => o['date'] <= targetdate);
-		var first = this.photos.find(function(o){return o.date <= targetdate && o.type == 'media'})
-
-		this.scroll_to_photo(first.id);
-
-		this.refresh_layout();
-	}
-
-	/*
 	 * Go to photo id
 	 */
-	go_to_photo_id(id) {
+	ui_go_to_photo_id(id) {
 		setTimeout(function(){
-			this._go_to_photo('id',id);
-			// this.flash_square_for_id(id); Why flash it? We're going to show the thumb over the top..
+			var first = this.photos.findIndex(o => o.id == id);
+
+			// If we don't find one, go all the way to the end
+			if ( first === undefined || first === -1 ) {
+				first = this.photos.length - 1;
+			}
+
+			this.scroll_to_photo(first);
 		}.bind(this),100);
-		this.show_thumb_popup(id);
-	}
-
-	/*
-	 * Find a photo based on a key name and value, and go to it
-	 */
-	_go_to_photo(key,val) {
-		// Find the first photo that is younger than our target photo
-		var first = this.photos.findIndex(o => o[key] == val);
-
-		// If we don't find one, go all the way to the end
-		if ( first === undefined || first === -1 ) {
-			first = this.photos.length - 1;
-		}
-
-		this.scroll_to_photo(first);
-	}
-
-	/*
-	 * Handle the rewind / memories icon click
-	 */
-	handle_rewind_click() {
-		var icon = jQuery('#rewindicon');
-
-		if ( icon.hasClass('active') ) {
-			icon.removeClass('active');
-			delete this.active_filters.rewind;
-			this.dirty_filters = true;
-		} else {
-			icon.addClass('active');
-			this.rewind_date = new Date();
-			this.setup_new_rewind_date();
-		}
-
-		this.refresh_layout();
-		this.hyperlist_container.prop('scrollTop',0);
-	}
-
-	/*
-	 * For an optional date object, set up a new rewind view
-	 */
-	setup_new_rewind_date(date_to_use) {
-		var self = this;
-		var d = date_to_use || new Date();
-		var month = d.getMonth();
-		var date = d.getDate();
-		this.active_filters.rewind = function() {
-			self.photos = self.photos.filter(function(p){ 
-				return p.date.getMonth() == month && p.date.getDate() == date;
-			});
-		};
-		this.dirty_filters = true;
-	}
-
-	/*
-	 * Handle logout
-	 */
-	handle_exit_click() {
-		window.location = this.fastbackurl + '?logout=true';
-	}
-
-	/*
-	 * Make the tags interface.
-	 */
-	make_tags() {
-		var thetags = $('#thetags');
-		var htmltag,t;
-		var tagnames = [];
-
-		for(t in this.tags) {
-			tagnames.push(t);
-		}
-
-		tagnames.sort();
-
-		for(var t = 0; t < tagnames.length; t++ ) {
-			htmltag = tagnames[t].replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-			thetags.append('<div class="onetag" data-tag="' + tagnames[t] + '">' + htmltag + ' (' + this.tags[tagnames[t]] + ')</div>');
-		}
-	}
-
-	/*
-	 * Handle tag click
-	 */
-	handle_tag_click() {
-		this.hide_thumb();
-		if ( $('#tagwindow').hasClass('disabled') ) {
-
-			this.tag_state = JSON.stringify({
-				'tags' : this.active_tags,
-				'andor': $('#tagand').hasClass('active'),
-				'tagson': $('#tagon').hasClass('active')
-			});
-
-			$('#tagwindow').removeClass('disabled');
-			return;
-		} else {
-			this.hide_tags();
-		}
+		this.ui_show_fullsized(id);
 	}
 
 	/*
 	 * Close tags interface, applying filter, if needed
 	 */
-	hide_tags() {
+	ui_hide_tags() {
 		if ( $('#tagwindow').hasClass('disabled') ) {
 			return;
 		}
@@ -1153,51 +1115,13 @@ Fastback = class Fastback {
 		}
 
 		this.dirty_filters = true;
-		setTimeout(this.refresh_layout.bind(this),20);
-	}
-
-	/*
-	 * Handle globe icon click
-	 */
-	handle_globe_click() {
-		var icon = jQuery('#globeicon');
-
-		if ( jQuery('body').hasClass('map') ) {
-			icon.removeClass('active');
-			jQuery('body').removeClass('map');
-		} else {
-			jQuery('body').addClass('map');
-			icon.addClass('active');
-
-			if ( this.fmap === undefined ) {
-				setTimeout(this.map_init.bind(this),100);
-			} else {
-				this.fmap.lmap.invalidateSize();
-
-				if ( this._map_init_action_queue !== undefined && Object.keys(this._map_init_action_queue).length > 0 ) {
-					this._map_handle_action_queue();
-				} else if ( this.fmap.clusterlayer.getBounds().isValid() ) {
-					this.fmap.lmap.fitBounds(this.fmap.clusterlayer.getBounds());
-				} else {
-					this.fmap.lmap.setView([0,0],1);
-				}
-			}
-		}
-		this.refresh_layout();
-	}
-
-	/*
-	 * Interact with map on mouse over
-	 */
-	handle_tn_mouseover(e){
-		var photoid = jQuery(e.target).closest('.tn').find('img').first().data('photoid');
-		this.flash_map_for_id(photoid);
+		setTimeout(this.ui_refresh_layout.bind(this),20);
 	}
 
 	/*
 	 * For a given photo ID, flash the corresponding icon on the map
 	 */
-	flash_map_for_id(target_id){
+	ui_flash_map_for_id(target_id){
 		if ( this.fmap === undefined ) {
 			return;
 		}
@@ -1220,13 +1144,13 @@ Fastback = class Fastback {
 				one_layer.setStyle(self.flashstyle);
 			}
 		},500);
-		this.flash_square_for_id(target_id);
+		this.ui_flash_square_for_id(target_id);
 	}
 
 	/*
 	 * For a given photo ID, flash the thumbnail
 	 */
-	flash_square_for_id(target_id) {
+	ui_flash_square_for_id(target_id) {
 		var one_tn = jQuery('img[data-photoid="' + target_id +'"]').closest('.tn').addClass('flash');
 
 		setTimeout(function(){
@@ -1235,23 +1159,9 @@ Fastback = class Fastback {
 	}
 
 	/*
-	 * Detect if the user is using a mobile browser
-	 *
-	 * I know that browser sniffing is bad and I'm going to do it anyways.
-	 *
-	 * https://stackoverflow.com/questions/11381673/detecting-a-mobile-browser
-	 */
-	is_mobile_browser() {
-		let check = false;
-		(function(a){if(/(android|bb\d+|meego).+mobile|avantgo|bada\/|blackberry|blazer|compal|elaine|fennec|hiptop|iemobile|ip(hone|od)|iris|kindle|lge |maemo|midp|mmp|mobile.+firefox|netfront|opera m(ob|in)i|palm( os)?|phone|p(ixi|re)\/|plucker|pocket|psp|series(4|6)0|symbian|treo|up\.(browser|link)|vodafone|wap|windows ce|xda|xiino|android|ipad|playbook|silk/i.test(a)||/1207|6310|6590|3gso|4thp|50[1-6]i|770s|802s|a wa|abac|ac(er|oo|s\-)|ai(ko|rn)|al(av|ca|co)|amoi|an(ex|ny|yw)|aptu|ar(ch|go)|as(te|us)|attw|au(di|\-m|r |s )|avan|be(ck|ll|nq)|bi(lb|rd)|bl(ac|az)|br(e|v)w|bumb|bw\-(n|u)|c55\/|capi|ccwa|cdm\-|cell|chtm|cldc|cmd\-|co(mp|nd)|craw|da(it|ll|ng)|dbte|dc\-s|devi|dica|dmob|do(c|p)o|ds(12|\-d)|el(49|ai)|em(l2|ul)|er(ic|k0)|esl8|ez([4-7]0|os|wa|ze)|fetc|fly(\-|_)|g1 u|g560|gene|gf\-5|g\-mo|go(\.w|od)|gr(ad|un)|haie|hcit|hd\-(m|p|t)|hei\-|hi(pt|ta)|hp( i|ip)|hs\-c|ht(c(\-| |_|a|g|p|s|t)|tp)|hu(aw|tc)|i\-(20|go|ma)|i230|iac( |\-|\/)|ibro|idea|ig01|ikom|im1k|inno|ipaq|iris|ja(t|v)a|jbro|jemu|jigs|kddi|keji|kgt( |\/)|klon|kpt |kwc\-|kyo(c|k)|le(no|xi)|lg( g|\/(k|l|u)|50|54|\-[a-w])|libw|lynx|m1\-w|m3ga|m50\/|ma(te|ui|xo)|mc(01|21|ca)|m\-cr|me(rc|ri)|mi(o8|oa|ts)|mmef|mo(01|02|bi|de|do|t(\-| |o|v)|zz)|mt(50|p1|v )|mwbp|mywa|n10[0-2]|n20[2-3]|n30(0|2)|n50(0|2|5)|n7(0(0|1)|10)|ne((c|m)\-|on|tf|wf|wg|wt)|nok(6|i)|nzph|o2im|op(ti|wv)|oran|owg1|p800|pan(a|d|t)|pdxg|pg(13|\-([1-8]|c))|phil|pire|pl(ay|uc)|pn\-2|po(ck|rt|se)|prox|psio|pt\-g|qa\-a|qc(07|12|21|32|60|\-[2-7]|i\-)|qtek|r380|r600|raks|rim9|ro(ve|zo)|s55\/|sa(ge|ma|mm|ms|ny|va)|sc(01|h\-|oo|p\-)|sdk\/|se(c(\-|0|1)|47|mc|nd|ri)|sgh\-|shar|sie(\-|m)|sk\-0|sl(45|id)|sm(al|ar|b3|it|t5)|so(ft|ny)|sp(01|h\-|v\-|v )|sy(01|mb)|t2(18|50)|t6(00|10|18)|ta(gt|lk)|tcl\-|tdg\-|tel(i|m)|tim\-|t\-mo|to(pl|sh)|ts(70|m\-|m3|m5)|tx\-9|up(\.b|g1|si)|utst|v400|v750|veri|vi(rg|te)|vk(40|5[0-3]|\-v)|vm40|voda|vulc|vx(52|53|60|61|70|80|81|83|85|98)|w3c(\-| )|webc|whit|wi(g |nc|nw)|wmlb|wonu|x700|yas\-|your|zeto|zte\-/i.test(a.substr(0,4))) check = true;})(navigator.userAgent||navigator.vendor||window.opera);
-		this.is_mobile_browser = check;
-		return check;
-	}
-
-	/*
 	 * Switch map filtering off and on
 	 */
-	toggle_map_filter() {
+	ui_toggle_map_filter() {
 		var is_filtered = (this.active_filters.map !== undefined );
 
 		if ( !is_filtered ) {
@@ -1275,55 +1185,86 @@ Fastback = class Fastback {
 		}
 
 		this.dirty_filters = true;
-		this.refresh_layout();
+		this.ui_refresh_layout();
 	}
 
 	/*
-	 * Make the tag filtering controls look how they should
+	 * Update the markercluster content
 	 */
-	handle_tag_state(e) {
-		if ( e.target.id == 'tagoff' ) {
-			$('#tagon').removeClass('active');
-			$('#tagoff').addClass('active');
-			$('#tagicon').removeClass('active');
-		} else if ( e.target.id == 'tagon' ) {
-			$('#tagon').addClass('active');
-			$('#tagoff').removeClass('active');
-			$('#tagicon').addClass('active');
-		} else if ( e.target.id == 'tagand' ) {
-			$('#tagand').addClass('active');
-			$('#tagor').removeClass('active');
-		} else if ( e.target.id == 'tagor' ) {
-			$('#tagor').addClass('active');
-			$('#tagand').removeClass('active');
+	ui_update_cluster() {
+		if ( this.fmap === undefined ) {
+			return;
 		}
-	}
 
-	/*
-	 * Add or remove a tag from the tag filter list
-	 */
-	handle_onetag_click(e) {
-		var tag = $(e.target).data('tag');
-		var idx = this.active_tags.indexOf(tag);
-		if (  idx === -1 ) {
-			this.active_tags.push(tag);
-			$(e.target).addClass('active');
-		} else {
-			this.active_tags.splice(idx,1);
-			$(e.target).removeClass('active');
-		}
-	}
-
-	/*
-	 * Run the cron job every 5 minutes. 
-	 *
-	 * The PHP timeout is set to 2 minutes (assuming ini_set can override it) so 5 minutes should give the server some breathing room.
-	 */
-	cron() {
-		var url = this.fastbackurl + '?cron=now';
 		var self = this;
-		$.get(url).then(function() {
-			setTimeout(self.cron.bind(self),1000 * 5 * 60);
-		});
+		// ui_update_cluster gets called from update and blocks. 
+		// Separate it out so it can updae cluster on its own
+		setTimeout(function(){
+			var geojson = self.util_build_geojson();
+
+			var gj = L.geoJson(geojson);
+
+			self.fmap.clusterlayer.clearLayers()
+
+			self.fmap.clusterlayer.addLayer(gj,{
+				'chunkedLoading': true
+			});
+
+			// If we're handling a user inited map move we don't want to update zoom. Let the user go where they want.
+			// if ( self.handling_map_move_end === undefined ) {
+			// 	if ( self._map_init_action_queue !== undefined && Object.keys(self._map_init_action_queue).length > 0 ) {
+			// 		self.util_map_action_queue();
+			// 	} else if ( self.fmap.clusterlayer.getBounds().isValid() ) {
+			// 		self.fmap.lmap.fitBounds(self.fmap.clusterlayer.getBounds());
+			// 	} else {
+			// 		self.fmap.lmap.setView([0,0],1);
+			// 	}
+			// }
+		},50);
+	}
+
+	/*
+	 * Refresh the page layout, including accounting for changed row nums or page resize.
+	 *
+	 * Called manually and by hyperlist
+	 */
+	ui_refresh_layout() {
+		jQuery('body').css('height',window.innerHeight);
+		this.util_apply_filters();
+
+		// Browsers can only support an object so big, so we can only use so many rows.
+		// Calculate the new max zoom
+		this.maxzoom = Math.ceil(Math.sqrt(this.hyperlist_container.width() * this.photos.length / this.hyperlist._maxElementHeight));
+
+		// Make sure our new cols doesn't go over the max zoom
+		this.cols = Math.max(this.maxzoom, this.cols);
+
+		if ( !this.hyperlist_container.hasClass('up' + this.cols) ) {
+			this.hyperlist_container.removeClass('up1 up2 up3 up4 up5 up6 up7 up8 up9 up10'.replace('up' + this.cols,' '));
+			this.hyperlist_container.addClass('up' + this.cols);
+		}
+
+		// Set the slider size
+		var zoomval = jQuery('#zoom').val();
+		jQuery('#resizer input').prop('min',this.maxzoom);
+
+		// Update hyperlist config
+		this.hyperlist_config.height = this.hyperlist_container.parent().height();
+		this.hyperlist_config.itemHeight = (this.hyperlist_container.width() / this.cols);
+		this.hyperlist_config.total = Math.ceil(this.photos.length / this.cols);
+
+
+		// propagate changes
+		this.hyperlist.refresh(this.hyperlist_container[0], this.hyperlist_config);
+
+		if ( this.photos.length == 0 ) {
+			jQuery('#photos > div').css('opacity',1);
+			var html = '<div id="nophotos"><p>No photos are available for this view. Try changing your filters.</p>';
+			if (this.csv_error_load) {
+				html += '<p>A new install will need a few minutes to populate the database.</p>';
+			}
+			html += '</div>';
+			jQuery('#photos > div').html(html);
+		}
 	}
 }
