@@ -992,12 +992,17 @@ Fastback = class Fastback {
 			// File type not found, proxy a jpg instead
 			var supported_type = (this.browser_supported_file_types.indexOf(imgsrc.replace(/.*\./,'').toLowerCase()) != -1);
 			if ( !supported_type || photo.isvideo ) {
-				directlink = encodeURI(this.fastbackurl + '?proxy=' + imgsrc);	
+				directlink = encodeURI(this.fastbackurl + '?proxy=' + imgsrc );	
 			}
 			var share_uri = encodeURI(this.fastbackurl + '?file=' + imgsrc + '&share=' + md5(imgsrc));
 
 			if (photo.isvideo){
-				imghtml = '<video controls poster="' + encodeURI(this.fastbackurl + '?thumbnail=' +  imgsrc) + '"><source src="' + directlink + '#t=0.0001">Your browser does not support this video format.</video>';
+				imghtml = '<video controls poster="' + encodeURI(this.fastbackurl + '?thumbnail=' +  imgsrc) + '" preload="auto">';
+				// Put the proxied link, this should be a transcoded mp4 version
+				imghtml += '<source src="' + directlink + '#t=0.0001" type="video/mp4">';
+				// Also include the original as a source...just in case it works
+				imghtml += '<source src="' + encodeURI(this.fastbackurl + '?download=' + imgsrc) + '#t=0.0001" type="video/' + imgsrc.replace(/.*\./,'').toLowerCase() + '">';
+				imghtml += '<p>Your browser does not support this video format.</p></video>';
 			} else {
 				imghtml = '<img src="' + directlink + '"/>';
 			}

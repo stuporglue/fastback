@@ -1578,6 +1578,7 @@ class Fastback {
 		$shellthumbvid = escapeshellarg($this->filecache . '/' . $videothumb);
 
 		// https://gist.github.com/jaydenseric/220c785d6289bcfd7366
+		// find . -regextype sed -iregex  ".*.\(mp4\|mov\|avi\|dv\|3gp\|mpeg\|mpg\|ogg\|vob\|webm\).webp" -delete
 		$cmd = $this->_ffmpeg . ' -i ' . $shellfile . ' -c:v libx264 -pix_fmt yuv420p -profile:v baseline -level 3.0 -crf 22 -maxrate 2M -bufsize 4M -preset medium -vf "scale=\'min(1024,iw)\':-2" -c:a aac -strict experimental -movflags +faststart -threads 1 ' . $shellthumbvid . ' 2>/dev/null';
 		$res = `$cmd`;
 
