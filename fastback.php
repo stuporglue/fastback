@@ -37,7 +37,6 @@ class Fastback {
 													   $filecache doesn't have to be web accessable
 													*/
 	var $precachethumbs = false;					// Should thumbnails be created for all photos in the cron task? Default is to generated them on the fly as needed.
-	var $make_video_streamable  = true;				// Make web optimized mp4s for all videos so that we can stream them.
 	var $sqlitefile = __DIR__ . '/fastback.sqlite';	// Path to .sqlite file, Optional, defaults to fastback/fastback.sqlite
 	var $csvfile;									// Path to .csv file, Optional, will use $this->filecache/fastback.sqlite by default
 	var $maybe_meme_level = 1;						/* Which level of maybe_meme should we filter at? The higher the number the more 
@@ -49,9 +48,11 @@ class Fastback {
 		'make_csv',
 		'process_exif',
 		'get_exif',
-		// 'make_thumbs',							// We generate these on the fly, so by default we won't make them
 		'remove_deleted',
-		'clear_locks');
+		'clear_locks',
+		'make_thumbs',							    
+		'make_streamable',							    
+	);
 
 	// Internal variables. These are also editable, but you probably don't need to.
 	// Proceed with caution.
@@ -238,7 +239,7 @@ class Fastback {
 				return;
 			} 
 
-			$allowed_actions = array('find_new_files','make_csv','process_exif','get_exif','make_thumbs','remove_deleted','clear_locks','status');
+			$allowed_actions = array('find_new_files','make_csv','process_exif','get_exif','make_thumbs','make_streamable','remove_deleted','clear_locks','status');
 
 			if ( in_array($argv[1],$allowed_actions) ) {
 				$this->log("Running {$argv[1]}");
@@ -818,9 +819,15 @@ class Fastback {
 			<link rel="stylesheet" href="fastback/css/fastback.css?ts=' . ($this->debug ? 'debug' : filemtime(__DIR__ . '/css/fastback.css')) . '">
 			</head>';
 
-			$html .= '<body>If you\'re seeing this, then ' . $this->util_base_url() . ' isn\'t accessable. Maybe it\'s down? You could also be offline, or the site could be an IPV6 site and you\'re on an IPV4 only network.';
+			$html .= '<body><div id="offline"><p>If you\'re seeing this, then ' . $this->util_base_url() . ' isn\'t accessable. Are you offline?? </p><p>The site could also be down, blocked for some reason, or the site could be an IPV6 site and you\'re on an IPV4 only network.</p></div>';
 
 			$html .= '<script>
+
+				// Refresh again after 10 seconds, and hope the site is back up. 
+				setTimeout(function(){
+					window.location=window.location;
+				},10000);
+
 				if("serviceWorker" in navigator) {
 					navigator.serviceWorker.register("' . $this->util_base_url() . '?pwa=sw", { scope: "' . $this->util_base_url() . '" });
 				}';
@@ -896,6 +903,7 @@ class Fastback {
 			file TEXT PRIMARY KEY, 
 			exif TEXT,
 			isvideo BOOL, 
+			streamable_made BOOL, 
 			flagged BOOL, 
 			mtime INTEGER, 
 			sorttime DATETIME, 
@@ -1379,15 +1387,6 @@ class Fastback {
 			}
 
 		} else if ( in_array(strtolower($pathinfo['extension']),$this->supported_video_types) ) {
-
-			$videothumb = ltrim($file,'./') . '.mp4';
-			$vidres = $this->_make_video_streamable($file,$videothumb,$print_to_stdout);
-
-			// Only make a thumb on disk if we have made the video
-			if ( $vidres === false && !$print_to_stdout ) {
-				return false;
-			}
-
 			$res = $this->_make_video_thumb($file,$thumbnailfile,$print_to_stdout);
 
 			if ( $res === false ) {
@@ -1553,18 +1552,37 @@ class Fastback {
 		return false;
 	}
 
-	private function _make_video_streamable($file,$videothumb,$print_to_stdout) {
+	/**
+	 * Make videos that are suitable for streaming. Thanks, ffmpeg!
+	 */
+	public function cron_make_streamable() {
+		$this->sql_update_cron_status('make_streamable');
+		do {
+			$queue = $this->sql_get_queue("flagged IS NOT TRUE AND streamable_made IS NULL AND isvideo AND file != ''");
 
-		if ( !$this->make_video_streamable ) {
-			return true;
-		}
+			foreach($queue as $file => $row) {
+				// If we've got the file, we're good
+				$outputfile = $file . '.mp4';
+				$worked = $this->_make_video_streamable($file,$outputfile);
 
-		if ( $print_to_stdout ) {
-			return true; // We can't send videos to stdout, so just skip it for now
-		}
+				$worked = $worked ? 1 : 0;
+
+				$this->sql_query_single("UPDATE fastback SET streamable_made=$worked WHERE file='"  . SQLite3::escapeString($file) . "'");
+			}
+
+			$this->sql_update_cron_status('make_streamable');
+		} while (!empty($queue));
+
+		$this->sql_update_cron_status('make_streamable',true);
+	}
+
+	/**
+	 * Make a streamable copy of the file under consideration. Does the reencoding with ffmpeg
+	 */
+	private function _make_video_streamable($file,$videothumb) {
 
 		if ( file_exists($this->filecache . '/' . $videothumb) ) {
-			return $videothumb;
+			return true;
 		}
 
 		if ( !file_exists($this->photobase . '/' . $file) ) {
@@ -1579,14 +1597,17 @@ class Fastback {
 
 		// https://gist.github.com/jaydenseric/220c785d6289bcfd7366
 		// find . -regextype sed -iregex  ".*.\(mp4\|mov\|avi\|dv\|3gp\|mpeg\|mpg\|ogg\|vob\|webm\).webp" -delete
-		$cmd = $this->_ffmpeg . ' -i ' . $shellfile . ' -c:v libx264 -pix_fmt yuv420p -profile:v baseline -level 3.0 -crf 22 -maxrate 2M -bufsize 4M -preset medium -vf "scale=\'min(1024,iw)\':-2" -c:a aac -strict experimental -movflags +faststart -threads 1 ' . $shellthumbvid . ' 2>/dev/null';
+		// If we're running from CLI, then use as much processor as possible since the user has direct control over the process & utilization
+		// Otherwise, run on 1 thread so we don't use more than what the PHP process was going ot use anyways.
+		$threads = php_sapi_name() == 'cli' ? 0 : 1;
+		$cmd = $this->_ffmpeg . ' -i ' . $shellfile . ' -c:v libx264 -pix_fmt yuv420p -profile:v baseline -level 3.0 -crf 22 -maxrate 2M -bufsize 4M -preset medium -vf "scale=\'min(1024,iw)\':-2" -c:a aac -strict experimental -movflags +faststart  -threads ' . $threads . ' ' . $shellthumbvid . ' 2>/dev/null';
 		$res = `$cmd`;
 
 		if ( file_exists($this->filecache . '/' . $videothumb) ) {
 			return true;
-		} else {
-			return false;
-		}
+		} 
+
+		return false;
 	}
 
 	/**
@@ -1986,7 +2007,7 @@ class Fastback {
 			'status' => 'Pending first run',
 		);
 
-		$allowed_actions = array('find_new_files','make_csv','process_exif','get_exif','make_thumbs','remove_deleted','clear_locks','status');
+		$allowed_actions = array('find_new_files','make_csv','process_exif','get_exif','make_thumbs','make_streamable','remove_deleted','clear_locks','status');
 		foreach($allowed_actions as $job){
 			$cron_status[$job] = $template;
 			$cron_status[$job]['job'] = $job;
@@ -2029,6 +2050,7 @@ class Fastback {
 
 		$total_rows = $this->sql_query_single("SELECT COUNT(*) FROM fastback");
 		$exif_rows = $this->sql_query_single("SELECT COUNT(*) FROM fastback WHERE flagged or exif IS NOT NULL");
+		$video_rows = $this->sql_query_single("SELECT COUNT(*) FROM fastback WHERE isvideo=1 AND flagged IS NULL");
 
 		if ( $total_rows > 0 ) {
 			if ( array_key_exists('get_exif',$cron_status) ) {
@@ -2036,6 +2058,9 @@ class Fastback {
 			}
 			if ( array_key_exists('make_thumbs',$cron_status) ) {
 				$cron_status['make_thumbs']['percent_complete'] = round($this->sql_query_single("SELECT COUNT(*) FROM FASTBACK WHERE flagged OR thumbnail IS NOT NULL") / $total_rows,4) * 100 . '%';
+			}
+			if ( array_key_exists('make_streamable',$cron_status) ) {
+				$cron_status['make_streamable']['percent_complete'] .= round($this->sql_query_single("SELECT COUNT(*) FROM FASTBACK WHERE streamable_made=1") / $video_rows,4) * 100 . '%';
 			}
 		} else {
 			if ( array_key_exists('get_exif',$cron_status) ) {
@@ -2112,7 +2137,7 @@ class Fastback {
 
 			} else {
 				header("Content-Type: application/json");
-				print json_encode($cron_status);
+				print json_encode($cron_status, JSON_PRETTY_PRINT);
 			}
 		} else {
 			return $cron_status;

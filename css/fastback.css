@@ -45,7 +45,7 @@ body #photos .photorow {
 	box-sizing: border-box;
 }
 
-#loadingbox,#nophotos {
+#loadingbox,#nophotos,#offline {
 	width: 300px;
 	max-width: 100%;
 	border: 4px solid #ccc;

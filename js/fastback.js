@@ -997,7 +997,8 @@ Fastback = class Fastback {
 			var share_uri = encodeURI(this.fastbackurl + '?file=' + imgsrc + '&share=' + md5(imgsrc));
 
 			if (photo.isvideo){
-				imghtml = '<video controls poster="' + encodeURI(this.fastbackurl + '?thumbnail=' +  imgsrc) + '" preload="auto">';
+				// the onloadedmetadata script is to make very short videos (like iOS live photos) loop but longer videos do not loop
+				imghtml = '<video id="thevideo" loop controls poster="' + encodeURI(this.fastbackurl + '?thumbnail=' +  imgsrc) + '" preload="auto" onloadedmetadata="this.duration > 5 ? this.removeAttribute(\'loop\') : false">';
 				// Put the proxied link, this should be a transcoded mp4 version
 				imghtml += '<source src="' + directlink + '#t=0.0001" type="video/mp4">';
 				// Also include the original as a source...just in case it works
