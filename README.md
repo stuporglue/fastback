@@ -417,9 +417,7 @@ TODO
 ----
 * Location search input 
 * Don't collapse exif tags
-* Prettier pwa offline page and more testing of pwa offline page.
 * Make colors customizable
-* Generate web-friendly videos so any video can be watched
 * Be able to zoom and pan on single image view
 * Make animated thumbs for videos
 
