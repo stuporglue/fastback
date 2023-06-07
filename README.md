@@ -392,6 +392,12 @@ Troubleshooting
     hyperlist.js which uses this max height and the number of photos to
     determine the max width of the thumbnails. 
 
+* Videos don't play
+    - Browser can only play a few media formats. Fastback will generated 
+    streamable videos, but this process is quite slow. You can run it from the
+    command line to use more cores and to create the streamable copies faster.
+    `php index.php make_streamable`.
+
 License, Credits and Thanks
 ----------------------------
 This project is under the [LICENSE.txt](MIT License). 

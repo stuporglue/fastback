@@ -1,7 +1,6 @@
 const CACHE_NAME = 'fastback';
 const SW_VERSION = 'SW_FASTBACK_TS';
 const BASEURL = 'SW_FASTBACK_BASEURL';
-const PHOTOURL = 'SW_FASTBACK_PHOTOURL';
 const OFFLINE_URL = '?pwa=down';
 
 var urls_to_cache = [

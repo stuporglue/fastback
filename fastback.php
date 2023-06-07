@@ -5,8 +5,6 @@
  */
 class Fastback {
 	/*
-	 * Settings!
-	 *
 	 * Usage: 
 	 * Initialize Fastback, then override whatever you want to.
 	 * Then call run.
@@ -15,30 +13,53 @@ class Fastback {
 	 * $fb->sitetitle = "Moore Family Gallery!";
 	 * $fb->user['Michael'] = 'Mypassw0rd!;
 	 * $fb->run();
-	 *
 	 */ 
-	var $debug = 1;									// Are we debugging
-	var $sitetitle = "Fastback Photo Gallery";		// Title
-	var $user = array();							// Dictionary of username => password 
 
-	// Advanced usage
-	var $photobase = __DIR__ . '/../';				// File path to full sized photos, Optional, will use current directory as default
-	var $photourl;									/* URL path to full sized photos, Optional, will use current web path as default
-													   Should probably be customized if photobase is customized.
-													   var $photodirregex = './[0-9]\{4\}/[0-9]\{2\}/[0-9]\{2\}/'; // Use '' (empty string) for all photos, regardless of structure.
-													*/
+	/*
+	 * Settings!
+	 *
+	 * Don't touch these here, change them in your index.php file. 
+	 */
+
+	/*
+	 * Debug mode or no?
+	 */
+	var $debug = 0;									// Are we debugging
+
+	/* 
+	 * User Experience
+	 */
+	var $sitetitle = "Fastback Photo Gallery";		// Title
 	var $basemap = "L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a> contributors'})";
-	var $photodirregex = '';						// Use '' (empty string) for all photos, regardless of structure.
-	var $ignore_tag  = array('iMovie','FaceTime');	// Tags to ignore from photos.
-	var $sortorder = 'DESC';						// Sort order of the photos for the csv (ASC or DESC)
+	var $user = array();							// Dictionary of username => password. eg array('Michae' => 'michaelpassword123', 'Ryan' => '12345')
 	var $canflag = array();							// List of users who can flag photos. eg. array('Michael','Caroline');
+	var $_thumbsize = "256x256";					// Thumbnail size. Must be square.
+
+
+	/*
+	 * Locations
+	 */
+	var $photobase = __DIR__ . '/../';				// File path to full sized photos, Optional, will use current directory as default
+	var $fastback_log = __DIR__ . '/cache/fastback.log'; // Where should fastabck log things. Nothing should get logged if debug is not true
 	var $filecache = __DIR__ . '/cache/';			/* Folder path to cache directory. sqlite and thumbnails will be stored here. 
 													   Optional, will create a cache folder in the current directory as the default
 													   $filecache doesn't have to be web accessable
 													*/
-	var $precachethumbs = false;					// Should thumbnails be created for all photos in the cron task? Default is to generated them on the fly as needed.
 	var $sqlitefile = __DIR__ . '/fastback.sqlite';	// Path to .sqlite file, Optional, defaults to fastback/fastback.sqlite
-	var $csvfile;									// Path to .csv file, Optional, will use $this->filecache/fastback.sqlite by default
+	var $csvfile = __DIR__ . '/cache/fastback.csv';	// Path to .csv file, Optional, will use $this->filecache/fastback.sqlite by default
+	var $siteurl;									/* Fastback will try to figure out the site url. If it's getting it wrong you can override it.
+													*/
+
+	/*
+	 * Data processing
+	 */
+
+	var $photodirregex = '';						/* Use '' (empty string) for all photos, regardless of structure.
+														Use this regex to only consider media in YYYY/MM/DD directories
+													   $fb->photodirregex = './[0-9]\{4\}/[0-9]\{2\}/[0-9]\{2\}/'; 
+													*/
+	var $ignore_tag  = array('iMovie','FaceTime');	// Tags to ignore from photos.
+	var $sortorder = 'DESC';						// Sort order of the photos for the csv (ASC or DESC)
 	var $maybe_meme_level = 1;						/* Which level of maybe_meme should we filter at? The higher the number the more 
 														likely it is a meme/junk image. Values can be any integer. Current code
 														ends up assigning values between about -2 and +2.
@@ -54,19 +75,6 @@ class Fastback {
 		'make_streamable',							    
 	);
 
-	// Internal variables. These are also editable, but you probably don't need to.
-	// Proceed with caution.
-	var $_process_limit = 100;						// How many records should we process at once?
-	var $_upsert_limit = 10000;						// Max number of SQL statements to do per upsert
-	var $_sql;										// The sqlite object
-	var $_sql_counter = 0;							// How many sql_connect calls do we have? Every function can sql_connect and sql_disconnect without closing the handle on someone else.
-	var $_sqlite_timeout = 60;						// Wait timeout for a db connection. Value in seconds.
-	var $_vipsthumbnail;							// Path to vips binary
-	var $_ffmpeg;									// Path to ffmpeg binary
-	var $_gzip;										// Generate gzipped csv
-	var $_convert;									// Path to ImageMagick binary
-	var $_jpegoptim;								// Path to jpegoptim
-	var $_thumbsize = "256x256";					// Thumbnail size. Must be square.
 	var $_crontimeout = 120;						/* How long to let cron run for in seconds. External calls don't count, so for thumbs and exif wall time may be longer
 													   If this is to short some cron jobs may not record any finished work. See also $_process_limit and $_upsert_limit.
 													*/
@@ -75,11 +83,32 @@ class Fastback {
 													   We don't want to use all processes as it will make the server unresponsive.
 													   We will set it to CEIL(nproc/4) in cron() to allow some parallell processing.
 													 */
-	var $_max_age_diff_csv = 10 * 60;				/* If the csv file is newer than the CSV, there might be new data available. But
-													   we don't want to regenerate the csv on every request while cron is running. This max
-													   age will make sure that we stay fresh, but not TOO fresh.
-													*/
-					
+
+	/*
+	 * ffmpeg -i photobase/$original_file $this->_ffmpeg_streamable -threads $this->_ffmpeg_streamable_threads cache/$streamable_output_file
+	 * Defatul command derived from examples here: https://gist.github.com/jaydenseric/220c785d6289bcfd7366
+	 */
+	var $_ffmpeg_streamable = ' -c:v libx264 -pix_fmt yuv420p -profile:v baseline -level 3.0 -crf 22 -maxrate 2M -bufsize 4M -preset medium -vf "scale=\'min(1024,iw)\':-2" -c:a aac -strict experimental -movflags +faststart';
+	var $_ffmpeg_streamable_threads = 'auto';		// auto uses 0 (optimal) for CLI, 1 for web requests
+	var $_process_limit = 100;						// How many records should we process at once?
+	var $_upsert_limit = 10000;						// Max number of SQL statements to do per upsert
+
+	/*
+	 * Processing tools
+	 */
+	var $_vipsthumbnail;							// Path to vips binary
+	var $_ffmpeg;									// Path to ffmpeg binary
+	var $_gzip;										// Generate gzipped csv
+	var $_convert;									// Path to ImageMagick binary
+	var $_jpegoptim;								// Path to jpegoptim
+
+	/*
+	 * Internal variables, not reall meant to be messed with
+	 */
+	var $_sql;										// The sqlite object
+	var $_sql_counter = 0;							// How many sql_connect calls do we have? Every function can sql_connect and sql_disconnect without closing the handle on someone else.
+	var $_sqlite_timeout = 60;						// Wait timeout for a db connection. Value in seconds.
+				
 
 	/*
 	 * These are internal variables you probably shouldn't try to change
@@ -117,13 +146,7 @@ class Fastback {
 	 * Defaults should be sane. Other things can be overridden in index.php
 	 */
 	public function __construct() {
-		$this->photourl = $this->util_base_url();
-		$this->csvfile = $this->filecache . '/fastback.csv';
-
-		if (php_sapi_name() !== 'cli') {
-			// Dothis after cli handling so that cli error log still goes to stdout
-			ini_set('error_log', $this->filecache . '/fastback.log'); 
-		}
+		$this->siteurl = $this->util_base_url();
 
 		// This will only log if debug is enabled
 		$this->log("Debug enabled");
@@ -135,6 +158,10 @@ class Fastback {
 	 * This function exits.
 	 */
 	public function run() {
+		// Ensure trailing slashes
+		$this->photobase = rtrim($this->photobase,'/') . '/';
+		$this->filecache = rtrim($this->filecache,'/') . '/';
+
 		if ( !is_dir($this->filecache) ) {
 			@mkdir($this->filecache,0750,TRUE);
 			if ( !is_dir($this->filecache) ) {
@@ -145,7 +172,14 @@ class Fastback {
 			touch($this->filecache . '/index.php');
 		}
 
-		$this->csvfile = $this->filecache . '/fastback.csv';
+		// Someone changed filecache but not the csv file. Update it.
+		if ( $this->filecache != __DIR__ . '/cache/' && $this->csvfile == __DIR__ . '/cache/fastback.csv' ) {
+			$this->csvfile = $this->filecache . 'fastback.csv';
+		}
+
+		if ( $this->filecache != __DIR__ . '/cache/' && $this->fastback_log == __DIR__ . '/cache/fastback.log' ) {
+			$this->fastback_log = $this->filecache . 'fastback.log';
+		}
 
 		// CLI stuff doesn't need auth
 		if (php_sapi_name() === 'cli') {
@@ -153,7 +187,7 @@ class Fastback {
 			exit();
 		} else  {
 			// Dothis after cli handling so that cli error log still goes to stdout
-			ini_set('error_log', $this->filecache . '/fastback.log'); 
+			ini_set('error_log', $this->fastback_log);
 		}
 
 		// PWA stuff doesn't need auth
@@ -201,7 +235,7 @@ class Fastback {
 	/**
 	 * Log a message through error_log if debug is true
 	 */
-	public function log($msg) {
+	private function log($msg) {
 		if ( $this->debug ) {
 			error_log($msg);
 		}
@@ -492,7 +526,7 @@ class Fastback {
 			$mime = 'text/plain';
 		}
 
-		if ( $mime == 'application/gzip' ) {
+		if ( $mime == 'application/gzip' && file_exists(str_replace('.gz','',$file)) ) {
 			header("Content-Encoding: gzip");
 			$mime = mime_content_type(str_replace('.gz','',$file));
 		}
@@ -514,7 +548,7 @@ class Fastback {
 	/**
 	 * Generate the HTML for the application
 	 */
-	public function send_html() {
+	private function send_html() {
 		$html = '<!doctype html>
 			<html lang="en">
 			<head>
@@ -604,14 +638,14 @@ class Fastback {
 
 		$html .= '<script>
 			fastback = new Fastback({
-				csvurl: "' . $this->util_base_url() . '?csv=get&ts=' . $csvmtime . '",
-				fastbackurl: "' . $this->util_base_url() . $base_script . '",
+				csvurl: "' . $this->siteurl . '?csv=get&ts=' . $csvmtime . '",
+				fastbackurl: "' . $this->siteurl . $base_script . '",
 				photocount: ' . $this->sql_query_single("SELECT COUNT(*) FROM fastback") . ',
 				basemap: ' . $this->basemap . '
 		});';
 
 		$html .= 'if("serviceWorker" in navigator) {
-			navigator.serviceWorker.register("?pwa=sw", { scope: "' . $this->util_base_url() . '" });
+			navigator.serviceWorker.register("?pwa=sw", { scope: "' . $this->siteurl . '" });
 		}';
 
 		$html .= '</script>';
@@ -623,7 +657,7 @@ class Fastback {
 	/**
 	 * Send, creating if needed, the CSV file of all the photos
 	 */
-	public function send_csv() {
+	private function send_csv() {
 		if ( !file_exists($this->csvfile ) ) {
 			$wrote = $this->util_make_csv(true);
 
@@ -645,7 +679,7 @@ class Fastback {
 	/**
 	 * Handle publicly sharable link
 	 */
-	public function send_share() {
+	private function send_share() {
 		if ( empty($_GET['share']) ) {
 			return false;
 		}
@@ -678,7 +712,7 @@ class Fastback {
 	/**
 	 * Proxy a file type which is not supported by the browser.
 	 */
-	public function send_proxy() {
+	private function send_proxy() {
 		if ( !($file = $this->util_file_is_ok($_GET['proxy']) ) ) {
 			die();
 		}
@@ -692,7 +726,7 @@ class Fastback {
 			if ( !empty($this->_convert) ) {
 				header("Content-Type: image/jpeg");
 				header("Content-Disposition: inline; filename=\"" . basename($file) . ".jpg\"");
-				$cmd = $this->_convert . ' ' . escapeshellarg($this->photobase . '/' . $file) . ' JPG:-';
+				$cmd = $this->_convert . ' ' . escapeshellarg($this->photobase . $file) . ' JPG:-';
 				passthru($cmd);
 				exit();
 			} else {
@@ -701,14 +735,14 @@ class Fastback {
 				exit();
 			}
 		} else {
-			if ( file_exists($this->filecache . '/' . $file . '.mp4') ) {
+			if ( file_exists($this->filecache . $file . '.mp4') ) {
 				header("Content-Type: video/mp4");
 				header("Content-Disposition: inline; filename=\"" . basename($file) . ".mp4\"" );
-				header("Content-Length: ".filesize($this->filecache . '/' . $file . '.mp4'));
-				header("Last-Modified: " . filemtime($this->filecache . '/' . $file . '.mp4'));
+				header("Content-Length: ".filesize($this->filecache . $file . '.mp4'));
+				header("Last-Modified: " . filemtime($this->filecache . $file . '.mp4'));
 				header('Cache-Control: max-age=86400');
-				header('Etag: ' . md5_file($this->filecache . '/' . $file . '.mp4'));
-				readfile($this->filecache . '/' . $file . '.mp4');
+				header('Etag: ' . md5_file($this->filecache . $file . '.mp4'));
+				readfile($this->filecache . $file . '.mp4');
 				exit();
 			} else {
 				header("Location: ?download=$file");
@@ -721,7 +755,7 @@ class Fastback {
 	 *
 	 * Dies if file not in database or not on disk
 	 */
-	public function send_download() {
+	private function send_download() {
 		if ( !$file = $this->util_file_is_ok($_GET['download']) ) {
 			die();
 		}
@@ -736,16 +770,16 @@ class Fastback {
 	 *
 	 * Dies if file not in database or not on disk
 	 */
-	public function send_thumbnail() {
+	private function send_thumbnail() {
 		$thumbnailfile = $this->_make_a_thumb($_GET['thumbnail'],false,true);
 
 		if ( empty($thumbnailfile) ) {
 			$this->log("Couldn't find thumbnail for '''{$_GET['thumbnail']}''', sending full sized!!!");
 			// I know this breaks video thumbs, but if a user is just getting set up I want something to still work for them
 			// This at least gets them images for now
-			$thumbnailfile = $this->photobase . '/' . $this->util_file_is_ok($_GET['thumbnail']);
+			$thumbnailfile = $this->photobase . $this->util_file_is_ok($_GET['thumbnail']);
 		} else {
-			$thumbnailfile = $this->filecache . '/' . $thumbnailfile;
+			$thumbnailfile = $this->filecache . $thumbnailfile;
 		}
 
 		$this->util_readfile($thumbnailfile);
@@ -757,9 +791,9 @@ class Fastback {
 	 *
 	 * The purpose of the PWA is to provide client side caching and to run the cron task in the background.
 	 */
-	public function send_pwa() {
+	private function send_pwa() {
 		if ( $_GET['pwa'] == 'manifest' ) {
-			$base_url = $this->util_base_url();
+			$base_url = $this->siteurl;
 			$manifest = array(
 				'id' => $base_url,
 				'name' => 'Fastback',
@@ -795,8 +829,7 @@ class Fastback {
 			header("Content-Transfer-Encoding: Binary");
 			header("Content-Disposition: inline; filename=\"fastback-sw.js\"");
 			$sw = file_get_contents(__DIR__ . '/js/fastback-sw.js');
-			$sw = str_replace('SW_FASTBACK_BASEURL',$this->util_base_url(),$sw);
-			$sw = str_replace('SW_FASTBACK_PHOTOURL',$this->photourl,$sw);
+			$sw = str_replace('SW_FASTBACK_BASEURL',$this->siteurl,$sw);
 			$sw = str_replace('SW_FASTBACK_TS',filemtime(__DIR__ . '/js/fastback-sw.js'),$sw);
 			print($sw);
 			exit();
@@ -819,7 +852,7 @@ class Fastback {
 			<link rel="stylesheet" href="fastback/css/fastback.css?ts=' . ($this->debug ? 'debug' : filemtime(__DIR__ . '/css/fastback.css')) . '">
 			</head>';
 
-			$html .= '<body><div id="offline"><p>If you\'re seeing this, then ' . $this->util_base_url() . ' isn\'t accessable. Are you offline?? </p><p>The site could also be down, blocked for some reason, or the site could be an IPV6 site and you\'re on an IPV4 only network.</p></div>';
+			$html .= '<body><div id="offline"><p>If you\'re seeing this, then ' . $this->siteurl . ' isn\'t accessable. Are you offline?? </p><p>The site could also be down, blocked for some reason, or the site could be an IPV6 site and you\'re on an IPV4 only network.</p></div>';
 
 			$html .= '<script>
 
@@ -829,7 +862,7 @@ class Fastback {
 				},10000);
 
 				if("serviceWorker" in navigator) {
-					navigator.serviceWorker.register("' . $this->util_base_url() . '?pwa=sw", { scope: "' . $this->util_base_url() . '" });
+					navigator.serviceWorker.register("' . $this->siteurl . '?pwa=sw", { scope: "' . $this->siteurl . '" });
 				}';
 
 			$html .= '</script>';
@@ -847,7 +880,7 @@ class Fastback {
 	 *
 	 * Flagged files are hidden the next time make_csv is run
 	 */
-	public function action_flag_photo(){
+	private function action_flag_photo(){
 		if (!empty($this->canflag) && !empty($_SESSION['user']) && in_array($_SESSION['user'],$this->canflag)){
 			$file = SQLite3::escapeString($_GET['flag']);
 			$row = $this->sql_query_single("UPDATE fastback SET flagged=1 WHERE file='$file' RETURNING file,flagged",true);
@@ -864,7 +897,7 @@ class Fastback {
 	/**
 	 * Connect to sqlite, setting $this->sql
 	 */
-	public function sql_connect(){
+	private function sql_connect(){
 		$this->_sql_counter++;
 		if ( isset($this->_sql) ) {
 			return $this->_sql;
@@ -888,7 +921,7 @@ class Fastback {
 	/**
 	 * Initialize the database
 	 */
-	public function sql_setup_db() {
+	private function sql_setup_db() {
 		$q_create_meta = "CREATE TABLE IF NOT EXISTS cron ( 
 			job VARCHAR(255) PRIMARY KEY, 
 			updated INTEGER,
@@ -926,7 +959,7 @@ class Fastback {
 	 *
 	 * Log the last 5 error messages.
 	 */
-	public function sql_disconnect(){
+	private function sql_disconnect(){
 		$this->_sql_counter--;
 
 		if ($this->_sql_counter < 0) {
@@ -969,11 +1002,30 @@ class Fastback {
 	/**
 	 * Do an upsert to reserve some items from the queue in a consistant way. 
 	 * The queue is used on the cli when forking multiple processes to process a request.
+	 * We will process media in the same order as we would put them into the CSV, this makes 
+	 * it so someone who is simply scroling down has the highest liklihod of having thumbnails etc.
 	 */
 	private function sql_get_queue($where) {
 		$this->sql_connect();
 		$this->_sql->query("UPDATE fastback SET _util=NULL WHERE _util='RESERVED-" . getmypid() . "'");
-		$this->_sql->query("UPDATE fastback SET _util='RESERVED-" . getmypid() . "' WHERE _util IS NULL AND (" . $where . ") ORDER BY file DESC LIMIT {$this->_process_limit}");
+		$query = "UPDATE fastback 
+			SET _util='RESERVED-" . getmypid() . "' 
+			WHERE 
+				_util IS NULL
+				AND file != \"\"
+				AND flagged IS NOT TRUE 
+				AND ($where) 
+			ORDER BY 
+			COALESCE(CAST(STRFTIME('%s',sorttime) AS INTEGER),mtime) {$this->sortorder},
+			file {$this->sortorder} 
+			LIMIT {$this->_process_limit}";
+		$this->_sql->query($query);
+
+		$err = $this->_sql->lastErrorMsg();
+		if ( $err != "1" && $err != "not an error") {
+			$this->log("SQL error: $err");
+			$this->log($query);
+		}
 
 		$query = "SELECT * FROM fastback WHERE _util='RESERVED-" . getmypid() . "'";
 		$res = $this->_sql->query($query);
@@ -991,7 +1043,7 @@ class Fastback {
 	/*
 	 * Update a bunch of rows at once using a CASE WHEN statement
 	 */
-	public function sql_update_case_when($update_q,$ar,$else,$escape_val = False) {
+	private function sql_update_case_when($update_q,$ar,$else,$escape_val = False) {
 		if ( empty($ar) ) {
 			return;
 		}
@@ -1058,7 +1110,7 @@ class Fastback {
 	 *
 	 * It could also be run from the command line.
 	 */
-	public function cron() {
+	private function cron() {
 
 		if ( !empty($_GET['cron']) && $_GET['cron'] == 'status' ) {
 			return $this->cron_status();
@@ -1074,7 +1126,6 @@ class Fastback {
 			header("Content-Encoding: none");
 			header("Content-Type: application/json");
 			set_time_limit($this->_crontimeout);
-		} else {
 		}
 
 		register_shutdown_function(function(){
@@ -1087,7 +1138,8 @@ class Fastback {
 
 		$cron_status = array();
 
-		$this->sql_query_single("UPDATE cron SET due_to_run=1,owner=NULL WHERE updated < " . (time() - $this->_cron_min_interval * 60)); // Everything can run at least hourly. 
+		// Everything can run at least every _cron_min_interval minutes. 
+		$this->sql_query_single("UPDATE cron SET due_to_run=1 WHERE updated < " . (time() - $this->_cron_min_interval * 60)); 
 
 		/*
 		 * Get the current cron status
@@ -1119,7 +1171,7 @@ class Fastback {
 					continue;
 				}
 
-				if ( !$cron_status[$job]['due_to_run'] ) {
+				if ( !empty($cron_status[$job]['last_completed']) && !$cron_status[$job]['due_to_run'] ) {
 					continue;
 				}
 
@@ -1152,6 +1204,7 @@ class Fastback {
 			@fastcgi_finish_request();
 		}
 
+		$this->cron_status();
 		$this->log("Cron Queue is: " . implode(', ',$jobs_to_run));
 		foreach($jobs_to_run as $job) {
 			$this->log("Running job $job");
@@ -1166,7 +1219,7 @@ class Fastback {
 	 *
 	 * Because we are reading from the file system this must complete 100% or not at all. We don't have a good way to crawl only part of the fs at the moment.
 	 */
-	public function cron_find_new_files() {
+	private function cron_find_new_files() {
 		$this->sql_update_cron_status('find_new_files');
 
 		$lastmod = '19000102';
@@ -1254,7 +1307,7 @@ class Fastback {
 	/**
 	 * This task will delete rows from the database for any files which were deleted from disk.
 	 */
-	public function cron_remove_deleted() {
+	private function cron_remove_deleted() {
 		$this->sql_update_cron_status('remove_deleted');
 		chdir($this->photobase);
 
@@ -1282,10 +1335,10 @@ class Fastback {
 	 * This is the child function that gets forked to make thumbnails
 	 *
 	 */
-	public function cron_make_thumbs() {
+	private function cron_make_thumbs() {
 		$this->sql_update_cron_status('make_thumbs');
 		do {
-			$queue = $this->sql_get_queue("flagged IS NOT TRUE AND thumbnail IS NULL AND file != ''");
+			$queue = $this->sql_get_queue("thumbnail IS NULL");
 
 			$made_thumbs = array();
 			$flag_these = array();
@@ -1294,7 +1347,7 @@ class Fastback {
 				$thumbnailfile = $this->_make_a_thumb($file,true);
 
 				// If we've got the file, we're good
-				if ( file_exists($this->filecache . '/' . $thumbnailfile) ) {
+				if ( file_exists($this->filecache . $thumbnailfile) ) {
 					$made_thumbs[$file] = $thumbnailfile;
 				} else {
 					$flag_these[] = $file;
@@ -1324,7 +1377,7 @@ class Fastback {
 	private function _make_a_thumb($file,$skip_db_write=false,$print_if_not_write = false){
 		// Find original file
 		$thumbnailfile = $this->sql_query_single("SELECT thumbnail FROM fastback WHERE file='" . SQLite3::escapeString($file) . "'");
-		if ( !empty($thumbnailfile) && file_exists($this->filecache . '/' . $thumbnailfile) ) {
+		if ( !empty($thumbnailfile) && file_exists($this->filecache . $thumbnailfile) ) {
 			// If it exists, we're golden
 			return $thumbnailfile;
 		}
@@ -1336,7 +1389,7 @@ class Fastback {
 		$thumbnailfile = ltrim($file,'./') . '.webp';
 
 		// Quick exit if thumb exists. Should be the default case
-		if ( file_exists($this->filecache . '/' . $thumbnailfile) ) {
+		if ( file_exists($this->filecache . $thumbnailfile) ) {
 			if ( !$skip_db_write ) {
 				$this->sql_query_single("UPDATE fastback SET thumbnail='" . SQLite3::escapeString($thumbnailfile) . "' WHERE file='" . SQLite3::escapeString($file) . "'");
 			}
@@ -1353,7 +1406,7 @@ class Fastback {
 		}
 
 		// Cachedir might exist, make sure we have our subdir
-		$dirname = dirname($this->filecache . '/' . $thumbnailfile);
+		$dirname = dirname($this->filecache . $thumbnailfile);
 		if (!file_exists($dirname) ){
 			@mkdir($dirname,0750,TRUE);
 			if ( !is_dir($dirname) ) {
@@ -1399,12 +1452,12 @@ class Fastback {
 			return false;
 		}
 
-		if ( !file_exists( $this->filecache . '/' . $thumbnailfile ) ) {
+		if ( !file_exists( $this->filecache . $thumbnailfile ) ) {
 			return false;
 		}
 
 		if ( !empty($this->_jpegoptim) ) {
-			$shellthumb = escapeshellarg($this->filecache . '/' . $thumbnailfile);
+			$shellthumb = escapeshellarg($this->filecache . $thumbnailfile);
 			$cmd = "jpegoptim --strip-all --strip-exif --strip-iptc $shellthumb";
 			$res = `$cmd`;
 		}
@@ -1424,16 +1477,16 @@ class Fastback {
 	 * @print_to_stdout If true then we print headers and image and exit
 	 */
 	private function _make_image_thumb($file,$thumbnailfile,$print_to_stdout = false) {
-		if ( file_exists($this->filecache . '/' . $thumbnailfile) ) {
+		if ( file_exists($this->filecache . $thumbnailfile) ) {
 			if ( $print_to_stdout ) {
-				$this->util_readfile($this->filecache . '/' . $thumbnailfile);
+				$this->util_readfile($this->filecache . $thumbnailfile);
 				exit();
 			}
 			return $thumbnailfile;
 		}
 
-		$shellfile = escapeshellarg($this->photobase . '/' . $file);
-		$shellthumb = escapeshellarg($this->filecache . '/' . $thumbnailfile);
+		$shellfile = escapeshellarg($this->photobase . $file);
+		$shellthumb = escapeshellarg($this->filecache . $thumbnailfile);
 
 		if ( !isset($this->_vipsthumbnail) ) { $this->_vipsthumbnail = trim(`which vipsthumbnail`); }
 		if (!empty($this->_vipsthumbnail) ) {
@@ -1446,16 +1499,16 @@ class Fastback {
 
 			if ( $print_to_stdout ) {
 				header("Content-Type: image/webp");
-				header("Last-Modified: " . filemtime($this-> photobase . '/' . $file));
+				header("Last-Modified: " . filemtime($this-> photobase . $file));
 				header('Cache-Control: max-age=86400');
-				header('Etag: ' . md5_file($this->photobase . '/' . $file));
+				header('Etag: ' . md5_file($this->photobase . $file));
 				passthru($cmd);
 				exit();
 			} else {
 				$res = `$cmd`;
 			}
 
-			if ( file_exists($this->filecache . '/' . $thumbnailfile) ) {
+			if ( file_exists($this->filecache . $thumbnailfile) ) {
 				return $thumbnailfile;
 			}
 		}
@@ -1472,9 +1525,9 @@ class Fastback {
 
 			if ( $print_to_stdout ) {
 				header("Content-Type: image/webp");
-				header("Last-Modified: " . filemtime($this->photobase . '/' . $file));
+				header("Last-Modified: " . filemtime($this->photobase . $file));
 				header('Cache-Control: max-age=86400');
-				header('Etag: ' . md5_file($this->photobase . '/' . $file));
+				header('Etag: ' . md5_file($this->photobase . $file));
 				passthru($cmd);
 				exit();
 			} else {
@@ -1489,16 +1542,16 @@ class Fastback {
 		// looks like vips didn't work
 		if (extension_loaded('gd') || function_exists('gd_info')) {
 			try {
-					$image_info = getimagesize($this->photobase . '/' . $file);
+					$image_info = getimagesize($this->photobase . $file);
 					switch($image_info[2]){
 					case IMAGETYPE_JPEG:
-						$img = imagecreatefromjpeg($this->photobase . '/' . $file);
+						$img = imagecreatefromjpeg($this->photobase . $file);
 						break;
 					case IMAGETYPE_GIF:
-						$img = imagecreatefromgif($this->photobase . '/' . $file);
+						$img = imagecreatefromgif($this->photobase . $file);
 						break;
 					case IMAGETYPE_PNG:
-						$img = imagecreatefrompng($this->photobase . '/' . $file);
+						$img = imagecreatefrompng($this->photobase . $file);
 						break;
 					default:
 						$img = FALSE;
@@ -1528,18 +1581,18 @@ class Fastback {
 						imagecopyresampled($tmpimg, $img, 0, 0, $srcx, $srcy, $newwidth, $newheight, $width, $height );
 						if ( $print_to_stdout ) {
 							header("Content-Type: image/webp");
-							header("Last-Modified: " . filemtime($this->photobase . '/' . $file));
+							header("Last-Modified: " . filemtime($this->photobase . $file));
 							header('Cache-Control: max-age=86400');
-							header('Etag: ' . md5_file($this->photobase . '/' . $file));
+							header('Etag: ' . md5_file($this->photobase . $file));
 							imagewebp($tmpimg);
 						} else {
-							imagewebp($tmpimg, $this->filecache . '/' . $thumbnailfile);
+							imagewebp($tmpimg, $this->filecache . $thumbnailfile);
 						}
 					} else {
 						$this->log("Tried GD, but image was not png/jpg/gif");
 					}
 
-					if(file_exists($this->filecache . '/' . $thumbnailfile)){
+					if(file_exists($this->filecache . $thumbnailfile)){
 						return $thumbnailfile;
 					}   
 				} catch (Exception $e){
@@ -1555,10 +1608,10 @@ class Fastback {
 	/**
 	 * Make videos that are suitable for streaming. Thanks, ffmpeg!
 	 */
-	public function cron_make_streamable() {
+	private function cron_make_streamable() {
 		$this->sql_update_cron_status('make_streamable');
 		do {
-			$queue = $this->sql_get_queue("flagged IS NOT TRUE AND streamable_made IS NULL AND isvideo AND file != ''");
+			$queue = $this->sql_get_queue("streamable_made IS NULL AND isvideo");
 
 			foreach($queue as $file => $row) {
 				// If we've got the file, we're good
@@ -1581,29 +1634,32 @@ class Fastback {
 	 */
 	private function _make_video_streamable($file,$videothumb) {
 
-		if ( file_exists($this->filecache . '/' . $videothumb) ) {
+		if ( file_exists($this->filecache . $videothumb) ) {
 			return true;
 		}
 
-		if ( !file_exists($this->photobase . '/' . $file) ) {
+		if ( !file_exists($this->photobase . $file) ) {
 			return false;
 		}
 
 		if ( !isset($this->_ffmpeg) ) { $this->_ffmpeg = trim(`which ffmpeg`); }
 
-		$shellfile = escapeshellarg($this->photobase . '/' . $file);
-		$shellthumb = escapeshellarg($this->filecache . '/' . $videothumb);
-		$shellthumbvid = escapeshellarg($this->filecache . '/' . $videothumb);
+		$shellfile = escapeshellarg($this->photobase . $file);
+		$shellthumb = escapeshellarg($this->filecache . $videothumb);
+		$shellthumbvid = escapeshellarg($this->filecache . $videothumb);
 
-		// https://gist.github.com/jaydenseric/220c785d6289bcfd7366
 		// find . -regextype sed -iregex  ".*.\(mp4\|mov\|avi\|dv\|3gp\|mpeg\|mpg\|ogg\|vob\|webm\).webp" -delete
 		// If we're running from CLI, then use as much processor as possible since the user has direct control over the process & utilization
 		// Otherwise, run on 1 thread so we don't use more than what the PHP process was going ot use anyways.
-		$threads = php_sapi_name() == 'cli' ? 0 : 1;
-		$cmd = $this->_ffmpeg . ' -i ' . $shellfile . ' -c:v libx264 -pix_fmt yuv420p -profile:v baseline -level 3.0 -crf 22 -maxrate 2M -bufsize 4M -preset medium -vf "scale=\'min(1024,iw)\':-2" -c:a aac -strict experimental -movflags +faststart  -threads ' . $threads . ' ' . $shellthumbvid . ' 2>/dev/null';
+		if ( $this->_ffmpeg_streamable_threads == 'auto' ) {
+			$threads = php_sapi_name() == 'cli' ? 0 : 1;
+		} else {
+			$threads = $this->_ffmpeg_streamable_threads;
+		}
+		$cmd = $this->_ffmpeg . ' -i ' . $shellfile . ' ' . $this->_ffmpeg_streamable . ' -threads ' . $threads . ' ' . $shellthumbvid . ' 2>/dev/null';
 		$res = `$cmd`;
 
-		if ( file_exists($this->filecache . '/' . $videothumb) ) {
+		if ( file_exists($this->filecache . $videothumb) ) {
 			return true;
 		} 
 
@@ -1618,9 +1674,9 @@ class Fastback {
 	 * @print_to_stdout If true then we print headers and image and exit
 	 */
 	private function _make_video_thumb($file,$thumbnailfile,$print_to_stdout) {
-			if ( file_exists($this->filecache . '/' . $thumbnailfile) ) {
+			if ( file_exists($this->filecache . $thumbnailfile) ) {
 				if ( $print_to_stdout ) {
-					$this->util_readfile($this->filecache . '/' . $thumbnailfile);
+					$this->util_readfile($this->filecache . $thumbnailfile);
 					exit();
 				}
 				return $thumbnailfile;
@@ -1632,10 +1688,10 @@ class Fastback {
 				return false;
 			}
 
-			$shellfile = escapeshellarg($this->photobase . '/' . $file);
-			$shellthumb = escapeshellarg($this->filecache . '/' . $thumbnailfile);
+			$shellfile = escapeshellarg($this->photobase . $file);
+			$shellthumb = escapeshellarg($this->filecache . $thumbnailfile);
 			$tmpthumb = $this->filecache . '/tmpthumb_' . getmypid() . '.webp';
-			$shellthumbvid = escapeshellarg($this->filecache . '/' . $thumbnailfile . '.mp4');
+			$shellthumbvid = escapeshellarg($this->filecache . $thumbnailfile . '.mp4');
 			$tmpshellthumb = escapeshellarg($tmpthumb);
 			$formatflags = "";
 
@@ -1676,11 +1732,11 @@ class Fastback {
 					$res = `$cmd`;
 					unlink($tmpthumb);
 				} else {
-					@rename($tmpthumb,$this->filecache . '/' . $thumbnailfile);
+					@rename($tmpthumb,$this->filecache . $thumbnailfile);
 				}
 			}
 
-			if ( file_exists($this->filecache . '/' . $thumbnailfile) ) {
+			if ( file_exists($this->filecache . $thumbnailfile) ) {
 				return $thumbnailfile;
 			}
 
@@ -1800,7 +1856,7 @@ class Fastback {
 	/**
 	 * Get exif data for files that don't have it.
 	 */
-	public function cron_get_exif() {
+	private function cron_get_exif() {
 		$this->sql_update_cron_status('get_exif');
 		$cmd = "exiftool -stay_open True  -@ -";
 		$cmdargs = [];
@@ -1871,7 +1927,7 @@ class Fastback {
 	/**
 	 * Look for rows that haven't had their exif data processed and handle them.
 	 */
-	public function cron_process_exif() {
+	private function cron_process_exif() {
 		$this->sql_update_cron_status('process_exif');
 		do {
 			$queue = $this->sql_get_queue("
@@ -1909,10 +1965,8 @@ class Fastback {
 				maybe_meme IS NULL
 				)
 			) AND (
-				file != \"\"
-				AND exif IS NOT NULL
+				exif IS NOT NULL
 				AND exif != \"\"
-				AND flagged IS NOT TRUE
 			)");
 
 			$this->_sql->query("BEGIN DEFERRED");
@@ -1964,7 +2018,7 @@ class Fastback {
 	/**
 	 * Clear all locks. These can happen if jobs timeout or something.
 	 */
-	public function cron_clear_locks() {
+	private function cron_clear_locks() {
 		$this->sql_update_cron_status('clear_locks');
 		// Clear reserved things once in a while.  May cause some double processing but also makes it possible to reprocess things that didn't work the first time.
 		$this->sql_query_single("UPDATE fastback SET _util=NULL WHERE _util LIKE 'RESERVED%'");
@@ -1976,7 +2030,7 @@ class Fastback {
 	/**
 	 * Update the CSV file
 	 */
-	public function cron_make_csv(){
+	private function cron_make_csv(){
 		$this->sql_update_cron_status('make_csv');
 		// A change to the sqlite or this file could indicate the need for a new csv. 
 		// With the cron jobs being busy in the sqlite file that's not completely accurate, but it's the best easy thing.
@@ -1992,19 +2046,16 @@ class Fastback {
 	/**
 	 * Get the status of the cron jobs
 	 */
-	public function cron_status($return = false) {
-		$this->sql_connect();
-		$q_get_cron = "SELECT job,updated,last_completed,due_to_run,owner FROM cron";
-		$res = $this->_sql->query($q_get_cron);
+	private function cron_status($return = false) {
 
 		$cron_status = array();
 
 		$template = array(
 			'updated' => NULL,
-			'last_completed' => NULL,
-			'due_to_run' => NULL,
-			'owner' => NULL,
+			'last_completed' => 'Task not complete',
+			'due_to_run' => 'Disabled',
 			'status' => 'Pending first run',
+			'percent_complete' => '0%',
 		);
 
 		$allowed_actions = array('find_new_files','make_csv','process_exif','get_exif','make_thumbs','make_streamable','remove_deleted','clear_locks','status');
@@ -2012,6 +2063,19 @@ class Fastback {
 			$cron_status[$job] = $template;
 			$cron_status[$job]['job'] = $job;
 		}
+
+		$this->sql_connect();
+		$q_get_cron = "SELECT 
+			job,
+			datetime(updated,'unixepoch') AS updated,
+			datetime(last_completed,'unixepoch') AS last_completed,
+			CASE 
+				WHEN owner IS NOT NULL THEN 'Currently Running'
+				WHEN due_to_run THEN 'Queued to run' 
+				ELSE 'Not queued' 
+			END AS status 
+			FROM cron";
+		$res = $this->_sql->query($q_get_cron);
 
 		if ( empty($res) ) {
 			$cron_status['queue'] = array();
@@ -2022,70 +2086,28 @@ class Fastback {
 		while($row = $res->fetchArray(SQLITE3_ASSOC)){
 			$cron_status[$row['job']] = array_merge($cron_status[$row['job']],$row);
 		}
-
 		foreach($cron_status as $job => $details){
-			$cron_status[$job]['updated'] = is_null($cron_status[$job]['updated']) ? 'Never' : date('Y-m-d H:i:s',$cron_status[$job]['updated']);
-			$cron_status[$job]['last_completed'] = is_null($cron_status[$job]['last_completed']) ? 'Task not complete' : date('Y-m-d H:i:s',$cron_status[$job]['last_completed']);
-			$cron_status[$job]['due_to_run'] = $cron_status[$job]['due_to_run'] == '1' ? 'Queued to run' : 'Not queued';
 			if ( !in_array($job,$this->cronjobs) ) {
-				$cron_status[$job]['due_to_run'] = 'Disabled';
+				$cron_status[$job]['status'] = 'Disabled';
 			}
-
-			if ( !empty($cron_status[$job]['owner']) ) {
-				$cron_status[$job]['due_to_run'] = 'Currently Running';
-			}
-
-			$cron_status[$job]['status'] = $cron_status[$job]['due_to_run'];
-			unset($cron_status[$job]['owner']);
-			unset($cron_status[$job]['due_to_run']);
 		}
 
-		if ( array_key_exists('find_new_files',$cron_status) ) {
-			$cron_status['find_new_files']['percent_complete'] = ($cron_status['find_new_files']['last_completed'] ? '100%' : '0%');
-		}
-
-		if ( array_key_exists('find_new_files',$cron_status) ) {
-			$cron_status['make_csv']['percent_complete'] = ($cron_status['make_csv']['last_completed'] ? '100%' : '0%');
-		}
-
+		// Calculate how much of each job is done.
 		$total_rows = $this->sql_query_single("SELECT COUNT(*) FROM fastback");
 		$exif_rows = $this->sql_query_single("SELECT COUNT(*) FROM fastback WHERE flagged or exif IS NOT NULL");
 		$video_rows = $this->sql_query_single("SELECT COUNT(*) FROM fastback WHERE isvideo=1 AND flagged IS NULL");
 
-		if ( $total_rows > 0 ) {
-			if ( array_key_exists('get_exif',$cron_status) ) {
-				$cron_status['get_exif']['percent_complete'] = round( $exif_rows / $total_rows,4) * 100 . '%';
-			}
-			if ( array_key_exists('make_thumbs',$cron_status) ) {
-				$cron_status['make_thumbs']['percent_complete'] = round($this->sql_query_single("SELECT COUNT(*) FROM FASTBACK WHERE flagged OR thumbnail IS NOT NULL") / $total_rows,4) * 100 . '%';
-			}
-			if ( array_key_exists('make_streamable',$cron_status) ) {
-				$cron_status['make_streamable']['percent_complete'] .= round($this->sql_query_single("SELECT COUNT(*) FROM FASTBACK WHERE streamable_made=1") / $video_rows,4) * 100 . '%';
-			}
-		} else {
-			if ( array_key_exists('get_exif',$cron_status) ) {
-				$cron_status['get_exif']['percent_complete'] = '0%';
-			}
-			if ( array_key_exists('make_thumbs',$cron_status) ) {
-				$cron_status['make_thumbs']['percent_complete'] = '0%';
-			}
+		$cron_status['get_exif']['percent_complete'] = $total_rows > 0 ? round( $exif_rows / $total_rows,4) * 100 . '%' : '0%';
+		$cron_status['make_thumbs']['percent_complete'] = $total_rows > 0 ? round($this->sql_query_single("SELECT COUNT(*) FROM FASTBACK WHERE flagged OR thumbnail IS NOT NULL") / $total_rows,4) * 100 . '%' : '0%';
+		$cron_status['make_streamable']['percent_complete'] = $video_rows > 0 ? round($this->sql_query_single("SELECT COUNT(*) FROM FASTBACK WHERE streamable_made=1") / $video_rows,4) * 100 . '%' : '0%';
+		$cron_status['process_exif']['percent_complete'] = $exif_rows > 0 ? round($this->sql_query_single("SELECT COUNT(*) FROM FASTBACK WHERE flagged OR sorttime IS NOT NULL") / $exif_rows,4) * 100 . '%' : '0%';
+
+		$all_or_nothing = array('remove_deleted','find_new_files','make_csv','clear_locks','status');
+		foreach($all_or_nothing as $job_name) {
+			$cron_status[$job_name]['percent_complete'] = ($cron_status[$job_name]['last_completed'] == 'Task not complete' ? '0%' : '100%');
 		}
 
-		if ( $exif_rows > 0 ) {
-			if ( array_key_exists('process_exif',$cron_status) ) {
-				$cron_status['process_exif']['percent_complete'] = round($this->sql_query_single("SELECT COUNT(*) FROM FASTBACK WHERE flagged OR sorttime IS NOT NULL") / $exif_rows,4) * 100 . '%';
-			}
-		} else {
-			if ( array_key_exists('process_exif',$cron_status) ) {
-				$cron_status['process_exif']['percent_complete'] =  '0%';
-			}
-		}
-
-		if ( array_key_exists('remove_deleted',$cron_status) ) {
-			$cron_status['remove_deleted']['percent_complete'] = ($cron_status['remove_deleted']['last_completed'] == 'Task not complete' ? '0%' : '100%');
-		}
-		
-		unset($cron_status['clear_locks']);
+		$this->sql_update_cron_status('status',true);
 
 		if (!$return) {
 
