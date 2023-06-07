@@ -473,3 +473,7 @@ performance include:
  * (Security) All photo and thumbnail access is routed through Fastback so that permissions can be checked
 
 Bug reports and feature requests are welcome. Clean, well documented, pull requests are even more welcome. 
+
+
+
+![Fastback Logo](img/icons/256.png)
