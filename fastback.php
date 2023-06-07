@@ -1376,6 +1376,7 @@ class Fastback {
 	 */
 	private function _make_a_thumb($file,$skip_db_write=false,$print_if_not_write = false){
 		// Find original file
+		$this->log("Making thumb for $file");
 		$thumbnailfile = $this->sql_query_single("SELECT thumbnail FROM fastback WHERE file='" . SQLite3::escapeString($file) . "'");
 		if ( !empty($thumbnailfile) && file_exists($this->filecache . $thumbnailfile) ) {
 			// If it exists, we're golden
@@ -1699,6 +1700,10 @@ class Fastback {
 				$tmpshellthumb = '-';
 				$formatflags = ' -f image2 -c png ';
 			}
+
+			// https://superuser.com/questions/650291/how-to-get-video-duration-in-seconds
+			// Should we make animated thumbs for short/live videos?
+			// approximte duration in seconds = ffmpeg -i ./03/30/IMG_1757.MOV 2>&1 | grep Duration | cut -d ' ' -f 4 | sed s/,// | sed 's@\..*@@g' | awk '{ split($1, A, ":"); split(A[3], B, "."); print 3600*A[1] + 60*A[2] + B[1] }'
 
 			$timestamps = array('10',2,'00:00:00');
 

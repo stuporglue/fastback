@@ -398,6 +398,13 @@ Troubleshooting
     command line to use more cores and to create the streamable copies faster.
     `php index.php make_streamable`.
 
+* The make_streamable or make_thumbs cron job never reaches 100% completion
+    - Some videos or images may be corrupt or have other issues which prevent a streamable
+    version or thumbnail from being made. You can reset these by running 
+    `UPDATE fastback SET streamable_made=NULL WHERE streamable_made=0;` (for videos)
+    or in the
+    database.
+
 License, Credits and Thanks
 ----------------------------
 This project is under the [LICENSE.txt](MIT License). 
