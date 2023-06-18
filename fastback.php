@@ -108,6 +108,7 @@ class Fastback {
 	var $_sql;										// The sqlite object
 	var $_sql_counter = 0;							// How many sql_connect calls do we have? Every function can sql_connect and sql_disconnect without closing the handle on someone else.
 	var $_sqlite_timeout = 60;						// Wait timeout for a db connection. Value in seconds.
+	var $_direct_cron_func_call = false;			// Set to true if a cron util function is called directly from the command line. May alter behavior of a function, such as find_new_files which will use a modified_since time of 0
 				
 
 	/*
@@ -278,6 +279,7 @@ class Fastback {
 			if ( in_array($argv[1],$allowed_actions) ) {
 				$this->log("Running {$argv[1]}");
 				$func = "cron_" . $argv[1];
+				$this->_direct_cron_func_call = true;
 				$this->$func();
 			} else {
 				print("You're using fastback photo gallery\n");
@@ -1228,6 +1230,10 @@ class Fastback {
 			$lastmod = date('Ymd',$res);
 		}
 
+		if ( $this->_direct_cron_func_call ) {
+			$lastmod = 0;
+		}
+
 		$origdir = getcwd();
 		chdir($this->photobase);
 		$filetypes = implode('\|',array_merge($this->supported_photo_types, $this->supported_video_types));
@@ -1327,6 +1333,10 @@ class Fastback {
 		}
 		$this->_sql->query("COMMIT");
 		$this->sql_query_single("UPDATE cron SET due_to_run=1 WHERE job = 'make_csv'"); // If we removed files, we need a new csv
+
+		$this->sql_update_cron_status('find_new_files',false,-1); 
+		$this->sql_query_single("UPDATE cron SET due_to_run=1 WHERE job = 'find_new_files'"); // If we delted files, maybe there are new ones too? 
+
 		$this->sql_disconnect();
 		$this->sql_update_cron_status('remove_deleted',true);
 	}
