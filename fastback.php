@@ -640,7 +640,7 @@ class Fastback {
 
 		$html .= '<script>
 			fastback = new Fastback({
-				csvurl: "' . $this->siteurl . '?csv=get&ts=' . $csvmtime . '",
+				csvurl: "?csv=get&ts=' . $csvmtime . '",
 				fastbackurl: "' . $this->siteurl . $base_script . '",
 				photocount: ' . $this->sql_query_single("SELECT COUNT(*) FROM fastback") . ',
 				basemap: ' . $this->basemap . '
@@ -950,7 +950,8 @@ class Fastback {
 			_util TEXT,
 			maybe_meme INT,
 			share_key VARCHAR(32),
-			tags TEXT
+			tags TEXT,
+			live TEXT
 		)";
 
 		$res = $this->_sql->query($q_create_files);
@@ -1454,7 +1455,7 @@ class Fastback {
 			$res = $this->_make_video_thumb($file,$thumbnailfile,$print_to_stdout);
 
 			if ( $res === false ) {
-				$this->log("Unable to make a thumbnail for $file");
+				$this->log("Unable to make a thumbnail for video $file");
 				return false;
 			}
 		} else {
@@ -1522,6 +1523,7 @@ class Fastback {
 			if ( file_exists($this->filecache . $thumbnailfile) ) {
 				return $thumbnailfile;
 			}
+			$this->log(__FILE__ . ":" . __LINE__ . ' -- ' .  microtime () . "\n"); 
 		}
 
 		if ( !isset($this->_convert) ) { $this->_convert = trim(`which convert`); }
@@ -1532,7 +1534,6 @@ class Fastback {
 			}
 
 			$cmd = "{$this->_convert} -define jpeg:size={$this->_thumbsize} $shellfile  -thumbnail {$this->_thumbsize}^ -gravity center -extent $this->_thumbsize $shellthumb 2>/dev/null";
-			$res = `$cmd`;
 
 			if ( $print_to_stdout ) {
 				header("Content-Type: image/webp");
@@ -1554,19 +1555,23 @@ class Fastback {
 		if (extension_loaded('gd') || function_exists('gd_info')) {
 			try {
 					$image_info = getimagesize($this->photobase . $file);
-					switch($image_info[2]){
-					case IMAGETYPE_JPEG:
-						$img = imagecreatefromjpeg($this->photobase . $file);
-						break;
-					case IMAGETYPE_GIF:
-						$img = imagecreatefromgif($this->photobase . $file);
-						break;
-					case IMAGETYPE_PNG:
-						$img = imagecreatefrompng($this->photobase . $file);
-						break;
-					default:
+					if ( count($image_info) < 2 ) {
 						$img = FALSE;
-					}   
+					} else {
+						switch($image_info[2]){
+						case IMAGETYPE_JPEG:
+							$img = imagecreatefromjpeg($this->photobase . $file);
+							break;
+						case IMAGETYPE_GIF:
+							$img = imagecreatefromgif($this->photobase . $file);
+							break;
+						case IMAGETYPE_PNG:
+							$img = imagecreatefrompng($this->photobase . $file);
+							break;
+						default:
+							$img = FALSE;
+						}   
+					}
 
 					if ( $img ) {
 						$thumbsize = preg_replace('/x.*/','',$this->_thumbsize);
@@ -1656,7 +1661,6 @@ class Fastback {
 		if ( !isset($this->_ffmpeg) ) { $this->_ffmpeg = trim(`which ffmpeg`); }
 
 		$shellfile = escapeshellarg($this->photobase . $file);
-		$shellthumb = escapeshellarg($this->filecache . $videothumb);
 		$shellthumbvid = escapeshellarg($this->filecache . $videothumb);
 
 		// find . -regextype sed -iregex  ".*.\(mp4\|mov\|avi\|dv\|3gp\|mpeg\|mpg\|ogg\|vob\|webm\).webp" -delete
@@ -1667,10 +1671,11 @@ class Fastback {
 		} else {
 			$threads = $this->_ffmpeg_streamable_threads;
 		}
-		$cmd = $this->_ffmpeg . ' -i ' . $shellfile . ' ' . $this->_ffmpeg_streamable . ' -threads ' . $threads . ' ' . $shellthumbvid . ' 2>/dev/null';
+		$cmd = $this->_ffmpeg . ' -i ' . $shellfile . ' ' . $this->_ffmpeg_streamable . ' -threads ' . $threads . ' ' . $shellthumbvid . ' 4>/dev/null; echo $?';
 		$res = `$cmd`;
+		$res = trim($res);
 
-		if ( file_exists($this->filecache . $videothumb) ) {
+		if ( file_exists($this->filecache . $videothumb) && $res == '0' ) {
 			return true;
 		} 
 
@@ -1713,39 +1718,50 @@ class Fastback {
 
 			// https://superuser.com/questions/650291/how-to-get-video-duration-in-seconds
 			// Should we make animated thumbs for short/live videos?
+
+			// Get duration
 			// approximte duration in seconds = ffmpeg -i ./03/30/IMG_1757.MOV 2>&1 | grep Duration | cut -d ' ' -f 4 | sed s/,// | sed 's@\..*@@g' | awk '{ split($1, A, ":"); split(A[3], B, "."); print 3600*A[1] + 60*A[2] + B[1] }'
+			// If under 5 seconds, 
+			//  If accompanying photo (on disk? in the db?) 
+			//		Make boomerang
+			//	Else
+			//		Make normal at 0 		
+			// Else
+			//	Make thumb based on length:
+	
 
 			$timestamps = array('10',2,'00:00:00');
 
 			foreach($timestamps as $timestamp) {
 
-				$cmd = "{$this->_ffmpeg} -y -ss $timestamp -i $shellfile -vframes 1 $formatflags $tmpshellthumb 2> /dev/null";
+				$cmd = "{$this->_ffmpeg} -y -ss $timestamp -i $shellfile -vframes 1 $formatflags $tmpshellthumb 2> /dev/null; echo $?";
 				$res = `$cmd`;
+				$res = trim($res);
 
-				if ( $print_to_stdout && $res !== NULL) {
+				if ( $print_to_stdout && $res == '0') {
 					header("Content-Type: image/webp");
 					header("Last-Modified: " . filemtime($file));
 					header('Cache-Control: max-age=86400');
 					header('Etag: ' . md5_file($file));
-					print($res); // Can't use passthru because we need to check if the command worked
+					readfile($file);
 					exit();
 				}
 
-				if ( file_exists($tmpthumb) && filesize($tmpthumb) > 0 ) {
+				if ( file_exists($tmpthumb) && filesize($tmpthumb) > 0 && $res == '0') {
 					break;
 				}
 			}
 
 			clearstatcache();
 
-			if ( file_exists($tmpthumb) && filesize($tmpthumb) !== 0) {
+			if ( file_exists($tmpthumb) && filesize($tmpthumb) !== 0 && $res == '0') {
 
 				if ( !isset($this->_vipsthumbnail) ) { $this->_vipsthumbnail = trim(`which vipsthumbnail`); }
 
 				if ( !empty($this->_vipsthumbnail) ) {
 					$cmd = "$this->_vipsthumbnail --size={$this->_thumbsize} --output=$shellthumb --smartcrop=attention $tmpshellthumb";
 					$res = `$cmd`;
-					unlink($tmpthumb);
+					// unlink($tmpthumb);
 				} else {
 					@rename($tmpthumb,$this->filecache . $thumbnailfile);
 				}
@@ -1819,6 +1835,11 @@ class Fastback {
 		// Having a camera name is good
 		if ( array_key_exists('Model',$exif) ) {
 			$maybe_meme -= 1;
+		} else 
+
+		// Having no FileModifyDate is sketchy
+		if ( !array_key_exists('FileModifyDate',$exif) ) {
+			$maybe_meme += 1;
 		} else 
 
 		// Not having a camera is extra bad in 2020s
