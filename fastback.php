@@ -479,17 +479,20 @@ class Fastback {
 		}
 
 		$q = "SELECT 
-			file,
-			isvideo,
-			COALESCE(CAST(STRFTIME('%s',sorttime) AS INTEGER),mtime) AS filemtime,
-			ROUND(lat,5) AS lat,
-			ROUND(lon,5) AS lon,
-			tags
-			FROM fastback 
+			fb.file AS file,
+			fb.isvideo AS isvideo,
+			COALESCE(CAST(STRFTIME('%s',fb.sorttime) AS INTEGER),fb.mtime) AS filemtime,
+			ROUND(fb.lat,5) AS lat,
+			ROUND(fb.lon,5) AS lon,
+            fb.tags AS tags,
+            livevid.file AS live
+            FROM fastback fb
+            LEFT JOIN fastback livevid ON (fb.content_identifier = livevid.content_identifier AND fb.file <> livevid.file AND livevid.content_identifier <> '-1')
 			WHERE 
-			flagged IS NOT TRUE 
-			AND (maybe_meme <= '" . SQLite3::escapeString($this->maybe_meme_level) . "' OR maybe_meme IS NULL) -- Only display non-memes. Threshold of 1 seems pretty ok
-			ORDER BY filemtime " . $this->sortorder . ",file " . $this->sortorder;
+			fb.flagged IS NOT TRUE 
+			AND (fb.maybe_meme <= '" . SQLite3::escapeString($this->maybe_meme_level) . "' OR fb.maybe_meme IS NULL) -- Only display non-memes. Threshold of 1 seems pretty ok
+			AND (livevid.file IS NULL OR livevid.isvideo) -- Only keep photo to video mappings
+			ORDER BY filemtime " . $this->sortorder . ",fb.file " . $this->sortorder;
 		$res = $this->_sql->query($q);
 
 		$printed = false;
@@ -959,7 +962,7 @@ class Fastback {
 			maybe_meme INT,
 			share_key VARCHAR(32),
 			tags TEXT,
-			live TEXT
+			content_identifier TEXT
 		)";
 
 		$res = $this->_sql->query($q_create_files);
@@ -1788,7 +1791,7 @@ class Fastback {
 	/**
 	 * Try to give an image a score of how likely it is to be a meme, based on some factors that seemed relavant for my photos.
 	 */
-	private function _process_exif_meme($exif,$file) {
+	private function _process_exif_meme($exif,$file,$row) {
 		$bad_filetypes = array('MacOS','WEBP');
 		$bad_mimetypes = array('application/unknown','image/png');
 		$maybe_meme = 0;
@@ -1920,6 +1923,21 @@ class Fastback {
 	}
 
 	/**
+	 * Try to associate a live file with the other piece of media.
+	 *
+	 * Currently only tested with Apple photos which use the ContentIdentifier exif tag.
+	 */
+
+	private function _process_exif_live($exif,$file,$row) {
+
+		if ( array_key_exists('ContentIdentifier',$exif) ) {
+			return array('content_identifier' => $exif['ContentIdentifier']);
+		}
+
+		return array('content_identifier' => '-1');
+	}
+
+	/**
 	 * Get exif data for files that don't have it.
 	 */
 	private function cron_get_exif() {
@@ -2008,15 +2026,16 @@ class Fastback {
 				-- Needs tags
 				(tags IS NULL
 				AND (
-					exif GLOB '*\"Subject\"*'
-				OR exif GLOB '*\"XPKeywords\"*'
-				OR exif GLOB '*\"Categories\"*'
-				OR exif GLOB '*\"TagsList\"*'
-				OR exif GLOB '*\"LastKeywordXMP\"*'
-				OR exif GLOB '*\"HierarchicalSubject\"*'
-				OR exif GLOB '*\"CatalogSets\"*'
-				OR exif GLOB '*\"Keywords\"*'
-				)) 
+						exif GLOB '*\"Subject\"*'
+						OR exif GLOB '*\"XPKeywords\"*'
+						OR exif GLOB '*\"Categories\"*'
+						OR exif GLOB '*\"TagsList\"*'
+						OR exif GLOB '*\"LastKeywordXMP\"*'
+						OR exif GLOB '*\"HierarchicalSubject\"*'
+						OR exif GLOB '*\"CatalogSets\"*'
+						OR exif GLOB '*\"Keywords\"*'
+					)
+				) 
 				OR
 				-- Needs Geo
 				(
@@ -2035,6 +2054,12 @@ class Fastback {
 				-- Meme status is null
 				(
 				maybe_meme IS NULL
+				)
+				OR
+				-- Live status is null
+				(
+					content_identifier IS NULL
+					AND (exif->'ContentIdentifier' IS NOT NULL)	
 				)
 			) AND (
 				exif IS NOT NULL
@@ -2066,12 +2091,13 @@ class Fastback {
 					continue;
 				}
 
-				$tags = $this->_process_exif_tags($exif,$row['file']);
-				$geo = $this->_process_exif_geo($exif,$row['file']);
-				$time = $this->_process_exif_time($exif,$row['file']);
-				$meme = $this->_process_exif_meme($exif,$row['file']);
+				$tags = $this->_process_exif_tags($exif,$row['file'],$row);
+				$geo = $this->_process_exif_geo($exif,$row['file'],$row);
+				$time = $this->_process_exif_time($exif,$row['file'],$row);
+				$meme = $this->_process_exif_meme($exif,$row['file'],$row);
+				$live = $this->_process_exif_live($exif,$row['file'],$row);
 
-				$found_vals = array_merge($tags,$geo,$time,$meme);
+				$found_vals = array_merge($tags,$geo,$time,$meme,$live);
 				$q = "UPDATE fastback SET ";
 				foreach($found_vals as $k => $v){
 					if ( is_null($v) ) {
@@ -2131,7 +2157,7 @@ class Fastback {
 		$exif = json_decode($exif_json,true);
 		var_dump($exif);
 		$this->verbose = true;
-		$ret = $this->_process_exif_meme($exif,$file);
+		$ret = $this->_process_exif_meme($exif,$file,array());
 		print("Final score is {$ret['maybe_meme']}\n");
 	}
 
@@ -2346,7 +2372,7 @@ class Fastback {
 	/*
 	 * Find people tags in exif data
 	 */
-	private function _process_exif_tags($exif,$file){
+	private function _process_exif_tags($exif,$file,$row){
 			$simple = array('Subject','XPKeywords','Keywords','RegionName','RegionPersonDisplayName','CatalogSets','HierarchicalSubject','LastKeywordXMP','TagsList');
 
 			// Clean up values
@@ -2380,7 +2406,7 @@ class Fastback {
 	/**
 	 * Find geo info in exif data
 	 */
-	private function _process_exif_geo($exif,$file) {
+	private function _process_exif_geo($exif,$file,$row) {
 		$xyz = array('lat' => NULL, 'lon' => NULL, 'elev' => 0);
 		if ( array_key_exists('GPSPosition',$exif) ) {
 			// eg "38.741200 N, 90.642800 W"
@@ -2494,7 +2520,7 @@ class Fastback {
 	/**
 	 * Find file time in exif data
 	 */
-	private function _process_exif_time($exif,$file) {
+	private function _process_exif_time($exif,$file,$row) {
 		$tags_to_consider = array(
 			"DateTimeOriginal",
 			"CreateDate",
