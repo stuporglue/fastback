@@ -25,6 +25,7 @@ class Fastback {
 	 * Debug mode or no?
 	 */
 	var $debug = 0;									// Are we debugging
+	var $verbose = 0;								// Are we extra verbose
 
 	/* 
 	 * User Experience
@@ -242,6 +243,12 @@ class Fastback {
 		}
 	}
 
+	private function verbose($msg){
+		if ($this->verbose ) {
+			error_log($msg);
+		}
+	}
+
 	/**
 	 * Process args and run what we should
 	 */
@@ -274,7 +281,7 @@ class Fastback {
 				return;
 			} 
 
-			$allowed_actions = array('find_new_files','make_csv','process_exif','get_exif','make_thumbs','make_streamable','remove_deleted','clear_locks','status');
+			$allowed_actions = array('find_new_files','make_csv','process_exif','get_exif','make_thumbs','make_streamable','remove_deleted','clear_locks','status','debug_meme_score');
 
 			if ( in_array($argv[1],$allowed_actions) ) {
 				$this->log("Running {$argv[1]}");
@@ -486,6 +493,7 @@ class Fastback {
 		$res = $this->_sql->query($q);
 
 		$printed = false;
+		$this->log("Trying to write to CSV file $this->csvfile\n");
 		$fh = fopen($this->csvfile,'w');
 		if ( $fh === false  && $print_if_not_write) {
 			$printed = true;
@@ -1232,6 +1240,7 @@ class Fastback {
 		}
 
 		if ( $this->_direct_cron_func_call ) {
+			$this->log("Finding all files, not just newer than $lastmod, since we were called directly");
 			$lastmod = 0;
 		}
 
@@ -1317,6 +1326,7 @@ class Fastback {
 	private function cron_remove_deleted() {
 		$this->sql_update_cron_status('remove_deleted');
 		chdir($this->photobase);
+		$this->log("Checking for files now missing from $this->photobase\n");
 
 		$count = $this->sql_query_single("SELECT COUNT(*) AS c FROM fastback");
 		$this->log("Checking for missing files: Found {$count} files in the database");
@@ -1324,11 +1334,11 @@ class Fastback {
 		$this->sql_connect();
 		$q = "SELECT file FROM fastback";
 		$res = $this->_sql->query($q);
-		$not_found = array();
 
 		$this->_sql->query("BEGIN");
 		while($row = $res->fetchArray(SQLITE3_ASSOC)){
 			if ( !file_exists($row['file'])){
+				$this->log("{$row['file']} NOT FOUND! Removing!\n");	
 				$this->_sql->query("DELETE FROM fastback WHERE file='" . SQLite3::escapeString($row['file']) . "'");
 			}
 		}
@@ -1555,7 +1565,8 @@ class Fastback {
 		if (extension_loaded('gd') || function_exists('gd_info')) {
 			try {
 					$image_info = getimagesize($this->photobase . $file);
-					if ( count($image_info) < 2 ) {
+
+					if ( !is_countable($image_info) || count($image_info) < 2 ) {
 						$img = FALSE;
 					} else {
 						switch($image_info[2]){
@@ -1788,19 +1799,23 @@ class Fastback {
 		// "MIMEType":"application\/unknown"
 		if ( array_key_exists('FileType',$exif) && in_array($exif['FileType'],$bad_filetypes) ) {
 			$maybe_meme += 1;
+			$this->verbose("Has FileType but it's bad (+1)\n");
 		}
 
 		if ( array_key_exists('MIMEType',$exif) && in_array($exif['MIMEType'],$bad_mimetypes) ) {
 			$maybe_meme += 1;
+			$this->verbose("Has MIMEType but it's bad (+1)\n");
 		} else if ( array_key_exists('MIMEType',$exif) && preg_match('/video/',$exif['MIMEType']) ) {
 			// Most videos aren't memes
 			$maybe_meme -= 1;
+			$this->verbose("Most videos aren't memes (-1)\n");
 		}
 
 		//  Error present
 		// "Error":"File format error"
 		if ( array_key_exists('Error',$exif) ) {
 			$maybe_meme +=1 ;
+			$this->verbose("File format error (+1)\n");
 		}
 
 		// If there's no real exif info
@@ -1812,6 +1827,7 @@ class Fastback {
 		if ( array_key_exists('ImageHeight',$exif) && array_key_exists('ImageWidth',$exif) ) {
 			if ( $exif['ImageHeight'] * $exif['ImageWidth'] <  804864 ) { // Less than 1024x768
 				$maybe_meme += 1;
+				$this->verbose("ImageHeight * ImageWidth is small (+1)\n");
 			}
 		}
 
@@ -1820,70 +1836,84 @@ class Fastback {
 		},ARRAY_FILTER_USE_KEY);
 		if ( count($exif_keys) <= 4 ) {
 			$maybe_meme += 1;
+			$this->verbose("Very few exif keys (+1) \n");
 		}
 
 		if ( count($exif_keys) === 1 ) {
 			$maybe_meme -= 1;
-
+			$this->verbose("Exactly 1 exif key (-1) \n");
 		}
 
 		// Having GPS is good
 		if ( array_key_exists('GPSLatitude',$exif) ) {
 			$maybe_meme -= 1;
+			$this->verbose("Has GPS (-1) \n");
 		}
 
 		// Having a camera name is good
 		if ( array_key_exists('Model',$exif) ) {
 			$maybe_meme -= 1;
+			$this->verbose("Has camera model (-1) \n");
 		} else 
 
 		// Having no FileModifyDate is sketchy
 		if ( !array_key_exists('FileModifyDate',$exif) ) {
 			$maybe_meme += 1;
+			$this->verbose("Has no FileModifyDate (+1) \n");
 		} else 
 
 		// Not having a camera is extra bad in 2020s
 		if ( preg_match('/^202[0-9]:/',$exif['FileModifyDate']) && !array_key_exists('Model',$exif) ) {
 			$maybe_meme += 1;
+			$this->verbose("Has no camera model AND is newer than 2020 (+1) \n");
 		}
 
 		// Scanners might put a comment in 
 		if ( array_key_exists('Comment',$exif) ) {
 			$maybe_meme -= 1;
+			$this->verbose("Scanner software likes to add comments (-1) \n");
 		}
 
 		// Scanners might put a comment in 
 		if ( array_key_exists('UserComment',$exif) && $exif['UserComment'] == 'Screenshot' ) {
 			$maybe_meme += 2;
+			$this->verbose("UserComment with Screenshot is probably a screenshot (+2) \n");
 		}
 
 		if ( array_key_exists('Software',$exif) && $exif['Software'] == 'Instagram' ) {
 			$maybe_meme += 1;
+			$this->verbose("From Insta? Probably a meme (+1) \n");
 		}
 
 		if ( array_key_exists('ThumbnailImage',$exif) ) {
 			$maybe_meme -= 1;
+			$this->verbose("Has a built-in Thumbnail (-1) \n");
 		}
 
 		if ( array_key_exists('ProfileDescriptionML',$exif) ) {
 			$maybe_meme -= 1;
+			$this->verbose("Has ProfileDescriptionML (-1) \n");
 		}
 
 		// Luminance seems to maybe be something in some of our photos that aren't memes?
 		if ( array_key_exists('Luminance',$exif) ) {
 			$maybe_meme -= 1;
+			$this->verbose("Has Luminance (-1) \n");
 		}
 
 		if ( array_key_exists('TagsList',$exif) ) {
 			$maybe_meme -= 1;
+			$this->verbose("Has TagsList (-1) \n");
 		}
 
 		if ( array_key_exists('Subject',$exif) ) {
 			$maybe_meme -= 1;
+			$this->verbose("Has Subject (-1) \n");
 		}
 
 		if ( array_key_exists('DeviceMfgDesc',$exif) ) {
 			$maybe_meme -= 1;
+			$this->verbose("Has DeviceMfgDesc (-1) \n");
 		}
 
 		return array('maybe_meme' => $maybe_meme);
@@ -1940,7 +1970,13 @@ class Fastback {
 			$found_exif = array();
 
 			foreach($queue as $file => $row) {
+				$this->log("Reading exif for $file");
 				$cur_exif = $this->_read_one_exif($file,$cmdargs,$proc,$pipes);
+
+				if ( array_key_exists('Error',$cur_exif) ) {
+					error_log("For $file read_one_exif got {$cur_exif['Error']}\n");
+				}
+
 				$found_exif[$file] = json_encode($cur_exif,JSON_FORCE_OBJECT | JSON_PARTIAL_OUTPUT_ON_ERROR);
 			}
 
@@ -2013,6 +2049,7 @@ class Fastback {
 
 			foreach($queue as $row) {
 				$exif = json_decode($row['exif'],true);
+				$this->log("Processing exif for {$row['file']}");
 
 				if ( !is_array($exif) ) {
 					ob_start();
@@ -2022,7 +2059,11 @@ class Fastback {
 					ob_end_clean();
 					$this->log("Non array exif value found");
 					$this->log($row['exif']);
-					die("ASDF");
+				}
+
+				if ( array_key_exists('Error',$exif) ) {
+					$this->log("Couldn't process exif for {$row['file']} because {$exif['Error']}");
+					continue;
 				}
 
 				$tags = $this->_process_exif_tags($exif,$row['file']);
@@ -2077,6 +2118,21 @@ class Fastback {
 				$this->sql_update_cron_status('make_csv',true);
 			}
 		}
+	}
+
+	/**
+	 * Debug the meme scoring
+	 */
+	private function cron_debug_meme_score() {
+		global $argv;
+		$file = $argv[2];
+		$file_safe = SQLite3::escapeString($file);
+		$exif_json = $this->sql_query_single("SELECT exif FROM fastback WHERE file='$file_safe'");
+		$exif = json_decode($exif_json,true);
+		var_dump($exif);
+		$this->verbose = true;
+		$ret = $this->_process_exif_meme($exif,$file);
+		print("Final score is {$ret['maybe_meme']}\n");
 	}
 
 	/**
