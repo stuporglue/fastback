@@ -150,6 +150,24 @@ body #photos .photorow {
 	transition: opacity 0.05s ease-in-out;
 }
 
+.tn.live:before {
+	display: block;
+	position: absolute;
+	z-index: 1;
+	width: 40%;
+	height: 40%;
+	max-width: 50px;
+	max-height: 50px;
+	content: " ";
+	background-image: url('../img/live.png');
+	background-size: 50% 50%;
+	background-repeat: no-repeat;
+	background-position: top left; 
+	margin-left: 2px;
+	margin-top: 2px;
+	font-size: 10em;
+	opacity: 0.6;
+}
 
 .tn.vid:before {
 	display: block;
@@ -380,11 +398,15 @@ body.map #thumb, body.map #tagwindow {
 	display: none;
 }
 
+#thumblive[data-live=""] {
+	display: none;
+}
+
 .thumbctrl {
 	width: 150px;
 	max-width: 30%;
-	/* 80 pix gets it above the video controls on desktop */
-	height: calc(100% - 80px);
+	/* 100 pix gets it above the video controls on desktop */
+	height: calc(100% - 100px);
 	position: absolute;
 	top: 0;
 	opacity: 0;

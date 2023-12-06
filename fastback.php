@@ -606,9 +606,10 @@ class Fastback {
 			if (!empty($this->canflag) && !empty($_SESSION['user']) && in_array($_SESSION['user'],$this->canflag)){
 				$html .= '<div class="fakelink" id="thumbflag" data-file="#">🚩</div>';
 			}
-			$html .= '<div class="fakelink" id="thumbgeo" data-coordinates="">🌐</div>
-			<div id="thumbinfo"></div>
-			</div>';
+			$html .= '<div class="fakelink" id="thumbgeo" data-coordinates="">🌐</div>';
+			$html .= '<div class="fakelink" id="thumblive" data-showing_live="0" data-live=""><img src="fastback/img/live.png"></div>';
+			$html .= '<div id="thumbinfo"></div>';
+			$html .= '</div>';
 		$html .= '</div>';
 
 		$html .= '<div id="tagwindow" class="disabled">

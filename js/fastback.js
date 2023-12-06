@@ -24,6 +24,7 @@ Fastback = class Fastback {
 		jQuery(document).on('keydown',this.handle_keydown.bind(this));
 		jQuery('#thumbgeo').on('click',this.handle_geoclick.bind(this));
 		jQuery('#thumbflag').on('click',this.handle_flagphoto.bind(this));
+		jQuery('#thumblive').on('click',this.handle_liveswap.bind(this));
 		jQuery('#sharelink').on('click',this.handle_shareclick.bind(this));
 		jQuery('#webshare').on('click',this.handle_shareclick.bind(this));
 		jQuery('#thumbdownload').on('click',this.handle_send_download.bind(this));
@@ -137,7 +138,8 @@ Fastback = class Fastback {
 					'date': new Date(res.data[2] * 1000),
 					'type': 'media',
 					'coordinates': (isNaN(parseFloat(res.data[4])) ? null : [parseFloat(res.data[4]),parseFloat(res.data[3])]),
-					'tags': res.data[5].split('|')
+					'tags': res.data[5].split('|'),
+					'live': res.data[6]
 				});
 
 				// Only check progress every 1000 rows
@@ -417,6 +419,15 @@ Fastback = class Fastback {
 		$.get(url).then(function(){
 			$('#thumbflag').animate({ opacity: 0.3 })
 		});
+	}
+
+	/**
+	 * Swap the static and live photos
+	 */
+	handle_liveswap(e) {
+		var photoid = jQuery('#thumb').data('curphoto');
+		var new_is_live = jQuery('#thumblive').data('showing_live') ? 0 : 1;
+		this.ui_show_fullsized(photoid,new_is_live);
 	}
 
 	/*
@@ -808,6 +819,9 @@ Fastback = class Fastback {
 				if ( p['isvideo'] ) {
 					vidclass = ' vid';
 					errimg = 'movie.webp';
+				} else if ( p['live'] ) {
+					errimg = 'picture.webp';
+					vidclass = ' live';
 				} else {
 					errimg = 'picture.webp';
 					vidclass = '';
@@ -977,15 +991,19 @@ Fastback = class Fastback {
 	 *
 	 * We assume that the correct ID has been found by now, even though photos may have scrolled or shifted in the background somehow
 	 *
+	 * @photoid the ID of the photo to show, the index of the photo in the csv array
+	 * @showlive If set to 1, and the photo has a `live` attribute, then the fullsize will show the live media instead.
+	 *
 	 * Returns false if couldn't show thumb
 	 */
-	ui_show_fullsized(photoid) {
+	ui_show_fullsized(photoid,showlive) {
 		var imghtml;
+		var showlive = showlive || 0;
 		var photo = this.orig_photos.find(function(p){return p.id == photoid && p.type == 'media';});
 		if ( photo === undefined ) {
 			return false;
 		}
-		var imgsrc = photo.file;
+		var imgsrc = showlive ? photo.live : photo.file;
 		var basename = imgsrc.replace(/.*\//,'');
 			var directlink = encodeURI(this.fastbackurl + '?download=' + imgsrc);
 
@@ -996,9 +1014,9 @@ Fastback = class Fastback {
 			}
 			var share_uri = encodeURI(this.fastbackurl + '?file=' + imgsrc + '&share=' + md5(imgsrc));
 
-			if (photo.isvideo){
+			if (showlive || photo.isvideo){
 				// the onloadedmetadata script is to make very short videos (like iOS live photos) loop but longer videos do not loop
-				imghtml = '<video id="thevideo" loop controls poster="' + encodeURI(this.fastbackurl + '?thumbnail=' +  imgsrc) + '" preload="auto" onloadedmetadata="this.duration > 5 ? this.removeAttribute(\'loop\') : false">';
+				imghtml = '<video id="thevideo" controls loop ' + (showlive ? ' ' : ' poster="' + encodeURI(this.fastbackurl + '?thumbnail=' +  imgsrc) + '"') + ' preload="auto" onloadedmetadata="this.duration > 5 ? this.removeAttribute(\'loop\') : false">';
 				// Put the proxied link, this should be a transcoded mp4 version
 				imghtml += '<source src="' + directlink + '#t=0.0001" type="video/mp4">';
 				// Also include the original as a source...just in case it works
@@ -1007,13 +1025,21 @@ Fastback = class Fastback {
 			} else {
 				imghtml = '<img src="' + directlink + '"/>';
 			}
+		jQuery('#thumbcontent').data('last_html',jQuery('#thumbcontent').html()); // Will keeping this here prevent images from unloading? 
 		jQuery('#thumbcontent').html(imghtml);
-		jQuery('#thumbinfo').html('<div id="infowrap">' + photo['file'] + '</div>');
-		jQuery('#thumbgeo').attr('data-coordinates',( photo.coordinates == null ? "" : photo.coordinates ));
+		jQuery('#thumbinfo').html('<div id="infowrap">' + (showlive ? photo.live : photo.file) + '</div>');
+		jQuery('#thumbgeo').attr('data-coordinates', (photo.coordinates == null ? "" : photo.coordinates ));
+		jQuery('#thumblive').attr('data-live',photo.live);
+		jQuery('#thumblive').data('showing_live',showlive)
 		jQuery('#thumbflag').css('opacity',1);
 		jQuery('#sharelink a').attr('href',share_uri);
 		jQuery('#thumb').data('curphoto',photo.id);
 		jQuery('#thumb').removeClass('disabled');
+		if ( showlive ) {
+			setTimeout(function(){
+				jQuery('#thevideo')[0].play();
+			},500);
+		}
 
 		return true;
 	}
