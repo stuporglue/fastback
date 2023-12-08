@@ -736,7 +736,7 @@ class Fastback {
 		if ( !$video) {
 			if ( !isset($this->_convert) ) { $this->_convert = trim(`which convert`); }
 
-			// We only try convert here because vips is just for thumbnails, and the only formats that GD supports are already supported by the browser.
+			// Vips is just for thumbnails, try imagemagick
 			if ( !empty($this->_convert) ) {
 				header("Content-Type: image/jpeg");
 				header("Content-Disposition: inline; filename=\"" . basename($file) . ".jpg\"");
@@ -1563,74 +1563,6 @@ class Fastback {
 			if ( file_exists($thumbnailfile) ) {
 				return $thumbnailfile;
 			}
-		}
-
-		// looks like vips didn't work
-		if (extension_loaded('gd') || function_exists('gd_info')) {
-			try {
-					$image_info = getimagesize($this->photobase . $file);
-
-					if ( !is_countable($image_info) || count($image_info) < 2 ) {
-						$img = FALSE;
-					} else {
-						switch($image_info[2]){
-						case IMAGETYPE_JPEG:
-							$img = imagecreatefromjpeg($this->photobase . $file);
-							break;
-						case IMAGETYPE_GIF:
-							$img = imagecreatefromgif($this->photobase . $file);
-							break;
-						case IMAGETYPE_PNG:
-							$img = imagecreatefrompng($this->photobase . $file);
-							break;
-						default:
-							$img = FALSE;
-						}   
-					}
-
-					if ( $img ) {
-						$thumbsize = preg_replace('/x.*/','',$this->_thumbsize);
-
-						$width = $image_info[0];
-						$height = $image_info[1];
-
-						if ( $height > $width ) {
-							$newwidth = $thumbsize;
-							$newheight = floor($height / ($width / $thumbsize));
-						} else if ( $width > $height ) {
-							$newheight = $thumbsize;
-							$newwidth = floor($width / ($height / $thumbsize));
-						} else {
-							$newwidth = $thumbsize;
-							$newheight = $thumbsize;
-						}
-
-						$srcy = max(0,($height / 2 - $width / 2));
-						$srcx = max(0,($width / 2 - $height / 2));
-
-						$tmpimg = imagecreatetruecolor($thumbsize, $thumbsize);
-						imagecopyresampled($tmpimg, $img, 0, 0, $srcx, $srcy, $newwidth, $newheight, $width, $height );
-						if ( $print_to_stdout ) {
-							header("Content-Type: image/webp");
-							header("Last-Modified: " . filemtime($this->photobase . $file));
-							header('Cache-Control: max-age=86400');
-							header('Etag: ' . md5_file($this->photobase . $file));
-							imagewebp($tmpimg);
-						} else {
-							imagewebp($tmpimg, $this->filecache . $thumbnailfile);
-						}
-					} else {
-						$this->log("Tried GD, but image was not png/jpg/gif");
-					}
-
-					if(file_exists($this->filecache . $thumbnailfile)){
-						return $thumbnailfile;
-					}   
-				} catch (Exception $e){
-					$this->log("Caught exception while using GD to make thumbnail");
-				}
-		} else {
-			$this->log("No GD here");
 		}
 
 		return false;
@@ -2520,6 +2452,8 @@ class Fastback {
 
 	/**
 	 * Find file time in exif data
+	 *
+	 * The tag to use will be considered in the order of $tags_to_consider
 	 */
 	private function _process_exif_time($exif,$file,$row) {
 		$tags_to_consider = array(
