@@ -59,6 +59,7 @@ class Fastback {
 														Use this regex to only consider media in YYYY/MM/DD directories
 													   $fb->photodirregex = './[0-9]\{4\}/[0-9]\{2\}/[0-9]\{2\}/'; 
 													*/
+	var $photo_order = 'date';						// 'date' or 'file'. 
 	var $ignore_tag  = array('iMovie','FaceTime');	// Tags to ignore from photos.
 	var $sortorder = 'DESC';						// Sort order of the photos for the csv (ASC or DESC)
 	var $maybe_meme_level = 1;						/* Which level of maybe_meme should we filter at? The higher the number the more 
@@ -174,22 +175,10 @@ class Fastback {
 			touch($this->filecache . '/index.php');
 		}
 
-		// Someone changed filecache but not the csv file. Update it.
-		if ( $this->filecache != __DIR__ . '/cache/' && $this->csvfile == __DIR__ . '/cache/fastback.csv' ) {
-			$this->csvfile = $this->filecache . 'fastback.csv';
-		}
-
-		if ( $this->filecache != __DIR__ . '/cache/' && $this->fastback_log == __DIR__ . '/cache/fastback.log' ) {
-			$this->fastback_log = $this->filecache . 'fastback.log';
-		}
-
 		// CLI stuff doesn't need auth
 		if (php_sapi_name() === 'cli') {
 			$this->util_handle_cli();
 			exit();
-		} else  {
-			// Dothis after cli handling so that cli error log still goes to stdout
-			ini_set('error_log', $this->fastback_log);
 		}
 
 		// PWA stuff doesn't need auth
@@ -235,10 +224,103 @@ class Fastback {
 	}
 
 	/**
+	 * Get the fastback dir
+	 */
+	public function dir(){
+		return __DIR__;
+	}
+
+	/**
+	 * Log the current config
+	 */
+	public function log_config(){
+
+		$this->log("=========FASTBACK CONFIG======");
+
+		// Which site
+		$this->log("| Site Info");
+		$this->log("|  sitetitle: $this->sitetitle");
+		$this->log("|  siteurl: $this->siteurl");
+		$this->log("|  Install directory: " . __DIR__);
+
+		// Where's stuff stored
+		$this->log("| Storage");
+		$this->log("|  photobase: $this->photobase");
+		$this->log("|  filecache: $this->filecache");
+		$this->log("|   exists: " . (file_exists($this->filecache) ? 'TRUE' : 'FALSE'));
+		$this->log("|   writable: " . (is_writable($this->filecache) ? 'TRUE' : 'FALSE'));
+		$this->log("|  sqlitefile: $this->sqlitefile");
+		$this->log("|   exists: " . (file_exists($this->sqlitefile) ? 'TRUE' : 'FALSE'));
+		$this->log("|   writable: " . (is_writable($this->sqlitefile) ? 'TRUE' : 'FALSE'));
+		$this->log("|   size: " . filesize($this->sqlitefile));
+		$this->log("|  csvfile: $this->csvfile");
+		$this->log("|   exists: " . (file_exists($this->csvfile) ? 'TRUE' : 'FALSE'));
+		$this->log("|   writable: " . (is_writable($this->csvfile) ? 'TRUE' : 'FALSE'));
+		$this->log("|   size: " . filesize($this->csvfile));
+
+		$this->log("| Users");
+		$this->log("|  user: " . implode(",",array_keys($this->user)));
+		$this->log("|  canflag: " . implode(",",$this->canflag));
+
+		// Debugging
+		$this->log("| Debugging");
+		$this->log("|  debug: $this->debug");
+		$this->log("|  verbose: $this->verbose");
+		$this->log("|  fastback_log: $this->fastback_log");
+		$this->log("|  error_log: " . ini_get("error_log"));
+		$this->log("|  PHP version: " . phpversion());
+
+		// Configuration
+		$this->log("| Configuration");
+		$this->log("|  photodirregex: $this->photodirregex");
+		$this->log("|  supported_video_types: " . implode(",",$this->supported_video_types));
+		$this->log("|  basemap: $this->basemap");
+		$this->log("|  ignore_tag: " . implode(",",$this->ignore_tag));
+		$this->log("|  sortorder: $this->sortorder");
+		$this->log("|  maybe_meme_level: $this->maybe_meme_level");
+
+		if ( $this->verbose ) {
+			if ( !isset($this->_concurrent_cronjobs) ) { $this->_concurrent_cronjobs = ceil(`nproc`/4); }
+			if ( !isset($this->_vipsthumbnail) ) { $this->_vipsthumbnail = trim(`which vipsthumbnail`); }
+			if ( !isset($this->_ffmpeg) ) { $this->_ffmpeg = trim(`which ffmpeg`); }
+			if ( !isset($this->_jpegoptim) ) { $this->_jpegoptim = trim(`which jpegoptim`); }
+			if ( !isset($this->_gzip) ) { $this->_gzip= trim(`which gzip`); }
+			if ( !isset($this->_convert) ) { $this->_convert = trim(`which convert`); }
+
+
+			$this->log("| Internals: settings");
+			$this->log("|  _thumbsize: $this->_thumbsize");
+			$this->log("|  _crontimeout: $this->_crontimeout");
+			$this->log("|  _concurrent_cronjobs: $this->_concurrent_cronjobs");
+			$this->log("|  _process_limit: $this->_process_limit");
+			$this->log("|  _upsert_limit: $this->_upsert_limit");
+			$this->log("|  _sqlite_timeout: $this->_sqlite_timeout");
+
+			$this->log("| Internals: settings");
+			$this->log("|  _sql_counter: $this->_sql_counter");
+			$this->log("|  _direct_cron_func_call: $this->_direct_cron_func_call");
+
+			$this->log("| Internals: external programs");
+			$this->log("|  _vipsthumbnail: $this->_vipsthumbnail");
+			$this->log("|  _ffmpeg: $this->_ffmpeg");
+			$this->log("|  _ffmpeg_streamable: $this->_ffmpeg_streamable");
+			$this->log("|  _ffmpeg_streamable_threads: $this->_ffmpeg_streamable_threads");
+			$this->log("|  _gzip: $this->_gzip");
+			$this->log("|  _convert: $this->_convert");
+			$this->log("|  _jpegoptim: $this->_jpegoptim");
+
+		}
+		$this->log("==============================");
+	}
+
+	/**
 	 * Log a message through error_log if debug is true
 	 */
 	private function log($msg) {
 		if ( $this->debug ) {
+			if ( php_sapi_name() !== 'cli') {
+				ini_set('error_log', $this->fastback_log);
+			}
 			error_log($msg);
 		}
 	}
@@ -254,6 +336,7 @@ class Fastback {
 	 */
 	private function util_handle_cli(){
 			global $argv;
+			ini_set('error_log','php://stderr');
 
 			pcntl_async_signals(true);
 
@@ -492,7 +575,12 @@ class Fastback {
 			fb.flagged IS NOT TRUE 
 			AND (fb.maybe_meme <= '" . SQLite3::escapeString($this->maybe_meme_level) . "' OR fb.maybe_meme IS NULL) -- Only display non-memes. Threshold of 1 seems pretty ok
 			AND (livevid.file IS NULL OR livevid.isvideo) -- Only keep photo to video mappings
-			ORDER BY filemtime " . $this->sortorder . ",fb.file " . $this->sortorder;
+		";
+		if ( $this->photo_order == "file" ) {
+			$q .= "ORDER BY fb.file " . $this->sortorder;
+		} else {
+			$q .= "ORDER BY filemtime " . $this->sortorder . ",fb.file " . $this->sortorder;
+		}
 		$res = $this->_sql->query($q);
 
 		$printed = false;
@@ -592,6 +680,7 @@ class Fastback {
 		$html .= '<div id="tagicon" class="disabled"></div>';
 		$html .= '<div id="rewindicon"></div>';
 		$html .= '<div id="calendaricon"><input readonly id="datepicker" type="text"></div>';
+		$html .= '<div id="packpickericon"><select id="pathpicker"></select></div>';
 		$html .= '<div id="exiticon" class="' . (empty($this->user) ? 'disabled' : '') . '"></div>';
 		$html .= '</div>';
 		$html .= '<div id="thumb" class="disabled">
@@ -641,7 +730,7 @@ class Fastback {
 
 		$csvmtime = "";
 		if ( $this->debug ) {
-			$csvmtime = 'debug';
+			$csvmtime = time();
 		} else if( file_exists($this->csvfile) ) {
 			$csvmtime = filemtime($this->csvfile);
 		} else if ( file_exists($this->sqlitefile )) {
@@ -655,7 +744,8 @@ class Fastback {
 				csvurl: "?csv=get&ts=' . $csvmtime . '",
 				fastbackurl: "' . $this->siteurl . $base_script . '",
 				photocount: ' . $this->sql_query_single("SELECT COUNT(*) FROM fastback") . ',
-				basemap: ' . $this->basemap . '
+				basemap: ' . $this->basemap . ',
+				photo_order: "' . ($this->photo_order == 'file' ? 'file' : 'date') . '"
 		});';
 
 		$html .= 'if("serviceWorker" in navigator) {
@@ -920,7 +1010,7 @@ class Fastback {
 		if ( !file_exists($this->sqlitefile) ) {
 			try {
 				$this->_sql = new SQLite3($this->sqlitefile);
-				$this->_sql->busyTimeout($this->_sqlite_timeout * 1001);
+				$this->_sql->busyTimeout($this->_sqlite_timeout * 1000);
 				$this->sql_setup_db();
 			} catch (Exception $e) {
 				$this->log($e->getMessage());
@@ -1147,9 +1237,7 @@ class Fastback {
 			$this->sql_query_single("UPDATE cron SET owner=NULL WHERE owner='" . getmypid() . "'");
 		});
 
-		if ( !isset($this->_concurrent_cronjobs) ) {
-			$this->_concurrent_cronjobs = ceil(`nproc`/4);
-		}
+		if ( !isset($this->_concurrent_cronjobs) ) { $this->_concurrent_cronjobs = ceil(`nproc`/4); }
 
 		$cron_status = array();
 
@@ -1255,7 +1343,7 @@ class Fastback {
 
 		$modified_files_str = `$cmd`;
 
-		if (  !is_null($modified_files_str) && strlen(trim($modified_files_str)) > 0) {
+		if (!is_null($modified_files_str) && strlen(trim($modified_files_str)) > 0) {
 			$modified_files = explode("\n",$modified_files_str);
 			$modified_files = array_filter($modified_files);
 
@@ -1265,6 +1353,7 @@ class Fastback {
 			$collect_photo = array();
 			$collect_video = array();
 			foreach($modified_files as $k => $one_file){
+				print $one_file . "\n";
 				$mtime = filemtime($one_file);
 				$pathinfo = pathinfo($one_file);
 

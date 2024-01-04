@@ -11,6 +11,7 @@ Fastback = class Fastback {
 		this.setup_setProps();
 		jQuery.extend(this,args);
 		var self = this;
+		this.paths = [];
 
 		// Set up handlers
 		jQuery('#speedslide').on('input',this.handle_speed_slide.bind(this));
@@ -66,6 +67,7 @@ Fastback = class Fastback {
 		this.active_filters = {};
 		this.dirty_filters = false;
 		this.active_tags = [];
+		this.photo_order = 'date';
 
 		// Browser supported file types - will be shown directly. 
 		// Anything not in this list will be proxied into a jpg
@@ -100,6 +102,7 @@ Fastback = class Fastback {
 		var progressbar = jQuery('#loadingprogress');
 		var lastprogress = 0;
 		var self = this;
+		var curpath;
 
 		Papa.parse(this.csvurl,{
 			download:true,
@@ -132,8 +135,14 @@ Fastback = class Fastback {
 					}
 				}
 
+				curpath = res.data[0].match(/.*\//)[0].replace(/^\.\//,'').replace(/\/$/,'');
+				if ( !self.paths.includes(curpath) && curpath !== "") {
+					self.paths.push(curpath);
+				}
+
 				self.photos.push({
 					'file': res.data[0],
+					'path': res.data[0].match(/.*\//)[0].replace(/^\.\//,'').replace(/\/$/,''),
 					'isvideo': res.data[1] == 1,
 					'date': new Date(res.data[2] * 1000),
 					'type': 'media',
@@ -177,7 +186,7 @@ Fastback = class Fastback {
 					setTimeout(self.util_cron.bind(self),1000 * 30);
 				}
 
-				self.orig_photos = self.util_add_date_blocks(self.photos);
+				self.orig_photos = self.util_add_separator_blocks(self.photos);
 				self.photos = self.orig_photos;
 
 				// These three processes can run almost concurrently off of the main thread to allow screen repainting
@@ -270,7 +279,35 @@ Fastback = class Fastback {
 			onSelect: this.handle_datepicker_change.bind(this) 
 		});
 
+		var pathhtml = '';
+		var cur_path;
+		var cur_part_parts;
+		var opt;
+		var paths_seen = [];
+		var cur_path_string;
+
+		for(var i = 0; i < this.paths.length; i++ ) {
+			cur_path = this.paths[i].split('/');
+			cur_part_parts = [];
+			while(cur_path.length > 0){
+				opt = cur_path.shift();
+				cur_part_parts.push(opt);
+				cur_path_string = cur_part_parts.join('/');
+				if ( paths_seen.indexOf(cur_path_string) !== -1 ) {
+					continue;
+				} else if ( this.paths.indexOf(cur_path_string) !== -1 ) {
+					pathhtml += '<option value="' + cur_path_string + '">' + '&emsp;'.repeat(cur_part_parts.length - 1) + (cur_part_parts.length > 1 ? '&#x21B3; ' : '' ) + opt + '</option>';
+				} else {
+					pathhtml += '<option disabled>' + '&emsp;'.repeat(cur_part_parts.length - 1) + (cur_part_parts.length > 1 ? '&#x21B3; ' : '' ) + opt + '</option>';
+				}
+				paths_seen.push(cur_path_string);
+			}
+		}
+
+		jQuery('#pathpicker').html(pathhtml);
+
 		jQuery('#calendaricon').on('click',this.handle_datepicker_toggle.bind(this));
+		jQuery('#pathpicker').on('click',this.handle_pathpicker_click.bind(this));
 		jQuery('#rewindicon').on('click',this.handle_rewind_click.bind(this));
 		jQuery('#globeicon').on('click',this.handle_globe_click.bind(this));
 		jQuery('#exiticon').on('click',this.handle_exit_click.bind(this));
@@ -676,6 +713,13 @@ Fastback = class Fastback {
 			this.ui_hide_tags();
 		}
 	}
+	
+	/*
+	 * Handle clicking the path picker
+	 */
+	handle_pathpicker_click() {
+
+	}
 
 	/*
 	 * Handle globe icon click
@@ -769,31 +813,47 @@ Fastback = class Fastback {
 	/*
 	 * Add colored date blocks to a photos array
 	 */
-	util_add_date_blocks(photos) {
+	util_add_separator_blocks(photos) {
 		var prev_date = null;
 		var cur_date;
-		for(var i = 0; i<photos.length; i++){
 
+		var prev_path = null;
+		var cur_path;
+
+		for(var i = 0; i<photos.length; i++){
 			if ( photos[i].type !== 'media' ) {
 				continue;
 			}
 
-			// cur_date = photos[i].date.getFullYear() + '-' + (photos[i].date.getMonth() + 1);
-			cur_date = photos[i].date.getFullYear() + '-' + (photos[i].date.getMonth() + 1) + '-' + (photos[i].date.getDate());
+			if ( this.photo_order == 'file' ) {
+				cur_path = photos[i].path;
 
-			if ( cur_date != prev_date ) {
-				photos.splice(i,0,{
-					'type': 'dateblock',
-					'printdate': cur_date,
-					'date': photos[i]['date']
-				});
-			}
+				if ( cur_path != prev_path) {
+					photos.splice(i,0,{
+						'type': 'pathblock',
+						'path': cur_path
+					});
+				}
+
+				prev_path = cur_path;
+			} else { // Should be the case that this.photo_order == 'date' ) {
+				cur_date = photos[i].date.getFullYear() + '-' + (photos[i].date.getMonth() + 1) + '-' + (photos[i].date.getDate());
+
+				if ( cur_date != prev_date ) {
+					photos.splice(i,0,{
+						'type': 'dateblock',
+						'printdate': cur_date,
+						'date': photos[i]['date']
+					});
+				}
+
+				prev_date = cur_date;
+			} 
 
 			if ( this.orig_photos == undefined ) {
 				photos[i].id = i;
 			}
 
-			prev_date = cur_date;
 		}
 
 		return photos;
@@ -838,6 +898,21 @@ Fastback = class Fastback {
 				cellhtml += '</div>';
 				cellhtml += '</div>';
 				return cellhtml;
+			} else if ( p['type'] == 'pathblock' ) {
+				var curpath = p.path;
+				if ( curpath = '' ) {
+					curpath = '(Home)';
+				}
+				var path_parts = curpath.split('/');
+				var cellhtml = '<div class="tn nolink" style="background-color: ' + self.palette[curpath.split('').reduce(function(e,f){e += f.charCodeAt(0); return e;},0) % self.palette.length] + ';">';
+				cellhtml += '<div class="faketable">';
+				for (var i = 0; i < path_parts.length; i++ ) {
+					cellhtml += '<div class="faketablecell">' + '&nbsp;'.repeat(i) + (i > 0 ? '&#x21B3; ' : '' ) +  path_parts[i] + '</div>';
+				}
+				cellhtml += '</div>';
+				cellhtml += '</div>';
+				return cellhtml;
+
 			}
 		}).join("");
 		var e = jQuery.parseHTML('<div class="photorow">' + html + '</div>');
@@ -954,7 +1029,7 @@ Fastback = class Fastback {
 				self.active_filters[filter]();
 			}
 
-			this.photos = this.util_add_date_blocks(this.photos);
+			this.photos = this.util_add_separator_blocks(this.photos);
 			this.ui_update_cluster();
 			this.dirty_filters = false;
 		}

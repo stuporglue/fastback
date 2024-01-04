@@ -5,6 +5,11 @@ if ( file_exists('fastback') && is_dir('fastback') ) {
 require_once('fastback.php');
 $fb = new Fastback();
 
+# Enable these for debugging!
+# $fb->debug = true;
+# ini_set("log_errors",1);
+# ini_set("error_log",$fb->dir() . '/error.log');
+
 /*
  * About the site
  */
@@ -45,6 +50,10 @@ $fb->photobase = __DIR__;
 
 // Directory regex used to find photos
 // $fb->photodirregex = './[0-9]\{4\}/[0-9]\{2\}/[0-9]\{2\}/'; 
+
+// Should photos be sorted by folder or by date? If photo exif dates are wrong (eg. scanned photos) then file might make more sense
+// $fb->photo_order = 'date';
+// $fb->photo_order = 'file'; 
 
 // What types of image files should be accepted
 // $fb->supported_photo_types[] = 'tiff';
