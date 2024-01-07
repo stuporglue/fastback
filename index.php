@@ -1,4 +1,26 @@
 <?php
+
+/**
+ * INSTRUCTIONS: 
+ *
+ * 1. Copy this index file to your web directory.
+ * 2. Set any setting overrides as needed
+ * 3. Delete the print() and exit() lines immediately following this comment!
+ *
+ * A typical install would be organized like this: 
+ *
+ *     /var/www/html/my_photos				<-- Web root for this app
+ *     /var/www/html/my_photos/fastback/	<-- Fastback install
+ *     /var/www/html/my_photos/index.php	<-- Customized copy of this file
+ *     /var/www/html/my_photos/2020/		<-- Photo directory
+ *     /var/www/html/my_photos/2022/		<-- Photo directory
+ */
+print("This file shouldn't be used without being copied outside of this directory, and being configured.\n");
+exit();
+
+
+
+
 if ( file_exists('fastback') && is_dir('fastback') ) {
 	set_include_path(get_include_path() . PATH_SEPARATOR . __DIR__ . DIRECTORY_SEPARATOR . 'fastback');
 }
@@ -39,7 +61,7 @@ $fb->photobase = __DIR__;
  */
 
 // Add a user account
-// $fb->user['Michael'] = 'moore';
+// $fb->user['User'] = 'password';
 
 // Give the user permission to flag photos
 // $fb->canflag[] = 'Michael';
@@ -48,18 +70,18 @@ $fb->photobase = __DIR__;
  * Other Settings
  */
 
-// Directory regex used to find photos
-// $fb->photodirregex = './[0-9]\{4\}/[0-9]\{2\}/[0-9]\{2\}/'; 
+// Directory regex used to find photos (YYYY/MM/DD, or any 4-number/2-number/2-number directories
+// $fb->photodirregex = './[0-9][0-9][0-9][0-9]/[0-9][0-9]/[0-9][0-9]/'; 
 
 // Should photos be sorted by folder or by date? If photo exif dates are wrong (eg. scanned photos) then file might make more sense
 // $fb->photo_order = 'date';
 // $fb->photo_order = 'file'; 
 
 // What types of image files should be accepted
-// $fb->supported_photo_types[] = 'tiff';
+// $fb->supported_photo_types[] = 'tiff'; // Eg add tiff support
 
 // Or maybe we only want jpgs
-// $fb->supported_photo_types = array('jpg','jpeg');
+// $fb->supported_photo_types = array('jpg','jpeg'); // Or just override the list completely
 
 // Change to a different basemap
 // Find free options (with certain terms of use) here: https://leaflet-extras.github.io/leaflet-providers/preview/
@@ -67,4 +89,5 @@ $fb->photobase = __DIR__;
 // 	attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
 // })";
 
+// Run Fastback with the setup above
 $fb->run();

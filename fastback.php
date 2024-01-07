@@ -69,8 +69,8 @@ class Fastback {
 	var $cronjobs = array(							// These are the cron jobs we will try to run, in the order we try to complete them.
 		'find_new_files',							// If you don't want them all to run, for example if you don't want to generate thumbnails, then you could change this.
 		'make_csv',
-		'process_exif',
 		'get_exif',
+		'process_exif',
 		'remove_deleted',
 		'clear_locks',
 		'make_thumbs',							    
@@ -2197,7 +2197,7 @@ class Fastback {
 			'percent_complete' => '0%',
 		);
 
-		$allowed_actions = array('find_new_files','make_csv','process_exif','get_exif','make_thumbs','make_streamable','remove_deleted','clear_locks','status');
+		$allowed_actions = array('find_new_files','make_csv','get_exif','process_exif','make_thumbs','make_streamable','remove_deleted','clear_locks','status');
 		foreach($allowed_actions as $job){
 			$cron_status[$job] = $template;
 			$cron_status[$job]['job'] = $job;
