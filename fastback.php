@@ -1113,6 +1113,7 @@ class Fastback {
 	private function sql_get_queue($where) {
 		$this->sql_connect();
 		$this->_sql->query("UPDATE fastback SET _util=NULL WHERE _util='RESERVED-" . getmypid() . "'");
+
 		$query = "UPDATE fastback 
 			SET _util='RESERVED-" . getmypid() . "' 
 			WHERE 
@@ -1121,9 +1122,18 @@ class Fastback {
 				AND flagged IS NOT TRUE 
 				AND ($where) 
 			ORDER BY 
-			COALESCE(CAST(STRFTIME('%s',sorttime) AS INTEGER),mtime) {$this->sortorder},
-			file {$this->sortorder} 
+		";
+
+		if ( $this->photo_order == "file" ) {
+			$query .= " file {$this->sortorder} ";
+		} else {
+		$query .= " COALESCE(CAST(STRFTIME('%s',sorttime) AS INTEGER),mtime) {$this->sortorder},
+			file {$this->sortorder} ";
+		}
+
+		$query .= "
 			LIMIT {$this->_process_limit}";
+
 		$this->_sql->query($query);
 
 		$err = $this->_sql->lastErrorMsg();
