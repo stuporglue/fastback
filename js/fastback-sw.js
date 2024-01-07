@@ -40,7 +40,7 @@ var urls_to_cache = [
 	'fastback/css/MarkerCluster.css',
 	'?csv=get',
 	'?pwa=manifest',
-	'?pwa=down',
+	'?pwa=down'
 ];
 
 /**
@@ -63,8 +63,6 @@ self.addEventListener('install', event => {
 	})());
 });
 
-
-
 /**
  * https://gomakethings.com/how-to-set-an-expiration-date-for-items-in-a-service-worker-cache/
  */
@@ -76,10 +74,10 @@ self.addEventListener('fetch', event => {
 				return response;
 			}
 
-			return fetch(request).then(functin (response) {
+			return fetch(request).then(function (response) {
 
 				var cache_this = false;
-				var cleaned_url = event.request.url.replace('SW_FASTBACK_BASEURL','').replace(/\?ts=[0-9]+/,'').replace(/&ts=[0-9]+/,'')
+				var cleaned_url = event.request.url.replace('SW_FASTBACK_BASEURL','').replace(/\?ts=[0-9]+/,'').replace(/&ts=[0-9]+/,'');
 				if ( urls_to_cache.indexOf(event.request.url) !== -1 ) {
 					cache_this = true;
 				} else if ( urls_to_cache.indexOf(cleaned_url) !== -1 ) {
@@ -115,7 +113,7 @@ self.addEventListener('fetch', event => {
 					return response || caches.match(OFFLINE_URL);
 				});
 			});
-		});
+		}));
 });
 
 self.addEventListener('activate', event => {

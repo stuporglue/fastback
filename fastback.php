@@ -552,7 +552,6 @@ class Fastback {
 	 * @note Using $print_if_not_write will cause this function to exit() after sending.
 	 */
 	private function util_make_csv($print_if_not_write = false){
-
 		$this->sql_connect();
 		$rows = $this->sql_query_single("SELECT COUNT(*) FROM fastback");
 
@@ -745,7 +744,8 @@ class Fastback {
 				fastbackurl: "' . $this->siteurl . $base_script . '",
 				photocount: ' . $this->sql_query_single("SELECT COUNT(*) FROM fastback") . ',
 				basemap: ' . $this->basemap . ',
-				photo_order: "' . ($this->photo_order == 'file' ? 'file' : 'date') . '"
+				photo_order: "' . ($this->photo_order == 'file' ? 'file' : 'date') . '",
+				debugger: "' . ($_SESSION['authed'] === true && $this->debug ? 'debug' : 'none') . '"
 		});';
 
 		$html .= 'if("serviceWorker" in navigator) {
@@ -1353,7 +1353,6 @@ class Fastback {
 			$collect_photo = array();
 			$collect_video = array();
 			foreach($modified_files as $k => $one_file){
-				print $one_file . "\n";
 				$mtime = filemtime($one_file);
 				$pathinfo = pathinfo($one_file);
 

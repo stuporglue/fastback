@@ -702,7 +702,11 @@ only screen and (min-device-pixel-ratio : 1.5) {
 	max-height: 100%;
 }
 
-.faketablecell {
+.dateblock.faketable {
+	font-size: 2.6vw;
+}
+
+.pathblock.faketablecell {
 	/* border-bottom: 1px solid rgba(255,255,255,0.2); */
 	white-space: nowrap;
 	width: 100%;
@@ -719,7 +723,7 @@ only screen and (min-device-pixel-ratio : 1.5) {
 }
 */
 
-.faketable {
+.pathblock.faketable {
 	width: 100%;
 }
 

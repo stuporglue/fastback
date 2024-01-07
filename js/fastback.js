@@ -875,37 +875,37 @@ Fastback = class Fastback {
 		var errimg;
 		var html = this.photos.slice(slice_from,slice_to).map(function(p){
 
-			if ( p['type'] == 'media' ) {
-				if ( p['isvideo'] ) {
+			if ( p.type == 'media' ) {
+				if ( p.isvideo ) {
 					vidclass = ' vid';
 					errimg = 'movie.webp';
-				} else if ( p['live'] ) {
+				} else if ( p.live ) {
 					errimg = 'picture.webp';
 					vidclass = ' live';
 				} else {
 					errimg = 'picture.webp';
 					vidclass = '';
 				}
-				return '<div class="tn' + vidclass + '"><img data-photoid="' + p['id'] + '" src="' + encodeURI(self.fastbackurl + '?thumbnail=' + p['file']) + '" onerror="this.onerror=null;this.src=\'fastback/img/' + errimg + '\';"/></div>';
-			} else if ( p['type'] == 'dateblock' ) {
-				date = p['date'];
+				return '<div class="tn' + vidclass + '"><img data-photoid="' + p.id + '" src="' + encodeURI(self.fastbackurl + '?thumbnail=' + p.file) + '" onerror="this.onerror=null;this.src=\'fastback/img/' + errimg + '\';"/></div>';
+			} else if ( p.type == 'dateblock' ) {
+				date = p.date;
 				// I feel like this is kind of clever. I take the Year-Month, eg. 2021-12, parse it to an int like 202112 and then take the mod of the palette length to get a fixed random color for each date.
-				var cellhtml = '<div class="tn nolink" style="background-color: ' + self.palette[parseInt(p['printdate'].replaceAll('-','')) % self.palette.length] + ';">';
-				cellhtml += '<div class="faketable">';
+				var cellhtml = '<div class="tn nolink" style="background-color: ' + self.palette[parseInt(p.printdate.replaceAll('-','')) % self.palette.length] + ';">';
+				cellhtml += '<div class="faketable dateblock">';
 				cellhtml += '<div class="faketablecell">' + date.getDate() +  '</div>';
 				cellhtml += '<div class="faketablecell">' + date.toLocaleDateString(navigator.languages[0],{month:'long'}) + '</div>';
 				cellhtml += '<div class="faketablecell">' + date.getFullYear()  + '</div>';
 				cellhtml += '</div>';
 				cellhtml += '</div>';
 				return cellhtml;
-			} else if ( p['type'] == 'pathblock' ) {
+			} else if ( p.type == 'pathblock' ) {
 				var curpath = p.path;
 				if ( curpath = '' ) {
 					curpath = '(Home)';
 				}
 				var path_parts = curpath.split('/');
 				var cellhtml = '<div class="tn nolink" style="background-color: ' + self.palette[curpath.split('').reduce(function(e,f){e += f.charCodeAt(0); return e;},0) % self.palette.length] + ';">';
-				cellhtml += '<div class="faketable">';
+				cellhtml += '<div class="faketable pathblock">';
 				for (var i = 0; i < path_parts.length; i++ ) {
 					cellhtml += '<div class="faketablecell">' + '&nbsp;'.repeat(i) + (i > 0 ? '&#x21B3; ' : '' ) +  path_parts[i] + '</div>';
 				}
