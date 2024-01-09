@@ -307,7 +307,7 @@ Fastback = class Fastback {
 		jQuery('#pathpicker').html(pathhtml);
 
 		jQuery('#calendaricon').on('click',this.handle_datepicker_toggle.bind(this));
-		jQuery('#pathpicker').on('click',this.handle_pathpicker_click.bind(this));
+		jQuery('#pathpicker').on('change',this.handle_pathpicker_click.bind(this));
 		jQuery('#rewindicon').on('click',this.handle_rewind_click.bind(this));
 		jQuery('#globeicon').on('click',this.handle_globe_click.bind(this));
 		jQuery('#exiticon').on('click',this.handle_exit_click.bind(this));
@@ -717,8 +717,14 @@ Fastback = class Fastback {
 	/*
 	 * Handle clicking the path picker
 	 */
-	handle_pathpicker_click() {
+	handle_pathpicker_click(e) {
+		var targetdir = e.target.value;
 
+		var first = this.photos.find(function(o){return o.path == targetdir && o.type == 'media'})
+
+		this.ui_scroll_to_photo(first.id);
+
+		this.ui_refresh_layout();
 	}
 
 	/*

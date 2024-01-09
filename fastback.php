@@ -394,7 +394,6 @@ class Fastback {
 		// Log out, just end it and redirect
 		if ( isset($_REQUEST['logout']) ) {
 			session_destroy();
-			print_r($_SERVER);
 			header("Location: " . preg_replace('/\?.*/','',$_SERVER['REQUEST_URI']));
 			setcookie("fastback","", time() - 3600); // Clear cookie
 			return true;
@@ -679,7 +678,7 @@ class Fastback {
 		$html .= '<div id="tagicon" class="disabled"></div>';
 		$html .= '<div id="rewindicon"></div>';
 		$html .= '<div id="calendaricon"><input readonly id="datepicker" type="text"></div>';
-		$html .= '<div id="packpickericon"><select id="pathpicker"></select></div>';
+		$html .= '<div id="pathpickericon"><select id="pathpicker"></select></div>';
 		$html .= '<div id="exiticon" class="' . (empty($this->user) ? 'disabled' : '') . '"></div>';
 		$html .= '</div>';
 		$html .= '<div id="thumb" class="disabled">
@@ -1499,13 +1498,14 @@ class Fastback {
 	 */
 	private function _make_a_thumb($file,$skip_db_write=false,$print_if_not_write = false){
 		// Find original file
-		$this->log("Making thumb for $file");
 		$thumbnailfile = $this->sql_query_single("SELECT thumbnail FROM fastback WHERE file='" . SQLite3::escapeString($file) . "'");
 		if ( !empty($thumbnailfile) && file_exists($this->filecache . $thumbnailfile) ) {
 			// If it exists, we're golden
 			return $thumbnailfile;
 		}
 
+		$this->log("Making thumb for $file");
+		
 		$file = $this->util_file_is_ok($file);
 		$print_to_stdout = false;
 
@@ -1612,6 +1612,7 @@ class Fastback {
 		$shellfile = escapeshellarg($this->photobase . $file);
 		$shellthumb = escapeshellarg($this->filecache . $thumbnailfile);
 
+		// Prefer vips as it makes smaller thumbnails and has smartcrop
 		if ( !isset($this->_vipsthumbnail) ) { $this->_vipsthumbnail = trim(`which vipsthumbnail`); }
 		if (!empty($this->_vipsthumbnail) ) {
 
@@ -1638,6 +1639,7 @@ class Fastback {
 			$this->log(__FILE__ . ":" . __LINE__ . ' -- ' .  microtime () . "\n"); 
 		}
 
+		// Fall back to ImageMagick since it supports basically every image format that exists.
 		if ( !isset($this->_convert) ) { $this->_convert = trim(`which convert`); }
 		if ( !empty($this->_convert) ) {
 
@@ -1716,6 +1718,21 @@ class Fastback {
 		} else {
 			$threads = $this->_ffmpeg_streamable_threads;
 		}
+
+		// If we're in a server/web-browser context, let's close the connection. It takes too long.
+		if ( php_sapi_name() !== 'cli' ) {
+			ob_end_clean();
+			header("Connection: close");
+			ignore_user_abort(true);
+			ob_start();
+			echo 'Finishing request separately';
+			$size = ob_get_length();
+			header("Content-Length: $size");
+			ob_end_flush(); // All output buffers must be flushed here
+			flush();        // Force output to client
+			@fastcgi_finish_request();
+		}
+
 		$cmd = $this->_ffmpeg . ' -i ' . $shellfile . ' ' . $this->_ffmpeg_streamable . ' -threads ' . $threads . ' ' . $shellthumbvid . ' 4>/dev/null; echo $?';
 		$res = `$cmd`;
 		$res = trim($res);
@@ -2095,6 +2112,7 @@ class Fastback {
 			) AND (
 				exif IS NOT NULL
 				AND exif != \"\"
+				AND exif NOT LIKE '\"Error\":'
 			)");
 
 			$this->_sql->query("BEGIN DEFERRED");
@@ -2154,8 +2172,13 @@ class Fastback {
 	 */
 	private function cron_clear_locks() {
 		$this->sql_update_cron_status('clear_locks');
+
 		// Clear reserved things once in a while.  May cause some double processing but also makes it possible to reprocess things that didn't work the first time.
 		$this->sql_query_single("UPDATE fastback SET _util=NULL WHERE _util LIKE 'RESERVED%'");
+
+		// Re-try exif data once in a while
+		$this->sql_query_single("UPDATE fastback SET exif=NULL WHERE exif LIKE '%\"Error\"%'");
+
 		// Also clear owner of any cron entries which have been idle for 3x the timeout period.
 		$this->sql_query_single("UPDATE cron SET owner=NULL WHERE updated < " . (time() - (60 * $this->_crontimeout * 3)));
 		$this->sql_update_cron_status('clear_locks',true);
@@ -2304,8 +2327,6 @@ class Fastback {
 					}
 					print("\n");
 				}
-
-
 			} else {
 				header("Content-Type: application/json");
 				print json_encode($cron_status, JSON_PRETTY_PRINT);

@@ -290,6 +290,14 @@ body .up10 .tn {width: calc(100vw/10); height: calc(100vw/10); font-size: 2vw;  
 	background-image: url('../img/exit.png');
 }
 
+#pathpickericon {
+	background-image: url('../img/folder.png');
+}
+
+#infoicon {
+	background-image: url('../img/info.png');
+}
+
 .disabled {
 	display: none !important;
 }
@@ -727,3 +735,8 @@ only screen and (min-device-pixel-ratio : 1.5) {
 	width: 100%;
 }
 
+#pathpicker {
+	opacity: 0;
+	width: 100%;
+	height: 100%;
+}
