@@ -676,9 +676,9 @@ class Fastback {
 		$html .= '<input type="range" min="1" max="10" value="5" class="slider" id="zoom">';
 		$html .= '<div id="globeicon" class="disabled"></div>';
 		$html .= '<div id="tagicon" class="disabled"></div>';
-		$html .= '<div id="rewindicon"></div>';
-		$html .= '<div id="calendaricon"><input readonly id="datepicker" type="text"></div>';
-		$html .= '<div id="pathpickericon"><select id="pathpicker"></select></div>';
+		$html .= '<div id="rewindicon" class="' . ($this->photo_order == 'date' ? '' : 'disabled') . '"></div>';
+		$html .= '<div id="calendaricon" class="' . ($this->photo_order == 'date' ? '' : 'disabled') . '"><input readonly id="datepicker" type="text"></div>';
+		$html .= '<div id="pathpickericon" class="' . ($this->photo_order == 'path' ? '' : 'disabled') . '"><select id="pathpicker"></select></div>';
 		$html .= '<div id="exiticon" class="' . (empty($this->user) ? 'disabled' : '') . '"></div>';
 		$html .= '</div>';
 		$html .= '<div id="thumb" class="disabled">

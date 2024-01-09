@@ -298,6 +298,10 @@ body .up10 .tn {width: calc(100vw/10); height: calc(100vw/10); font-size: 2vw;  
 	background-image: url('../img/info.png');
 }
 
+#calendaricon {
+	background-image: url('../img/calendar.png');
+}
+
 .disabled {
 	display: none !important;
 }
@@ -311,9 +315,6 @@ body .up10 .tn {width: calc(100vw/10); height: calc(100vw/10); font-size: 2vw;  
 	transition: opacity 1s ease-in;
 }
 
-#calendaricon {
-	background-image: url('../img/calendar.png');
-}
 
 /** Thumbnail controls **/
 #thumb, #tagwindow {
