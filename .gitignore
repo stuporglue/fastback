@@ -9,3 +9,4 @@ fastback.ini
 cache/*.*
 cache/*
 fastback.sqlite-journal
+*.log

@@ -715,8 +715,7 @@ only screen and (min-device-pixel-ratio : 1.5) {
 	font-size: 2.6vw;
 }
 
-.pathblock.faketablecell {
-	/* border-bottom: 1px solid rgba(255,255,255,0.2); */
+.pathblock .faketablecell {
 	white-space: nowrap;
 	width: 100%;
 	text-align: left;
@@ -726,13 +725,7 @@ only screen and (min-device-pixel-ratio : 1.5) {
 	font-size: max(1.4vw,10px);
 }
 
-/*
-.faketablecell:last-child {
-	border-bottom: none;
-}
-*/
-
-.pathblock.faketable {
+.pathblock .faketable {
 	width: 100%;
 }
 

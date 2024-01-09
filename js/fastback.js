@@ -906,7 +906,7 @@ Fastback = class Fastback {
 				return cellhtml;
 			} else if ( p.type == 'pathblock' ) {
 				var curpath = p.path;
-				if ( curpath = '' ) {
+				if ( curpath == '' ) {
 					curpath = '(Home)';
 				}
 				var path_parts = curpath.split('/');
