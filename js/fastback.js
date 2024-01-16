@@ -180,10 +180,10 @@ Fastback = class Fastback {
 					self.csv_error_load = true;
 					// If we got an error we want to start cron right away
 					// Cron should run on its own
-					setTimeout(self.util_cron.bind(self),1);
+					// setTimeout(self.util_cron.bind(self),1);
 				} else {
 					// Cron should run on its own
-					setTimeout(self.util_cron.bind(self),1000 * 30);
+					// setTimeout(self.util_cron.bind(self),1000 * 30);
 				}
 
 				self.orig_photos = self.util_add_separator_blocks(self.photos);
@@ -206,7 +206,7 @@ Fastback = class Fastback {
 				// Whatever error we get, we assume 
 				self.csv_error_load = true;
 				// Cron should run on its own
-				setTimeout(self.util_cron.bind(self),1);
+				// setTimeout(self.util_cron.bind(self),1);
 			}
 		});
 	}
@@ -947,11 +947,11 @@ Fastback = class Fastback {
 	 * The PHP timeout is set to 2 minutes (assuming ini_set can override it) so 5 minutes should give the server some breathing room.
 	 */
 	util_cron() {
-		var url = this.fastbackurl + '?cron=now';
-		var self = this;
-		$.get(url).then(function() {
-			setTimeout(self.util_cron.bind(self),1000 * 5 * 60);
-		});
+		// var url = this.fastbackurl + '?cron=now';
+		// var self = this;
+		// $.get(url).then(function() {
+		// 	setTimeout(self.util_cron.bind(self),1000 * 5 * 60);
+		// });
 	}
 
 	/*

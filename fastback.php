@@ -325,7 +325,7 @@ class Fastback {
 		}
 	}
 
-	private function verbose($msg){
+	private function log_verbose($msg){
 		if ($this->verbose ) {
 			error_log($msg);
 		}
@@ -1850,23 +1850,23 @@ class Fastback {
 		// "MIMEType":"application\/unknown"
 		if ( array_key_exists('FileType',$exif) && in_array($exif['FileType'],$bad_filetypes) ) {
 			$maybe_meme += 1;
-			$this->verbose("Has FileType but it's bad (+1)\n");
+			$this->log_verbose("Has FileType but it's bad (+1)\n");
 		}
 
 		if ( array_key_exists('MIMEType',$exif) && in_array($exif['MIMEType'],$bad_mimetypes) ) {
 			$maybe_meme += 1;
-			$this->verbose("Has MIMEType but it's bad (+1)\n");
+			$this->log_verbose("Has MIMEType but it's bad (+1)\n");
 		} else if ( array_key_exists('MIMEType',$exif) && preg_match('/video/',$exif['MIMEType']) ) {
 			// Most videos aren't memes
 			$maybe_meme -= 1;
-			$this->verbose("Most videos aren't memes (-1)\n");
+			$this->log_verbose("Most videos aren't memes (-1)\n");
 		}
 
 		//  Error present
 		// "Error":"File format error"
 		if ( array_key_exists('Error',$exif) ) {
 			$maybe_meme +=1 ;
-			$this->verbose("File format error (+1)\n");
+			$this->log_verbose("File format error (+1)\n");
 		}
 
 		// If there's no real exif info
@@ -1878,7 +1878,7 @@ class Fastback {
 		if ( array_key_exists('ImageHeight',$exif) && array_key_exists('ImageWidth',$exif) ) {
 			if ( $exif['ImageHeight'] * $exif['ImageWidth'] <  804864 ) { // Less than 1024x768
 				$maybe_meme += 1;
-				$this->verbose("ImageHeight * ImageWidth is small (+1)\n");
+				$this->log_verbose("ImageHeight * ImageWidth is small (+1)\n");
 			}
 		}
 
@@ -1887,84 +1887,84 @@ class Fastback {
 		},ARRAY_FILTER_USE_KEY);
 		if ( count($exif_keys) <= 4 ) {
 			$maybe_meme += 1;
-			$this->verbose("Very few exif keys (+1) \n");
+			$this->log_verbose("Very few exif keys (+1) \n");
 		}
 
 		if ( count($exif_keys) === 1 ) {
 			$maybe_meme -= 1;
-			$this->verbose("Exactly 1 exif key (-1) \n");
+			$this->log_verbose("Exactly 1 exif key (-1) \n");
 		}
 
 		// Having GPS is good
 		if ( array_key_exists('GPSLatitude',$exif) ) {
 			$maybe_meme -= 1;
-			$this->verbose("Has GPS (-1) \n");
+			$this->log_verbose("Has GPS (-1) \n");
 		}
 
 		// Having a camera name is good
 		if ( array_key_exists('Model',$exif) ) {
 			$maybe_meme -= 1;
-			$this->verbose("Has camera model (-1) \n");
+			$this->log_verbose("Has camera model (-1) \n");
 		} else 
 
 		// Having no FileModifyDate is sketchy
 		if ( !array_key_exists('FileModifyDate',$exif) ) {
 			$maybe_meme += 1;
-			$this->verbose("Has no FileModifyDate (+1) \n");
+			$this->log_verbose("Has no FileModifyDate (+1) \n");
 		} else 
 
 		// Not having a camera is extra bad in 2020s
 		if ( preg_match('/^202[0-9]:/',$exif['FileModifyDate']) && !array_key_exists('Model',$exif) ) {
 			$maybe_meme += 1;
-			$this->verbose("Has no camera model AND is newer than 2020 (+1) \n");
+			$this->log_verbose("Has no camera model AND is newer than 2020 (+1) \n");
 		}
 
 		// Scanners might put a comment in 
 		if ( array_key_exists('Comment',$exif) ) {
 			$maybe_meme -= 1;
-			$this->verbose("Scanner software likes to add comments (-1) \n");
+			$this->log_verbose("Scanner software likes to add comments (-1) \n");
 		}
 
 		// Scanners might put a comment in 
 		if ( array_key_exists('UserComment',$exif) && $exif['UserComment'] == 'Screenshot' ) {
 			$maybe_meme += 2;
-			$this->verbose("UserComment with Screenshot is probably a screenshot (+2) \n");
+			$this->log_verbose("UserComment with Screenshot is probably a screenshot (+2) \n");
 		}
 
 		if ( array_key_exists('Software',$exif) && $exif['Software'] == 'Instagram' ) {
 			$maybe_meme += 1;
-			$this->verbose("From Insta? Probably a meme (+1) \n");
+			$this->log_verbose("From Insta? Probably a meme (+1) \n");
 		}
 
 		if ( array_key_exists('ThumbnailImage',$exif) ) {
 			$maybe_meme -= 1;
-			$this->verbose("Has a built-in Thumbnail (-1) \n");
+			$this->log_verbose("Has a built-in Thumbnail (-1) \n");
 		}
 
 		if ( array_key_exists('ProfileDescriptionML',$exif) ) {
 			$maybe_meme -= 1;
-			$this->verbose("Has ProfileDescriptionML (-1) \n");
+			$this->log_verbose("Has ProfileDescriptionML (-1) \n");
 		}
 
 		// Luminance seems to maybe be something in some of our photos that aren't memes?
 		if ( array_key_exists('Luminance',$exif) ) {
 			$maybe_meme -= 1;
-			$this->verbose("Has Luminance (-1) \n");
+			$this->log_verbose("Has Luminance (-1) \n");
 		}
 
 		if ( array_key_exists('TagsList',$exif) ) {
 			$maybe_meme -= 1;
-			$this->verbose("Has TagsList (-1) \n");
+			$this->log_verbose("Has TagsList (-1) \n");
 		}
 
 		if ( array_key_exists('Subject',$exif) ) {
 			$maybe_meme -= 1;
-			$this->verbose("Has Subject (-1) \n");
+			$this->log_verbose("Has Subject (-1) \n");
 		}
 
 		if ( array_key_exists('DeviceMfgDesc',$exif) ) {
 			$maybe_meme -= 1;
-			$this->verbose("Has DeviceMfgDesc (-1) \n");
+			$this->log_verbose("Has DeviceMfgDesc (-1) \n");
 		}
 
 		return array('maybe_meme' => $maybe_meme);
