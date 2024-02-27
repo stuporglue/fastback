@@ -25,7 +25,7 @@ if ( file_exists('fastback') && is_dir('fastback') ) {
 	set_include_path(get_include_path() . PATH_SEPARATOR . __DIR__ . DIRECTORY_SEPARATOR . 'fastback');
 }
 require_once('fastback.php');
-$fb = new Fastback();
+$fb = Fastback::getInstance();
 
 # Enable these for debugging!
 # $fb->debug = true;
@@ -74,8 +74,8 @@ $fb->photobase = __DIR__;
 // $fb->photodirregex = './[0-9][0-9][0-9][0-9]/[0-9][0-9]/[0-9][0-9]/'; 
 
 // Should photos be sorted by folder or by date? If photo exif dates are wrong (eg. scanned photos) then file might make more sense
-// $fb->photo_order = 'date';
-// $fb->photo_order = 'file'; 
+// $fb->sort_order = 'date';
+// $fb->sort_order = 'file'; 
 
 // What types of image files should be accepted
 // $fb->supported_photo_types[] = 'tiff'; // Eg add tiff support

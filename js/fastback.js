@@ -67,7 +67,7 @@ Fastback = class Fastback {
 		this.active_filters = {};
 		this.dirty_filters = false;
 		this.active_tags = [];
-		this.photo_order = 'date';
+		this.sort_order = 'date';
 
 		// Browser supported file types - will be shown directly. 
 		// Anything not in this list will be proxied into a jpg
@@ -831,7 +831,7 @@ Fastback = class Fastback {
 				continue;
 			}
 
-			if ( this.photo_order == 'file' ) {
+			if ( this.sort_order == 'file' ) {
 				cur_path = photos[i].path;
 
 				if ( cur_path != prev_path) {
@@ -842,7 +842,7 @@ Fastback = class Fastback {
 				}
 
 				prev_path = cur_path;
-			} else { // Should be the case that this.photo_order == 'date' ) {
+			} else { // Should be the case that this.sort_order == 'date' ) {
 				cur_date = photos[i].date.getFullYear() + '-' + (photos[i].date.getMonth() + 1) + '-' + (photos[i].date.getDate());
 
 				if ( cur_date != prev_date ) {
