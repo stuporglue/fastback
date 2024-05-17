@@ -55,6 +55,4 @@ class Fastback_Photos extends Fastback_Module {
 
 		return false;
 	}
-
-
 }

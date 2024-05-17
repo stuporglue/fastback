@@ -51,7 +51,6 @@ class Fastback_Module {
 			$flag_these = array();
 
 			foreach($queue as $file => $row) {
-
 				// Modules should override make_a_thumb unless they override the whole make_thumbs
 				$thumbnailfile = $this->make_a_thumb($file,true);
 
@@ -66,7 +65,13 @@ class Fastback_Module {
 			$this->fb->sql_update_case_when("UPDATE fastback SET _util=NULL, thumbnail=CASE", $made_thumbs, "ELSE thumbnail END", TRUE);
 
 			$flag_these = array_map('SQLite3::escapeString',$flag_these);
-			$this->fb->sql_query_single("UPDATE fastback SET flagged=1 WHERE file IN ('" . implode("','",$flag_these) . "')");
+			$extra_sql = "";
+
+			if (!method_exists($this,'make_a_webversion')) {
+				$extra_sql =", webversion_made=1";
+			}
+
+			$this->fb->sql_query_single("UPDATE fastback SET flagged=1 $extra_sql WHERE file IN ('" . implode("','",$flag_these) . "') AND module={$this->id}");
 			$this->cron->sql_update_cron_status('make_thumbs');
 
 		} while (count($made_thumbs) > 0);
@@ -79,7 +84,7 @@ class Fastback_Module {
 	 */
 	public function make_a_thumb($file){
 		// Find original file
-		$thumbnailfile = $this->fb->sql_query_single("SELECT thumbnail FROM fastback WHERE file='" . SQLite3::escapeString($file) . "'");
+		$thumbnailfile = $this->fb->sql_query_single("SELECT thumbnail FROM fastback WHERE file='" . SQLite3::escapeString($file) . "' AND module={$this->id}");
 		if ( !empty($thumbnailfile) && file_exists($this->fb->filecache . $thumbnailfile) ) {
 			// If it exists, we're golden
 			return $thumbnailfile;
@@ -94,8 +99,10 @@ class Fastback_Module {
 
 		// Quick exit if thumb exists. Just update the db and return it.
 		if ( file_exists($this->fb->filecache . $thumbnailfile) ) {
-			$this->fb->sql_query_single("UPDATE fastback SET thumbnail='" . SQLite3::escapeString($thumbnailfile) . "' WHERE file='" . SQLite3::escapeString($file) . "'");
+			$this->fb->sql_query_single("UPDATE fastback SET thumbnail='" . SQLite3::escapeString($thumbnailfile) . "' WHERE file='" . SQLite3::escapeString($file) . "' AND module={$this->id}");
 			return $thumbnailfile;
+		} else {
+			var_dump($thumbnailfile);
 		}
 
 		// Quick exit if cachedir doesn't exist. That means we can't cache.
@@ -117,8 +124,6 @@ class Fastback_Module {
 		}
 
 		// Find our tools
-		// if ( !isset($this->_ffmpeg) ) { $this->_ffmpeg = trim(`which ffmpeg`); }
-
 		$pathinfo = pathinfo($file);
 
 		// Supported type, let's do it.
@@ -146,9 +151,35 @@ class Fastback_Module {
 			$res = `$cmd`;
 		}
 
-		$this->fb->sql_query_single("UPDATE fastback SET thumbnail='" . SQLite3::escapeString($thumbnailfile) . "' WHERE file='" . SQLite3::escapeString($file) . "'");
+		$this->fb->sql_query_single("UPDATE fastback SET thumbnail='" . SQLite3::escapeString($thumbnailfile) . "' WHERE file='" . SQLite3::escapeString($file) . "' AND module={$this->id}");
 
 		return $thumbnailfile;
+	}
+
+	/**
+	 * Convert content into something that can be displayed on the web, if needed
+	 */
+	public function make_webversion(){
+
+		if (!method_exists($this,'make_a_webversion')) {
+			return;
+		}
+
+		do {
+			$queue = $this->fb->sql_get_queue("webversion_made IS NULL AND module={$this->id}");
+
+			foreach($queue as $file => $row) {
+				// If we've got the file, we're good
+				$videothumb = './' . $this->id . '/' . ltrim($file,'./') . '.mp4';
+				$worked = $this->make_a_webversion($file,$videothumb);
+
+				$worked = $worked ? 1 : 0;
+
+				$this->fb->sql_query_single("UPDATE fastback SET webversion_made=$worked WHERE file='"  . SQLite3::escapeString($file) . "' AND module={$this->id}");
+			}
+
+			$this->cron->sql_update_cron_status('make_webversion');
+		} while (!empty($queue));
 	}
 
 	public function __toString() {

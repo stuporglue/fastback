@@ -128,7 +128,7 @@ class Fastback {
 	public function run() {
 		$this->siteurl = $this->util_base_url();
 		// Ensure trailing slashes
-		$this->photobase = rtrim($this->photobase,'/') . '/';
+		// $this->photobase = rtrim($this->photobase,'/') . '/';
 		$this->filecache = rtrim($this->filecache,'/') . '/';
 
 		if ( !is_dir($this->filecache) ) {
@@ -265,8 +265,8 @@ class Fastback {
 			$this->log("| Internals: external programs");
 			$this->log("|  _vipsthumbnail: $this->_vipsthumbnail");
 			$this->log("|  _ffmpeg: $this->_ffmpeg");
-			$this->log("|  _ffmpeg_streamable: $this->_ffmpeg_streamable");
-			$this->log("|  _ffmpeg_streamable_threads: $this->_ffmpeg_streamable_threads");
+			$this->log("|  _ffmpeg_webversion: $this->_ffmpeg_webversion");
+			$this->log("|  _ffmpeg_webversion_threads: $this->_ffmpeg_webversion_threads");
 			$this->log("|  _gzip: $this->_gzip");
 			$this->log("|  _convert: $this->_convert");
 			$this->log("|  _jpegoptim: $this->_jpegoptim");
@@ -877,14 +877,13 @@ class Fastback {
 		$q_create_files = "CREATE TABLE IF NOT EXISTS fastback ( 
 			module INTEGER,
 			file TEXT PRIMARY KEY, 
-			exif TEXT,
-			isvideo BOOL, 
 			media_type TEXT,
-			streamable_made BOOL, 
+			thumbnail TEXT, 
+			webversion_made BOOL, 
+			exif TEXT,
 			flagged BOOL, 
 			mtime INTEGER, 
 			sorttime DATETIME, 
-			thumbnail TEXT, 
 			lat DECIMAL(15,10),
 			lon DECIMAL(15,10), 
 			elev DECIMAL(15,10), 
@@ -908,6 +907,8 @@ class Fastback {
 		)";
 
 		$res = $this->_sql->query($q_create_modules);
+
+		$res = $this->_sql->query('PRAGMA journal_mode=WAL');
 	}
 
 	/**

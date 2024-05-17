@@ -18,11 +18,13 @@ class Fastback_Cron {
 		'remove_deleted',
 		'clear_locks',
 		'make_thumbs',							    
-		'make_streamable',							    
+		'make_webversion',							    
 	);
 
 	var $_crontimeout = 120;						// How long to let cron run for in seconds. External calls don't count, so for thumbs and exif wall time may be longer
 	// If this is to short some cron jobs may not record any finished work. See also $_process_limit and $_upsert_limit.
+	
+	var $_gzip;										// Which gzip binary to use
 
 	var $_cron_min_interval = 62;					// A completed cron will run again occastionally to see if anything is new. This is how long it should wait between runs, when completed.	
 	var $_concurrent_cronjobs;						// How many concurrent cron jobs should we run? These take up fcgi processes. 
@@ -73,7 +75,7 @@ class Fastback_Cron {
 			return;
 		}
 
-		$allowed_actions = array('find_new_files','make_csv','process_meta','get_meta','make_thumbs','make_streamable','remove_deleted','clear_locks','status','debug_meme_score');
+		$allowed_actions = array('find_new_files','make_csv','process_meta','get_meta','make_thumbs','make_webversion','remove_deleted','clear_locks','status','debug_meme_score');
 
 		if ( in_array($argv[1],$allowed_actions) ) {
 			$this->fb->log("Running {$argv[1]}");
@@ -215,8 +217,6 @@ class Fastback_Cron {
 
 		foreach($this->fb->modules as $module) {
 
-			print $module . "\n";
-
 			chdir($module->path);
 
 			$lastmod = $module->lastmod;
@@ -288,8 +288,8 @@ class Fastback_Cron {
 	 */
 	private function cron_remove_deleted() {
 		$this->sql_update_cron_status('remove_deleted');
-		chdir($this->photobase);
-		$this->fb->log("Checking for files now missing from $this->photobase\n");
+		chdir($this->fb->photobase);
+		$this->fb->log("Checking for files now missing from $this->fb->photobase\n");
 
 		$count = $this->fb->sql_query_single("SELECT COUNT(*) AS c FROM fastback");
 		$this->fb->log("Checking for missing files: Found {$count} files in the database");
@@ -331,27 +331,16 @@ class Fastback_Cron {
 
 
 	/**
-	 * Make videos that are suitable for streaming. Thanks, ffmpeg!
+	 * Make content that are suitable for web. 
 	 */
-	private function cron_make_streamable() {
-		$this->sql_update_cron_status('make_streamable');
-		do {
-			$queue = $this->fb->sql_get_queue("streamable_made IS NULL AND isvideo");
+	private function cron_make_webversion() {
+		$this->sql_update_cron_status('make_webversion');
 
-			foreach($queue as $file => $row) {
-				// If we've got the file, we're good
-				$outputfile = $file . '.mp4';
-				$worked = $this->_make_video_streamable($file,$outputfile);
+		foreach($this->fb->modules as $module) {
+			$module->make_webversion();
+		}
 
-				$worked = $worked ? 1 : 0;
-
-				$this->fb->sql_query_single("UPDATE fastback SET streamable_made=$worked WHERE file='"  . SQLite3::escapeString($file) . "'");
-			}
-
-			$this->sql_update_cron_status('make_streamable');
-		} while (!empty($queue));
-
-		$this->sql_update_cron_status('make_streamable',true);
+		$this->sql_update_cron_status('make_webversion',true);
 	}
 
 	/**
@@ -414,7 +403,6 @@ class Fastback_Cron {
 		$file_safe = SQLite3::escapeString($file);
 		$exif_json = $this->fb->sql_query_single("SELECT exif FROM fastback WHERE file='$file_safe'");
 		$exif = json_decode($exif_json,true);
-		var_dump($exif);
 		$this->verbose = true;
 		$ret = $this->_process_exif_meme($exif,$file,array());
 		print("Final score is {$ret['maybe_meme']}\n");
@@ -435,7 +423,7 @@ class Fastback_Cron {
 			'percent_complete' => '0%',
 		);
 
-		$allowed_actions = array('find_new_files','make_csv','get_meta','process_meta','make_thumbs','make_streamable','remove_deleted','clear_locks','status');
+		$allowed_actions = array('find_new_files','make_csv','get_meta','process_meta','make_thumbs','make_webversion','remove_deleted','clear_locks','status');
 		foreach($allowed_actions as $job){
 			$cron_status[$job] = $template;
 			$cron_status[$job]['job'] = $job;
@@ -461,6 +449,9 @@ class Fastback_Cron {
 		}
 
 		while($row = $res->fetchArray(SQLITE3_ASSOC)){
+			if ( !array_key_exists($row['job'],$cron_status)) {
+				continue;
+			}
 			$cron_status[$row['job']] = array_merge($cron_status[$row['job']],$row);
 		}
 		foreach($cron_status as $job => $details){
@@ -476,8 +467,8 @@ class Fastback_Cron {
 
 		$cron_status['get_meta']['percent_complete'] = $total_rows > 0 ? round( $exif_rows / $total_rows,4) * 100 . '%' : '0%';
 		$cron_status['make_thumbs']['percent_complete'] = $total_rows > 0 ? round($this->fb->sql_query_single("SELECT COUNT(*) FROM FASTBACK WHERE flagged OR thumbnail IS NOT NULL") / $total_rows,4) * 100 . '%' : '0%';
-		$cron_status['make_streamable']['percent_complete'] = $video_rows > 0 ? round($this->fb->sql_query_single("SELECT COUNT(*) FROM FASTBACK WHERE streamable_made=1") / $video_rows,4) * 100 . '%' : '0%';
-		$cron_status['proces_meta']['percent_complete'] = $exif_rows > 0 ? round($this->fb->sql_query_single("SELECT COUNT(*) FROM FASTBACK WHERE flagged OR sorttime IS NOT NULL") / $exif_rows,4) * 100 . '%' : '0%';
+		$cron_status['make_webversion']['percent_complete'] = $video_rows > 0 ? round($this->fb->sql_query_single("SELECT COUNT(*) FROM FASTBACK WHERE webversion_made=1") / $video_rows,4) * 100 . '%' : '0%';
+		$cron_status['process_meta']['percent_complete'] = $exif_rows > 0 ? round($this->fb->sql_query_single("SELECT COUNT(*) FROM FASTBACK WHERE flagged OR sorttime IS NOT NULL") / $exif_rows,4) * 100 . '%' : '0%';
 
 		$all_or_nothing = array('remove_deleted','find_new_files','make_csv','clear_locks','status');
 		foreach($all_or_nothing as $job_name) {
@@ -600,10 +591,10 @@ class Fastback_Cron {
 			exit();
 		}
 
-		if ( !isset($this->fb->_gzip) ) { $this->fb->_gzip= trim(`which gzip`); }
+		if ( !isset($this->_gzip) ) { $this->_gzip= trim(`which gzip`); }
 
-		if ( isset($this->fb->_gzip) ) {
-			$cmd = "{$this->fb->_gzip} -k --best -f {$this->fb->csvfile}";
+		if ( isset($this->_gzip) ) {
+			$cmd = "{$this->_gzip} -k --best -f {$this->fb->csvfile}";
 			`$cmd`;
 		} else if ( file_exists($this->fb->csvfile . '.gz') ) {
 			$this->fb->log("Can't write new {$this->fb->csvfile}.gz, but it exists. It may get served and show stale results");

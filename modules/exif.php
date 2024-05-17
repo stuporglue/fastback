@@ -45,7 +45,7 @@ trait Fastback_Exif {
 				$err = fgets($pipes[2]);
 				if ( $err !== FALSE ) {
 					$no_err = FALSE;
-					$this->log($err);
+					$this->fb->log($err);
 				}
 
 				if ($err === FALSE && $line === FALSE) {
@@ -61,7 +61,7 @@ trait Fastback_Exif {
 				if ( preg_match('/^======== (.*)/',$line, $matches ) ) {
 
 					if ($matches[1] != $exiftarget) {
-						$this->log("Expected '$exiftarget', got '$matches[1]'");
+						$this->fb->log("Expected '$exiftarget', got '$matches[1]'");
 						die("Somethings broken");
 					}
 				} else if (preg_match('/^([^ ]+)\s*:\s*(.*)$/',$line,$matches)){
@@ -73,7 +73,7 @@ trait Fastback_Exif {
 				} else if ($line === ''){
 					// do nothing
 				} else {
-					$this->log("Don't know how to handle exif line '" . $line . "'");
+					$this->fb->log("Don't know how to handle exif line '" . $line . "'");
 					// die("Quitting for fun");
 				}
 			}
@@ -163,7 +163,7 @@ trait Fastback_Exif {
 				} else if ( $exif['GPSAltitude'] == 'undef') {
 					$xyz['elev'] = 0;
 				} else {
-					$this->log("New type of altitude value found: {$exif['GPSAltitude']} in $file");
+					$this->fb->log("New type of altitude value found: {$exif['GPSAltitude']} in $file");
 					$xyz['elev'] = 0;
 				}
 			} else {
@@ -229,7 +229,7 @@ trait Fastback_Exif {
 				$xyz['lon'] = $matches[3];
 				$xyz['lat'] = $matches[1];
 			} else {
-				$this->log("Couldn't parse >>$line<<");
+				$this->fb->log("Couldn't parse >>$line<<");
 			}
 		}
 		return $xyz;
@@ -282,7 +282,7 @@ trait Fastback_Exif {
 				preg_match('/(\d{4})\D(\d{2})\D(\d{2})/',trim($exif[$tag]),$matches);
 
 				if ( count($matches) !== 4 ) {
-					$this->log("Coudln't regex a date from {$exif[$tag]}");
+					$this->fb->log("Coudln't regex a date from {$exif[$tag]}");
 					continue;
 				} else {
 					$matches[4] = '00';
@@ -502,7 +502,6 @@ trait Fastback_Exif {
 
 		do {
 			$queue = $this->fb->sql_get_queue("exif IS NULL AND module={$this->id}");
-			print_r($queue);
 
 			$found_exif = array();
 
@@ -519,7 +518,7 @@ trait Fastback_Exif {
 
 			$this->fb->sql_update_case_when("UPDATE fastback SET _util=NULL, exif=CASE",$found_exif,"ELSE exif END",True);
 			$this->fb->sql_query_single("UPDATE cron SET due_to_run=1 WHERE job = 'process_exif'"); // If we found exif, then we need to process it.
-			$this->cron->sql_update_cron_status('get_exif');
+			$this->cron->sql_update_cron_status('get_meta');
 
 		} while (!empty($queue) );
 
@@ -592,8 +591,6 @@ trait Fastback_Exif {
 
 			foreach($queue as $row) {
 
-				print_r($row);
-
 				$exif = json_decode($row['exif'],true);
 				$this->fb->log("Processing exif for {$row['file']}");
 
@@ -627,7 +624,7 @@ trait Fastback_Exif {
 						$q .= "$k='" . SQLite3::escapeString($v). "', ";
 					}
 				}
-				$q .= "file=file WHERE file='" . SQLite3::escapeString($row['file']) . "'";
+				$q .= "file=file WHERE file='" . SQLite3::escapeString($row['file']) . "' AND module={$this->id}";
 
 				$this->fb->_sql->query($q);
 			}
