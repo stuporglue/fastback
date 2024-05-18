@@ -386,7 +386,7 @@ class Fastback_Cron {
 		// A change to the sqlite or this file could indicate the need for a new csv. 
 		// With the cron jobs being busy in the sqlite file that's not completely accurate, but it's the best easy thing.
 
-		if ( !file_exists($this->fb->csvfile) || filemtime($this->fb->sqlitefile) - filemtime($this->fb->csvfile) > 0 || filemtime(__FILE__) -  filemtime($this->fb->csvfile) > 0) {
+		if ( $this->fb->debug || !file_exists($this->fb->csvfile) || filemtime($this->fb->sqlitefile) - filemtime($this->fb->csvfile) > 0 || filemtime(__FILE__) -  filemtime($this->fb->csvfile) > 0) {
 			$wrote = $this->util_make_csv();
 			if ( $wrote ) {
 				$this->sql_update_cron_status('make_csv',true);
@@ -463,11 +463,11 @@ class Fastback_Cron {
 		// Calculate how much of each job is done.
 		$total_rows = $this->fb->sql_query_single("SELECT COUNT(*) FROM fastback");
 		$exif_rows = $this->fb->sql_query_single("SELECT COUNT(*) FROM fastback WHERE flagged or exif IS NOT NULL");
-		$video_rows = $this->fb->sql_query_single("SELECT COUNT(*) FROM fastback WHERE isvideo=1 AND flagged IS NULL");
+		$webversion_rows = $this->fb->sql_query_single("SELECT COUNT(*) FROM fastback WHERE webversion_made=1 AND flagged IS NULL");
 
 		$cron_status['get_meta']['percent_complete'] = $total_rows > 0 ? round( $exif_rows / $total_rows,4) * 100 . '%' : '0%';
 		$cron_status['make_thumbs']['percent_complete'] = $total_rows > 0 ? round($this->fb->sql_query_single("SELECT COUNT(*) FROM FASTBACK WHERE flagged OR thumbnail IS NOT NULL") / $total_rows,4) * 100 . '%' : '0%';
-		$cron_status['make_webversion']['percent_complete'] = $video_rows > 0 ? round($this->fb->sql_query_single("SELECT COUNT(*) FROM FASTBACK WHERE webversion_made=1") / $video_rows,4) * 100 . '%' : '0%';
+		$cron_status['make_webversion']['percent_complete'] = $webversion_rows > 0 ? round($this->fb->sql_query_single("SELECT COUNT(*) FROM FASTBACK WHERE webversion_made=1") / $webversion_rows,4) * 100 . '%' : '0%';
 		$cron_status['process_meta']['percent_complete'] = $exif_rows > 0 ? round($this->fb->sql_query_single("SELECT COUNT(*) FROM FASTBACK WHERE flagged OR sorttime IS NOT NULL") / $exif_rows,4) * 100 . '%' : '0%';
 
 		$all_or_nothing = array('remove_deleted','find_new_files','make_csv','clear_locks','status');
@@ -539,57 +539,64 @@ class Fastback_Cron {
 	 *
 	 * @note Using $print_if_not_write will cause this function to exit() after sending.
 	 */
-	public function util_make_csv($print_if_not_write = false){
+	public function util_make_csv(){
 		$this->fb->sql_connect();
 
 		$q = "SELECT 
-			fb.file AS file,
-			fb.isvideo AS isvideo,
+			CONCAT(fb.module,':',fb.file) AS file,
 			COALESCE(CAST(STRFTIME('%s',fb.sorttime) AS INTEGER),fb.mtime) AS filemtime,
 			ROUND(fb.lat,5) AS lat,
 			ROUND(fb.lon,5) AS lon,
 			fb.tags AS tags,
-			livevid.file AS live
+			(CASE 
+				WHEN livevid.file IS NOT NULL THEN CONCAT(livevid.module,':',livevid.file)
+				ELSE NULL
+			END) AS  live
 			FROM fastback fb
-			LEFT JOIN fastback livevid ON (fb.content_identifier = livevid.content_identifier AND fb.file <> livevid.file AND livevid.content_identifier <> '-1')
+			INNER JOIN modules modules ON (fb.module=modules.id)
+			
+			-- Some photos have live versions. In the database this shows up as two records - a photo record and a video record. we connect them with the content_identifier in their exif data.
+			-- When we make the CSV we want to to only show the photo version. 
+			-- The javascript handles swapping the photo for the video, if needed.
+			-- If some other module type supports something like this in the future, then we'll need to update this code. 
+			-- We have to do two joins. The first is to find the live version. The second is to find the main live listing to exclude.
+			LEFT JOIN fastback livevid ON ( fb.content_identifier = livevid.content_identifier )
 			WHERE 
-			fb.file_ready
-			AND fb.flagged IS NOT TRUE 
+			fb.flagged IS NOT TRUE 
+			AND livevid.content_identifier IS NOT NULL
+			AND livevid.content_identifier <> '-1'
+			AND livevid.module<>fb.module 
+			AND fb.file <> livevid.file 
+			AND fb.content_identifier IS NOT NULL
 			AND (fb.maybe_meme <= '" . SQLite3::escapeString($this->fb->maybe_meme_level) . "' OR fb.maybe_meme IS NULL) -- Only display non-memes. Threshold of 1 seems pretty ok
-			AND (livevid.file IS NULL OR livevid.isvideo) -- Only keep photo to video mappings
+			AND (livevid.file IS NULL OR modules.module_type='photos') -- 
 ";
 		if ( $this->fb->sort_order == "file" ) {
 			$q .= "ORDER BY fb.file " . $this->fb->sortorder;
 		} else {
 			$q .= "ORDER BY filemtime " . $this->fb->sortorder . ",fb.file " . $this->fb->sortorder;
 		}
+
+		print($q . "\n");
+
+		print(__FILE__ . ":" . __LINE__ . ' -- ' .  microtime () . "\n"); 
+
+		print(__FILE__ . ":" . __LINE__ . ' -- ' .  microtime () . "\n"); 
 		$res = $this->fb->_sql->query($q);
 
-		$printed = false;
+		print(__FILE__ . ":" . __LINE__ . ' -- ' .  microtime () . "\n"); 
 		$this->fb->log("Trying to write to CSV file {$this->fb->csvfile}\n");
 		$fh = fopen($this->fb->csvfile,'w');
-		if ( $fh === false  && $print_if_not_write) {
-			$printed = true;
-			header("Content-type: text/plain");
-			header("Content-Disposition: inline; filename=\"" . basename($this->fb->csvfile) . "\"");
-			header("Last-Modified: " . filemtime($this->fb->csvfile));
-			header('Cache-Control: max-age=86400');
-			header('Etag: ' . md5_file($this->fb->sqlitefile));
-			$fh = fopen('php://output', 'w');
-		}
+		print(__FILE__ . ":" . __LINE__ . ' -- ' .  microtime () . "\n"); 
 
 		while($row = $res->fetchArray(SQLITE3_ASSOC)){
-			if ( $row['isvideo'] == 0 ) {
-				$row['isvideo'] = NULL;
-			}
 			fputcsv($fh,$row);
 		}
+		print(__FILE__ . ":" . __LINE__ . ' -- ' .  microtime () . "\n"); 
 		fclose($fh);
+		print(__FILE__ . ":" . __LINE__ . ' -- ' .  microtime () . "\n"); 
 		$this->fb->sql_disconnect();
-
-		if ( $printed ) {
-			exit();
-		}
+		print(__FILE__ . ":" . __LINE__ . ' -- ' .  microtime () . "\n"); 
 
 		if ( !isset($this->_gzip) ) { $this->_gzip= trim(`which gzip`); }
 

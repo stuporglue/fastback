@@ -579,11 +579,11 @@ class Fastback {
 		$html .= '<script>
 			fastback = new Fastback({
 			csvurl: "?csv=get&ts=' . $csvmtime . '",
-				fastbackurl: "' . $this->siteurl . $base_script . '",
-				photocount: ' . $this->sql_query_single("SELECT COUNT(*) FROM fastback") . ',
-				basemap: ' . $this->basemap . ',
-				sort_order: "' . ($this->sort_order == 'file' ? 'file' : 'date') . '",
-				debugger: "' . ($_SESSION['authed'] === true && $this->debug ? 'debug' : 'none') . '"
+			fastbackurl: "' . $this->siteurl . $base_script . '",
+			photocount: ' . $this->sql_query_single("SELECT COUNT(*) FROM fastback") . ',
+			basemap: ' . $this->basemap . ',
+			sort_order: "' . ($this->sort_order == 'file' ? 'file' : 'date') . '",
+			debugger: "' . ($_SESSION['authed'] === true && $this->debug ? 'debug' : 'none') . '"
 	});';
 
 			$html .= 'if("serviceWorker" in navigator) {
@@ -601,7 +601,7 @@ class Fastback {
 	 */
 	public function send_csv() {
 		if ( !file_exists($this->csvfile ) ) {
-			$wrote = $this->util_make_csv(true);
+			$wrote = $this->util_make_csv();
 
 			if ( !$wrote ) {
 				header("HTTP/1.0 404 Not Found");
@@ -892,8 +892,7 @@ class Fastback {
 			maybe_meme INT,
 			share_key VARCHAR(32),
 			tags TEXT,
-			content_identifier TEXT,
-			file_ready BOOL
+			content_identifier TEXT
 		)";
 
 		$res = $this->_sql->query($q_create_files);
@@ -905,6 +904,12 @@ class Fastback {
 			module_type TEXT,
 			CONSTRAINT unique_module UNIQUE(path,module_type)
 		)";
+
+		$this->_sql->query("CREATE UNIQUE INDEX IF NOT EXISTS fb_file ON fastback (file)");
+		$this->_sql->query("CREATE INDEX IF NOT EXISTS fb_content_identifier ON fastback (content_identifier)");
+		$this->_sql->query("CREATE INDEX IF NOT EXISTS fb_module ON fastback (module)");
+		$this->_sql->query("CREATE INDEX IF NOT EXISTS fb_maybe_meme ON fastback (maybe_meme)");
+		$this->_sql->query("CREATE INDEX IF NOT EXISTS fb_csvsort ON fastback (COALESCE(CAST(STRFTIME('%s',sorttime) AS INTEGER),mtime),file)");
 
 		$res = $this->_sql->query($q_create_modules);
 
