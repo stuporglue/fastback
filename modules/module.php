@@ -212,6 +212,10 @@ class Fastback_Module {
 	 * Send the download version.
 	 */
 	public function send_download($file){
+		$this->fb->util_readfile($this->path . '/' . $file,'download');
+	}
+
+	public function send_share($file){
 		$this->fb->util_readfile($this->path . '/' . $file);
 	}
 }

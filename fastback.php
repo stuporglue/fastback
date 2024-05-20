@@ -631,29 +631,25 @@ class Fastback {
 			return false;
 		}
 		$share = SQLite3::escapeString($_GET['share']);
-		$file = $this->sql_query_single("SELECT file FROM fastback WHERE share_key='$share'");
+		$row = $this->sql_query_single("SELECT module,file FROM fastback WHERE share_key='$share'",true);
 
-		if ( !$file ) {
+		if ( !$row ) {
 			http_response_code(404);
 			$this->log("Someone tried to access a shared file with parameters " . print_r($_GET,true));
 			die();
 		}
 
-		if ( !file_exists($this->photobase . $file) ) {
+		if ( !$file = $this->util_file_is_ok($row['file'],$row['module']) ) {
 			http_response_code(404);
 			$this->log("Someone tried to access $file, which doesn't exist");
 			die();
 		}
 
-		if ( !empty($_GET['proxy']) ) {
-			$_GET['proxy'] = $file;
-			return $this->send_proxy();
+		if ( !array_key_exists($row['module'],$this->modules) ) {
+			die("The requested module is not loaded");
 		}
 
-		$file = $this->photobase . $file;
-
-		$this->util_readfile($file);
-		exit();
+		$this->modules[$row['module']]->send_share($row['file']);
 	}
 
 	/**
@@ -806,8 +802,10 @@ class Fastback {
 	 */
 	public function action_flag_photo(){
 		if (!empty($this->canflag) && !empty($_SESSION['user']) && in_array($_SESSION['user'],$this->canflag)){
-			$file = SQLite3::escapeString($_GET['flag']);
-			$row = $this->sql_query_single("UPDATE fastback SET flagged=1 WHERE file='$file' RETURNING file,flagged",true);
+			$mfile = explode(':',$_GET['flag']);
+			$file = SQLite3::escapeString('./' . $mfile[1]);
+			$module = SQLite3::escapeString($mfile[0]);
+			$row = $this->sql_query_single("UPDATE fastback SET flagged=1 WHERE file='$file' AND module='$module' RETURNING file,flagged",true);
 		} else {
 			$row = array('error' => 'access denied');
 			http_response_code(403);

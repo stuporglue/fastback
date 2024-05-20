@@ -445,7 +445,7 @@ Fastback = class Fastback {
 	 */
 	handle_send_download(e) {
 		var photoid = jQuery('#thumb').data('curphoto');
-		var download = encodeURI(this.fastbackurl + '?download=' + this.orig_photos[photoid]['file']);
+		var download = encodeURI(this.fastbackurl + '?download=' + this.orig_photos[photoid]['mfile']);
 		window.open(download, '_blank').focus();
 	}
 
@@ -454,7 +454,7 @@ Fastback = class Fastback {
 	 */
 	handle_flagphoto(e) {
 		var photoid = jQuery('#thumb').data('curphoto');
-		var imgsrc = this.orig_photos[photoid]['file'];
+		var imgsrc = this.orig_photos[photoid]['mfile'];
 		var url = encodeURI(this.fastbackurl + '?flag=' + imgsrc);
 		$.get(url).then(function(){
 			$('#thumbflag').animate({ opacity: 0.3 })
@@ -500,9 +500,9 @@ Fastback = class Fastback {
 	handle_shareclick(e) {
 		var photoid = jQuery('#thumb').data('curphoto');
 		var orig = this.orig_photos[photoid];
-		var fullsize = orig.file;
+		var fullsize = './' + orig.file;
 
-		var share_uri = encodeURI(this.fastbackurl + '?file=' + fullsize + '&share=' + md5(fullsize));
+		var share_uri = encodeURI(this.fastbackurl + '?file=' + this.orig_photos[photoid].mfile + '&share=' + md5(fullsize));
 		share_uri = new URL(share_uri,document.location).href;
 
 		if ( !orig.isvideo ) {
