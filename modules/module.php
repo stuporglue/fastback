@@ -200,4 +200,18 @@ class Fastback_Module {
 	public function __toString() {
 		return "Module ({$this->id}): {$this->module_type}, at {$this->path}";
 	}
+
+	/**
+	 * Send the full-sized webview version.
+	 */
+	public function send_web_view($file){
+		die("send_web_view should be overridden");
+	}
+
+	/**
+	 * Send the download version.
+	 */
+	public function send_download($file){
+		$this->fb->util_readfile($this->path . '/' . $file);
+	}
 }

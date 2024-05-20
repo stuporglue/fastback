@@ -14,11 +14,11 @@
 	RewriteEngine On
 
 	# For thumbnail requests...
-	RewriteCond %{QUERY_STRING} thumbnail=([^&]+)
+	RewriteCond %{QUERY_STRING} thumbnail=([0-9]+):([^&]+)
     # Where the thumbnail already exists on disk...
-	RewriteCond "/path/to/cache/directory/on/disk/%1.webp" -f 
+	RewriteCond "/path/to/cache/directory/on/disk/%1/%2.webp" -f 
 	# Skip the PHP and serve the file directly
-	RewriteRule .* "/url/to/cache/%1.webp" [R=302,QSD,L]
+	RewriteRule .* "/url/to/cache/%1/%2.webp" [R=302,QSD,L]
     # If you're doing this you probably don't need a template... RewriteRule .* "https://otherdomain.com/url/to/cache/%1.webp" [QSD,L]
 
 	# For proxied videos, which we have pre-rendered

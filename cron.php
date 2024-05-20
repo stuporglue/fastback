@@ -548,12 +548,12 @@ class Fastback_Cron {
 		$this->fb->sql_connect();
 
 		$q = "SELECT 
-			CONCAT(fb.module,':',fb.file) AS file,
-			COALESCE(CAST(STRFTIME('%s',fb.sorttime) AS INTEGER),fb.mtime) AS filemtime,
-			ROUND(fb.lat,5) AS lat,
-			ROUND(fb.lon,5) AS lon,
-			fb.tags AS tags,
-			alt_content
+			REPLACE(CONCAT(fb.module,':',fb.file),':./',':') AS file, -- 0
+			COALESCE(CAST(STRFTIME('%s',fb.sorttime) AS INTEGER),fb.mtime) AS filemtime, -- 1
+			ROUND(fb.lat,5) AS lat, -- 2 
+			ROUND(fb.lon,5) AS lon, -- 3
+			fb.tags AS tags, -- 4 
+			REPLACE(alt_content,':./',':') -- 5
 			FROM fastback fb
 			WHERE 
 			fb.flagged IS NOT TRUE 

@@ -86,7 +86,6 @@ class Fastback {
 	/*
 	 * Locations
 	 */
-	// var $photobase = __DIR__ . '/../';				// File path to full sized photos, Optional, will use current directory as default
 	var $fastback_log = __DIR__ . '/cache/fastback.log'; // Where should fastabck log things. Nothing should get logged if debug is not true
 	var $filecache = __DIR__ . '/cache/';			// Folder path to cache directory. sqlite and thumbnails will be stored here. 
 													// Optional, will create a cache folder in the current directory as the default
@@ -126,7 +125,6 @@ class Fastback {
 	public function run() {
 		$this->siteurl = $this->util_base_url();
 		// Ensure trailing slashes
-		// $this->photobase = rtrim($this->photobase,'/') . '/';
 		$this->filecache = rtrim($this->filecache,'/') . '/';
 
 		if ( !is_dir($this->filecache) ) {
@@ -205,7 +203,6 @@ class Fastback {
 
 		// Where's stuff stored
 		$this->log("| Storage");
-		$this->log("|  photobase: $this->photobase");
 		$this->log("|  filecache: $this->filecache");
 		$this->log("|   exists: " . (file_exists($this->filecache) ? 'TRUE' : 'FALSE'));
 		$this->log("|   writable: " . (is_writable($this->filecache) ? 'TRUE' : 'FALSE'));
@@ -443,6 +440,9 @@ class Fastback {
 		if ( !$file_safe ) {
 			http_response_code(404);
 			$this->log("Someone tried to access file '''$file'''");
+			var_dump($file);
+			var_dump($module);
+			die(__FILE__ . ":" . __LINE__ . ' -- ' .  microtime () ); 
 			die();
 		}
 
@@ -573,9 +573,17 @@ class Fastback {
 			$csvmtime = filemtime(__FILE__);
 		}
 
+		$query = "SELECT * FROM modules";
+		$res = $this->_sql->query($query);
+		$modules = array();
+		while($row = $res->fetchArray(SQLITE3_ASSOC)){
+			$modules[$row['id']] = $row['module_type'];
+		}
+
 		$html .= '<script>
 			fastback = new Fastback({
 			csvurl: "?csv=get&ts=' . $csvmtime . '",
+			modules: ' . json_encode($modules) . ',
 			fastbackurl: "' . $this->siteurl . $base_script . '",
 			photocount: ' . $this->sql_query_single("SELECT COUNT(*) FROM fastback") . ',
 			basemap: ' . $this->basemap . ',
@@ -652,41 +660,13 @@ class Fastback {
 	 * Proxy a file type which is not supported by the browser.
 	 */
 	public function send_proxy() {
-		if ( !($file = $this->util_file_is_ok($_GET['proxy']) ) ) {
-			die();
+		$mfile = explode(':',$_GET['proxy']);
+
+		if ( !array_key_exists($mfile[0],$this->modules) ) {
+			die("The requested module is not loaded");
 		}
 
-		$video = $this->sql_query_single("SELECT isvideo FROM fastback WHERE file='" . SQLite3::escapeString($file) . "'");
-
-		if ( !$video) {
-			if ( !isset($this->_convert) ) { $this->_convert = trim(`which convert`); }
-
-			// Vips is just for thumbnails, try imagemagick
-			if ( !empty($this->_convert) ) {
-				header("Content-Type: image/jpeg");
-				header("Content-Disposition: inline; filename=\"" . basename($file) . ".jpg\"");
-				$cmd = $this->_convert . ' ' . escapeshellarg($this->photobase . $file) . ' JPG:-';
-				passthru($cmd);
-				exit();
-			} else {
-				// Fallback to sending the original. Maybe they can figure out what to do with it.
-				header("Location: ?download=$file");
-				exit();
-			}
-		} else {
-			if ( file_exists($this->filecache . $file . '.mp4') ) {
-				header("Content-Type: video/mp4");
-				header("Content-Disposition: inline; filename=\"" . basename($file) . ".mp4\"" );
-				header("Content-Length: ".filesize($this->filecache . $file . '.mp4'));
-				header("Last-Modified: " . filemtime($this->filecache . $file . '.mp4'));
-				header('Cache-Control: max-age=86400');
-				header('Etag: ' . md5_file($this->filecache . $file . '.mp4'));
-				readfile($this->filecache . $file . '.mp4');
-				exit();
-			} else {
-				header("Location: ?download=$file");
-			}
-		}
+		$this->modules[$mfile[0]]->send_web_view('./' . $mfile[1]);
 	}
 
 	/**
@@ -695,13 +675,16 @@ class Fastback {
 	 * Dies if file not in database or not on disk
 	 */
 	public function send_download() {
-		if ( !$file = $this->util_file_is_ok($_GET['download']) ) {
+		$mfile = explode(':',$_GET['download']);
+		if ( !$file = $this->util_file_is_ok('./' . $mfile[1],$mfile[0]) ) {
 			die();
 		}
 
-		$file = $this->photobase . $file;
-		$this->util_readfile($file,'download');
-		exit();
+		if ( !array_key_exists($mfile[0],$this->modules) ) {
+			die("The requested module is not loaded");
+		}
+
+		$this->modules[$mfile[0]]->send_download('./' . $mfile[1]);
 	}
 
 	/**
@@ -710,13 +693,15 @@ class Fastback {
 	 * Dies if file not in database or not on disk
 	 */
 	public function send_thumbnail() {
-		$thumbnailfile = $this->_make_a_thumb($_GET['thumbnail'],false,true);
+		$tninfo = explode(':',$_GET['thumbnail']);
+
+		$tnfile = './' . $tninfo[1];
+
+		$thumbnailfile = $this->modules[$tninfo[0]]->make_a_thumb($tnfile);
 
 		if ( empty($thumbnailfile) ) {
 			$this->log("Couldn't find thumbnail for '''{$_GET['thumbnail']}''', sending full sized!!!");
-			// I know this breaks video thumbs, but if a user is just getting set up I want something to still work for them
-			// This at least gets them images for now
-			$thumbnailfile = $this->photobase . $this->util_file_is_ok($_GET['thumbnail']);
+			return false;
 		} else {
 			$thumbnailfile = $this->filecache . $thumbnailfile;
 		}

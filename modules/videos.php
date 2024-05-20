@@ -135,14 +135,11 @@ class Fastback_Videos extends Fastback_Module {
 
 	public function prep_for_csv() {
 		// Start by assuming anything unprocessed is valid
-		print(__FILE__ . ":" . __LINE__ . ' -- ' .  microtime () );
 		$this->fb->sql_query_single("UPDATE fastback SET csv_ready=1 WHERE csv_ready IS NULL AND module={$this->id}");
-		print(__FILE__ . ":" . __LINE__ . ' -- ' .  microtime () );
 
 		// Remove duplicates
 		// REPEAT UNTIL NO MORE files found
 		do {
-		print(__FILE__ . ":" . __LINE__ . ' -- ' .  microtime () );
 		$res = $this->fb->sql_query_single("
 						UPDATE 
 						fastback 
@@ -165,7 +162,6 @@ class Fastback_Videos extends Fastback_Module {
 						");
 		} while (!empty($res));
 
-		print(__FILE__ . ":" . __LINE__ . ' -- ' .  microtime () );
 		$this->fb->sql_query_single("
 				UPDATE
 				fastback
@@ -187,6 +183,21 @@ class Fastback_Videos extends Fastback_Module {
 				)
 				AND module={$this->id}
 		");
-		print(__FILE__ . ":" . __LINE__ . ' -- ' .  microtime () );
+	}
+
+	public function send_web_view($file) {
+		$full_file = $this->fb->filecache . '/' . $this->id . '/' . $file  . '.mp4';
+		if ( file_exists($full_file) ) {
+			header("Content-Type: video/mp4");
+			header("Content-Disposition: inline; filename=\"" . basename($full_file) . "\"" );
+			header("Content-Length: ".filesize($full_file));
+			header("Last-Modified: " . filemtime($full_file));
+			header('Cache-Control: max-age=86400');
+			header('Etag: ' . md5_file($full_file));
+			readfile($full_file);
+			exit();
+		} else {
+			header("Location: ?download={$this->id}:" . preg_replace('^./','',$file));
+		}
 	}
 }

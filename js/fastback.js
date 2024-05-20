@@ -7,6 +7,7 @@ Fastback = class Fastback {
 	 * Load the data and set up event handlers
 	 */
 	constructor(args) {
+		this.modules = {};
 		var progressbar = jQuery('#loadingprogress');
 		this.setup_setProps();
 		jQuery.extend(this,args);
@@ -67,7 +68,6 @@ Fastback = class Fastback {
 		this.active_filters = {};
 		this.dirty_filters = false;
 		this.active_tags = [];
-		this.sort_order = 'date';
 
 		// Browser supported file types - will be shown directly. 
 		// Anything not in this list will be proxied into a jpg
@@ -122,33 +122,36 @@ Fastback = class Fastback {
 					return;
 				}
 
-				if ( res.data[4] !== '' ) {
+				if ( res.data[2] !== '' ) {
 					has_geo = true;
 				}
-				if ( res.data[5] !== '' ) {
+				if ( res.data[4] !== '' ) {
 					has_tag = true;
 
-					var tags = res.data[5].split('|');
+					var tags = res.data[4].split('|');
 					for(var j=0;j<tags.length;j++){
 						self.tags[tags[j]] = self.tags[tags[j]] || 0;
 						self.tags[tags[j]]++;
 					}
 				}
 
-				curpath = res.data[0].match(/.*\//)[0].replace(/^\.\//,'').replace(/\/$/,'');
+				var fileinfo = res.data[0].split(':');
+
+				curpath = fileinfo[1].match(/.*\//)[0].replace(/\/$/,'');
 				if ( !self.paths.includes(curpath) && curpath !== "") {
 					self.paths.push(curpath);
 				}
 
 				self.photos.push({
-					'file': res.data[0],
-					'path': res.data[0].match(/.*\//)[0].replace(/^\.\//,'').replace(/\/$/,''),
-					'isvideo': res.data[1] == 1,
-					'date': new Date(res.data[2] * 1000),
 					'type': 'media',
-					'coordinates': (isNaN(parseFloat(res.data[4])) ? null : [parseFloat(res.data[4]),parseFloat(res.data[3])]),
-					'tags': res.data[5].split('|'),
-					'live': res.data[6]
+					'mfile': res.data[0],
+					'module': fileinfo[0],
+					'file': fileinfo[1],
+					'path': res.data[0].match(/.*\//)[0].replace(/\/$/,''),
+					'date': new Date(res.data[1] * 1000),
+					'coordinates': (isNaN(parseFloat(res.data[3])) ? null : [parseFloat(res.data[3]),parseFloat(res.data[2])]),
+					'tags': res.data[4] == "" ? [] : res.data[4].split('|'),
+					'alt': res.data[5] == "" ? null : res.data[5]
 				});
 
 				// Only check progress every 1000 rows
@@ -831,30 +834,17 @@ Fastback = class Fastback {
 				continue;
 			}
 
-			if ( this.sort_order == 'file' ) {
-				cur_path = photos[i].path;
+			cur_date = photos[i].date.getFullYear() + '-' + (photos[i].date.getMonth() + 1) + '-' + (photos[i].date.getDate());
 
-				if ( cur_path != prev_path) {
-					photos.splice(i,0,{
-						'type': 'pathblock',
-						'path': cur_path
-					});
-				}
+			if ( cur_date != prev_date ) {
+				photos.splice(i,0,{
+					'type': 'dateblock',
+					'printdate': cur_date,
+					'date': photos[i]['date']
+				});
+			}
 
-				prev_path = cur_path;
-			} else { // Should be the case that this.sort_order == 'date' ) {
-				cur_date = photos[i].date.getFullYear() + '-' + (photos[i].date.getMonth() + 1) + '-' + (photos[i].date.getDate());
-
-				if ( cur_date != prev_date ) {
-					photos.splice(i,0,{
-						'type': 'dateblock',
-						'printdate': cur_date,
-						'date': photos[i]['date']
-					});
-				}
-
-				prev_date = cur_date;
-			} 
+			prev_date = cur_date;
 
 			if ( this.orig_photos == undefined ) {
 				photos[i].id = i;
@@ -881,19 +871,7 @@ Fastback = class Fastback {
 		var errimg;
 		var html = this.photos.slice(slice_from,slice_to).map(function(p){
 
-			if ( p.type == 'media' ) {
-				if ( p.isvideo ) {
-					vidclass = ' vid';
-					errimg = 'movie.webp';
-				} else if ( p.live ) {
-					errimg = 'picture.webp';
-					vidclass = ' live';
-				} else {
-					errimg = 'picture.webp';
-					vidclass = '';
-				}
-				return '<div class="tn' + vidclass + '"><img data-photoid="' + p.id + '" src="' + encodeURI(self.fastbackurl + '?thumbnail=' + p.file) + '" onerror="this.onerror=null;this.src=\'fastback/img/' + errimg + '\';"/></div>';
-			} else if ( p.type == 'dateblock' ) {
+			if ( p.type == 'dateblock' ) {
 				date = p.date;
 				// I feel like this is kind of clever. I take the Year-Month, eg. 2021-12, parse it to an int like 202112 and then take the mod of the palette length to get a fixed random color for each date.
 				var cellhtml = '<div class="tn nolink" style="background-color: ' + self.palette[parseInt(p.printdate.replaceAll('-','')) % self.palette.length] + ';">';
@@ -904,21 +882,20 @@ Fastback = class Fastback {
 				cellhtml += '</div>';
 				cellhtml += '</div>';
 				return cellhtml;
-			} else if ( p.type == 'pathblock' ) {
-				var curpath = p.path;
-				if ( curpath == '' ) {
-					curpath = '(Home)';
+			} else {
+				if (self.modules[p.module] == 'photos') {
+					if ( p.alt !== null ) {
+						errimg = 'picture.webp';
+						vidclass = ' live';
+					} else {
+						errimg = 'picture.webp';
+						vidclass = ' ';
+					}
+				} else if (self.modules[p.module] == 'videos') {
+					vidclass = ' vid';
+					errimg = 'movie.webp';
 				}
-				var path_parts = curpath.split('/');
-				var cellhtml = '<div class="tn nolink" style="background-color: ' + self.palette[curpath.split('').reduce(function(e,f){e += f.charCodeAt(0); return e;},0) % self.palette.length] + ';">';
-				cellhtml += '<div class="faketable pathblock">';
-				for (var i = 0; i < path_parts.length; i++ ) {
-					cellhtml += '<div class="faketablecell">' + '&nbsp;'.repeat(i) + (i > 0 ? '&#x21B3; ' : '' ) +  path_parts[i] + '</div>';
-				}
-				cellhtml += '</div>';
-				cellhtml += '</div>';
-				return cellhtml;
-
+				return '<div class="tn' + vidclass + '"><img data-photoid="' + p.id + '" src="' + encodeURI(self.fastbackurl + '?thumbnail=' + p.mfile) + '" onerror="this.onerror=null;this.src=\'fastback/img/' + errimg + '\';"/></div>';
 			}
 		}).join("");
 		var e = jQuery.parseHTML('<div class="photorow">' + html + '</div>');
@@ -1084,18 +1061,18 @@ Fastback = class Fastback {
 		if ( photo === undefined ) {
 			return false;
 		}
-		var imgsrc = showlive ? photo.live : photo.file;
+		var imgsrc = showlive ? photo.alt : photo.mfile;
 		var basename = imgsrc.replace(/.*\//,'');
-			var directlink = encodeURI(this.fastbackurl + '?download=' + imgsrc);
+		var directlink = encodeURI(this.fastbackurl + '?download=' + imgsrc);
 
 			// File type not found, proxy a jpg instead
 			var supported_type = (this.browser_supported_file_types.indexOf(imgsrc.replace(/.*\./,'').toLowerCase()) != -1);
 			if ( !supported_type || photo.isvideo ) {
 				directlink = encodeURI(this.fastbackurl + '?proxy=' + imgsrc );	
 			}
-			var share_uri = encodeURI(this.fastbackurl + '?file=' + imgsrc + '&share=' + md5(imgsrc));
+			var share_uri = encodeURI(this.fastbackurl + '?file=' + imgsrc + '&share=' + md5('./' + photo.file));
 
-			if (showlive || photo.isvideo){
+			if (showlive || this.modules[photo.module] == 'videos'){
 				// the onloadedmetadata script is to make very short videos (like iOS live photos) loop but longer videos do not loop
 				imghtml = '<video id="thevideo" controls loop ' + (showlive ? ' ' : ' poster="' + encodeURI(this.fastbackurl + '?thumbnail=' +  imgsrc) + '"') + ' preload="auto" onloadedmetadata="this.duration > 5 ? this.removeAttribute(\'loop\') : false">';
 				// Put the proxied link, this should be a transcoded mp4 version

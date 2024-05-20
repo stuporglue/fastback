@@ -12,6 +12,8 @@ class Fastback_Photos extends Fastback_Module {
 
 	var $_vipsthumbnail; // tool to make thumbs
 
+	var $_convert; // Where is imagemagick
+
 	var $supported_types = array(	// Photo formats that we will search for
 		'png',
 		'jpg',
@@ -59,13 +61,11 @@ class Fastback_Photos extends Fastback_Module {
 
 	public function prep_for_csv() {
 		// Start by assuming anything unprocessed is valid
-		print(__FILE__ . ":" . __LINE__ . ' -- ' .  microtime () );
 		$this->fb->sql_query_single("UPDATE fastback SET csv_ready=1 WHERE csv_ready IS NULL AND module={$this->id}");
 
 		// Remove duplicates
 		// DO THIS WHILE more rows returned
 		do { 
-		print(__FILE__ . ":" . __LINE__ . ' -- ' .  microtime () );
 		$res = $this->fb->sql_query_single("
 				UPDATE 
 				fastback 
@@ -87,11 +87,9 @@ class Fastback_Photos extends Fastback_Module {
 				RETURNING file
 				");
 
-			var_dump($res);
 		} while (!empty($res));
 
 		// Set alt values
-		print(__FILE__ . ":" . __LINE__ . ' -- ' .  microtime () );
 		$this->fb->sql_query_single("
 				UPDATE
 				fastback
@@ -116,7 +114,21 @@ class Fastback_Photos extends Fastback_Module {
 				AND fastback.content_identifier=alty.content_identifier
 				AND fastback.alt_content IS NULL
 		");
-		print(__FILE__ . ":" . __LINE__ . ' -- ' .  microtime () );
+	}
 
+	public function send_web_view($file) {
+			if ( !isset($this->_convert) ) { $this->_convert = trim(`which convert`); }
+
+			// Vips is just for thumbnails, try imagemagick
+			if ( !empty($this->_convert) ) {
+				$cmd = $this->_convert . ' ' . escapeshellarg($this->path . '/' . $file) . ' JPG:-';
+				header("Content-Type: image/jpeg");
+				header("Content-Disposition: inline; filename=\"" . basename($file) . ".jpg\"");
+				passthru($cmd);
+				exit();
+			} else {
+				die(__FILE__ . ":" . __LINE__ . ' -- ' .  microtime () ); 
+				header("Location: ?download={$this->id}:" . preg_replace('^./','',$file));
+			}
 	}
 }
