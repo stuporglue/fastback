@@ -516,7 +516,7 @@ trait Fastback_Exif {
 				$found_exif[$file] = json_encode($cur_exif,JSON_FORCE_OBJECT | JSON_PARTIAL_OUTPUT_ON_ERROR);
 			}
 
-			$this->fb->sql_update_case_when("UPDATE fastback SET _util=NULL, exif=CASE",$found_exif,"ELSE exif END",True);
+			$this->fb->sql_update_case_when($this->id,"UPDATE fastback SET _util=NULL, exif=CASE",$found_exif,"ELSE exif END",True);
 			$this->fb->sql_query_single("UPDATE cron SET due_to_run=1 WHERE job = 'process_exif'"); // If we found exif, then we need to process it.
 			$this->cron->sql_update_cron_status('get_meta');
 

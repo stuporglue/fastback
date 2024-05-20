@@ -132,4 +132,61 @@ class Fastback_Videos extends Fastback_Module {
 
 		return false;
 	}
+
+	public function prep_for_csv() {
+		// Start by assuming anything unprocessed is valid
+		print(__FILE__ . ":" . __LINE__ . ' -- ' .  microtime () );
+		$this->fb->sql_query_single("UPDATE fastback SET csv_ready=1 WHERE csv_ready IS NULL AND module={$this->id}");
+		print(__FILE__ . ":" . __LINE__ . ' -- ' .  microtime () );
+
+		// Remove duplicates
+		// REPEAT UNTIL NO MORE files found
+		do {
+		print(__FILE__ . ":" . __LINE__ . ' -- ' .  microtime () );
+		$res = $this->fb->sql_query_single("
+						UPDATE 
+						fastback 
+						SET csv_ready=-1 
+						WHERE 
+						module={$this->id}
+						AND file in 
+							(
+								SELECT MIN(file) AS file 
+								FROM fastback 
+								WHERE 
+								csv_ready<>-1
+								AND content_identifier IS NOT NULL 
+								AND content_identifier<>-1 
+								AND module={$this->id}
+								GROUP BY module, content_identifier 
+								HAVING COUNT(file) > 1
+							)
+						RETURNING FILE
+						");
+		} while (!empty($res));
+
+		print(__FILE__ . ":" . __LINE__ . ' -- ' .  microtime () );
+		$this->fb->sql_query_single("
+				UPDATE
+				fastback
+				SET csv_ready=-1
+				WHERE
+				file in (
+				SELECT
+				fb.file
+				FROM
+				fastback fb
+				LEFT JOIN fastback orig ON (CONCAT(fb.module,':',fb.file)=orig.alt_content)
+				WHERE
+				fb.module={$this->id}
+				AND fb.csv_ready=1
+				AND fb.content_identifier IS NOT NULL
+				AND fb.content_identifier<>-1
+				AND orig.content_identifier IS NOT NULL
+				AND orig.content_identifier<>-1
+				)
+				AND module={$this->id}
+		");
+		print(__FILE__ . ":" . __LINE__ . ' -- ' .  microtime () );
+	}
 }

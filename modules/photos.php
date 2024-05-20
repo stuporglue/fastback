@@ -55,4 +55,68 @@ class Fastback_Photos extends Fastback_Module {
 
 		return false;
 	}
+
+
+	public function prep_for_csv() {
+		// Start by assuming anything unprocessed is valid
+		print(__FILE__ . ":" . __LINE__ . ' -- ' .  microtime () );
+		$this->fb->sql_query_single("UPDATE fastback SET csv_ready=1 WHERE csv_ready IS NULL AND module={$this->id}");
+
+		// Remove duplicates
+		// DO THIS WHILE more rows returned
+		do { 
+		print(__FILE__ . ":" . __LINE__ . ' -- ' .  microtime () );
+		$res = $this->fb->sql_query_single("
+				UPDATE 
+				fastback 
+				SET csv_ready=-1 
+				WHERE 
+				module={$this->id}
+				AND file in 
+					(
+						SELECT MIN(file) AS file 
+						FROM fastback 
+						WHERE 
+						csv_ready<>-1
+						AND content_identifier IS NOT NULL 
+						AND content_identifier<>-1 
+						AND module={$this->id}
+						GROUP BY module, content_identifier 
+						HAVING COUNT(file) > 1
+					)
+				RETURNING file
+				");
+
+			var_dump($res);
+		} while (!empty($res));
+
+		// Set alt values
+		print(__FILE__ . ":" . __LINE__ . ' -- ' .  microtime () );
+		$this->fb->sql_query_single("
+				UPDATE
+				fastback
+				SET
+				alt_content=alty.alt_content
+				FROM (
+					SELECT
+					fb.content_identifier,
+					CONCAT(alt.module,':',MIN(alt.file)) AS alt_content
+					FROM
+					fastback fb
+					LEFT JOIN fastback alt ON (fb.content_identifier=alt.content_identifier AND fb.module<>alt.module)
+					WHERE
+					fb.module=64
+					AND fb.content_identifier IS NOT NULL
+					AND fb.content_identifier<>-1
+					AND fb.csv_ready<>-1
+					AND alt.module IS NOT NULL
+					GROUP BY alt.content_identifier) alty
+				WHERE
+				fastback.module=64
+				AND fastback.content_identifier=alty.content_identifier
+				AND fastback.alt_content IS NULL
+		");
+		print(__FILE__ . ":" . __LINE__ . ' -- ' .  microtime () );
+
+	}
 }

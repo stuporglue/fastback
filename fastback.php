@@ -102,9 +102,7 @@ class Fastback {
 	var $photodirregex = '';						// Use '' (empty string) for all photos, regardless of structure.
 													// Use this regex to only consider media in YYYY/MM/DD directories
 													// $fb->photodirregex = './[0-9]\{4\}/[0-9]\{2\}/[0-9]\{2\}/'
-	var $sort_order = 'date';						// 'date' or 'file'. 
 	var $ignore_tag  = array('iMovie','FaceTime');	// Tags to ignore from photos.
-	var $sortorder = 'DESC';						// Sort order of the photos for the csv (ASC or DESC)
 	var $maybe_meme_level = 1;						// Which level of maybe_meme should we filter at? The higher the number the more 
 													// likely it is a meme/junk image. Values can be any integer. Current code
 													// ends up assigning values between about -2 and +2.
@@ -238,7 +236,6 @@ class Fastback {
 		$this->log("|  supported_video_types: " . implode(",",$this->supported_video_types));
 		$this->log("|  basemap: $this->basemap");
 		$this->log("|  ignore_tag: " . implode(",",$this->ignore_tag));
-		$this->log("|  sortorder: $this->sortorder");
 		$this->log("|  maybe_meme_level: $this->maybe_meme_level");
 
 		if ( $this->verbose ) {
@@ -515,9 +512,9 @@ class Fastback {
 		$html .= '<input type="range" min="1" max="10" value="5" class="slider" id="zoom">';
 		$html .= '<div id="globeicon" class="disabled"></div>';
 		$html .= '<div id="tagicon" class="disabled"></div>';
-		$html .= '<div id="rewindicon" class="' . ($this->sort_order == 'date' ? '' : 'disabled') . '"></div>';
-		$html .= '<div id="calendaricon" class="' . ($this->sort_order == 'date' ? '' : 'disabled') . '"><input readonly id="datepicker" type="text"></div>';
-		$html .= '<div id="pathpickericon" class="' . ($this->sort_order == 'file' ? '' : 'disabled') . '"><select id="pathpicker"></select></div>';
+		$html .= '<div id="rewindicon" class="date"></div>';
+		$html .= '<div id="calendaricon" class="date"><input readonly id="datepicker" type="text"></div>';
+		$html .= '<div id="pathpickericon" class="date"><select id="pathpicker"></select></div>';
 		$html .= '<div id="exiticon" class="' . (empty($this->user) ? 'disabled' : '') . '"></div>';
 		$html .= '</div>';
 		$html .= '<div id="thumb" class="disabled">
@@ -582,7 +579,7 @@ class Fastback {
 			fastbackurl: "' . $this->siteurl . $base_script . '",
 			photocount: ' . $this->sql_query_single("SELECT COUNT(*) FROM fastback") . ',
 			basemap: ' . $this->basemap . ',
-			sort_order: "' . ($this->sort_order == 'file' ? 'file' : 'date') . '",
+			sort_order: "date",
 			debugger: "' . ($_SESSION['authed'] === true && $this->debug ? 'debug' : 'none') . '"
 	});';
 
@@ -875,24 +872,25 @@ class Fastback {
 		$res = $this->_sql->query($q_create_meta);
 
 		$q_create_files = "CREATE TABLE IF NOT EXISTS fastback ( 
-			module INTEGER,
-			file TEXT PRIMARY KEY, 
-			media_type TEXT,
-			thumbnail TEXT, 
-			webversion_made BOOL, 
-			exif TEXT,
-			flagged BOOL, 
-			mtime INTEGER, 
-			sorttime DATETIME, 
-			lat DECIMAL(15,10),
-			lon DECIMAL(15,10), 
-			elev DECIMAL(15,10), 
-			nullgeom BOOL,
-			_util TEXT,
-			maybe_meme INT,
-			share_key VARCHAR(32),
-			tags TEXT,
-			content_identifier TEXT
+			module INTEGER,				-- which module does this row belong to?
+			file TEXT PRIMARY KEY,  	-- which file is being referenced?
+			thumbnail TEXT,				-- where is the thumbnail for this object?
+			webversion_made BOOL,		-- has a web-friendly version of this been made? (eg. streamable video version)
+			exif TEXT,					-- place to store the metadata before it is processed
+			flagged BOOL,				-- has the user flagged this object to exclude it?
+			mtime INTEGER,				-- what is the file's modification time (used until a sorttime is calcualted)
+			sorttime DATETIME,			-- what time should be used to sort the object? (might come from exif or elsewhere)
+			lat DECIMAL(15,10),			-- coordinates (latitude)
+			lon DECIMAL(15,10),			-- coordiantes (longitude)
+			elev DECIMAL(15,10),		-- coordinates (elevation)
+			nullgeom BOOL,				-- handle weird geometry fields so we don't plot 0,0 coordinate objects
+			maybe_meme INT,				-- meme rating score
+			share_key VARCHAR(32),		-- secret key used to authenticate a sharing link
+			tags TEXT,					-- comma separated list of tags for this object
+			content_identifier TEXT,	-- media ID that connects two different representations of the same thing. eg. a live and still version of the same picture
+			alt_content TEXT,			-- a reference to the other version of the content. Format: module_id:/file/path
+			csv_ready BOOL,				-- is the media ready for CSV usage? (ready to show on the web?)
+			_util TEXT					-- util field used by cron to mark rows as reserved for work
 		)";
 
 		$res = $this->_sql->query($q_create_files);
@@ -910,6 +908,9 @@ class Fastback {
 		$this->_sql->query("CREATE INDEX IF NOT EXISTS fb_module ON fastback (module)");
 		$this->_sql->query("CREATE INDEX IF NOT EXISTS fb_maybe_meme ON fastback (maybe_meme)");
 		$this->_sql->query("CREATE INDEX IF NOT EXISTS fb_csvsort ON fastback (COALESCE(CAST(STRFTIME('%s',sorttime) AS INTEGER),mtime),file)");
+		$this->_sql->query("CREATE INDEX IF NOT EXISTS fb_csv_ready ON fastback (csv_ready)");
+		$this->_sql->query("CREATE INDEX IF NOT EXISTS fb_alt ON fastback (alt_content)");
+		$this->_sql->query("CREATE INDEX fb_alt_lookup ON fastback (CONCAT(module,':',file))");
 
 		$res = $this->_sql->query($q_create_modules);
 
@@ -981,16 +982,8 @@ class Fastback {
 			AND flagged IS NOT TRUE 
 			AND ($where) 
 			ORDER BY 
-";
-
-		if ( $this->sort_order == "file" ) {
-			$query .= " file {$this->sortorder} ";
-		} else {
-			$query .= " COALESCE(CAST(STRFTIME('%s',sorttime) AS INTEGER),mtime) {$this->sortorder},
-				file {$this->sortorder} ";
-		}
-
-		$query .= "
+			COALESCE(CAST(STRFTIME('%s',sorttime) AS INTEGER),mtime) DESC,
+			file DESC
 			LIMIT {$this->_process_limit}";
 
 		$this->log_verbose($query);
@@ -1018,16 +1011,16 @@ class Fastback {
 	/*
 	 * Update a bunch of rows at once using a CASE WHEN statement
 	 */
-	public function sql_update_case_when($update_q,$ar,$else,$escape_val = False) {
+	public function sql_update_case_when($module_id,$update_q,$ar,$else,$escape_val = False) {
 		if ( empty($ar) ) {
 			return;
 		}
 
 		foreach($ar as $file => $val){
 			if ( $escape_val ) {
-				$update_q .= " WHEN file='" . SQLite3::escapeString($file) . "' THEN '" . SQLite3::escapeString($val) . "'\n";
+				$update_q .= " WHEN module='$module_id' AND file='" . SQLite3::escapeString($file) . "' THEN '" . SQLite3::escapeString($val) . "'\n";
 			} else {
-				$update_q .= " WHEN file='" . SQLite3::escapeString($file) . "' THEN " . $val . "\n";
+				$update_q .= " WHEN module='$module_id' AND file='" . SQLite3::escapeString($file) . "' THEN " . $val . "\n";
 			}
 		}
 		$update_q .= " " . $else;

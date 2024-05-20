@@ -387,6 +387,11 @@ class Fastback_Cron {
 		// With the cron jobs being busy in the sqlite file that's not completely accurate, but it's the best easy thing.
 
 		if ( $this->fb->debug || !file_exists($this->fb->csvfile) || filemtime($this->fb->sqlitefile) - filemtime($this->fb->csvfile) > 0 || filemtime(__FILE__) -  filemtime($this->fb->csvfile) > 0) {
+
+			foreach($this->fb->modules as $module) {
+				$module->prep_for_csv();
+			}
+
 			$wrote = $this->util_make_csv();
 			if ( $wrote ) {
 				$this->sql_update_cron_status('make_csv',true);
@@ -548,55 +553,23 @@ class Fastback_Cron {
 			ROUND(fb.lat,5) AS lat,
 			ROUND(fb.lon,5) AS lon,
 			fb.tags AS tags,
-			(CASE 
-				WHEN livevid.file IS NOT NULL THEN CONCAT(livevid.module,':',livevid.file)
-				ELSE NULL
-			END) AS  live
+			alt_content
 			FROM fastback fb
-			INNER JOIN modules modules ON (fb.module=modules.id)
-			
-			-- Some photos have live versions. In the database this shows up as two records - a photo record and a video record. we connect them with the content_identifier in their exif data.
-			-- When we make the CSV we want to to only show the photo version. 
-			-- The javascript handles swapping the photo for the video, if needed.
-			-- If some other module type supports something like this in the future, then we'll need to update this code. 
-			-- We have to do two joins. The first is to find the live version. The second is to find the main live listing to exclude.
-			LEFT JOIN fastback livevid ON ( fb.content_identifier = livevid.content_identifier )
 			WHERE 
 			fb.flagged IS NOT TRUE 
-			AND livevid.content_identifier IS NOT NULL
-			AND livevid.content_identifier <> '-1'
-			AND livevid.module<>fb.module 
-			AND fb.file <> livevid.file 
-			AND fb.content_identifier IS NOT NULL
-			AND (fb.maybe_meme <= '" . SQLite3::escapeString($this->fb->maybe_meme_level) . "' OR fb.maybe_meme IS NULL) -- Only display non-memes. Threshold of 1 seems pretty ok
-			AND (livevid.file IS NULL OR modules.module_type='photos') -- 
-";
-		if ( $this->fb->sort_order == "file" ) {
-			$q .= "ORDER BY fb.file " . $this->fb->sortorder;
-		} else {
-			$q .= "ORDER BY filemtime " . $this->fb->sortorder . ",fb.file " . $this->fb->sortorder;
-		}
+			AND csv_ready=1
+			ORDER BY filemtime DESC,fb.file DESC";
 
-		print($q . "\n");
-
-		print(__FILE__ . ":" . __LINE__ . ' -- ' .  microtime () . "\n"); 
-
-		print(__FILE__ . ":" . __LINE__ . ' -- ' .  microtime () . "\n"); 
 		$res = $this->fb->_sql->query($q);
 
-		print(__FILE__ . ":" . __LINE__ . ' -- ' .  microtime () . "\n"); 
 		$this->fb->log("Trying to write to CSV file {$this->fb->csvfile}\n");
 		$fh = fopen($this->fb->csvfile,'w');
-		print(__FILE__ . ":" . __LINE__ . ' -- ' .  microtime () . "\n"); 
 
 		while($row = $res->fetchArray(SQLITE3_ASSOC)){
 			fputcsv($fh,$row);
 		}
-		print(__FILE__ . ":" . __LINE__ . ' -- ' .  microtime () . "\n"); 
 		fclose($fh);
-		print(__FILE__ . ":" . __LINE__ . ' -- ' .  microtime () . "\n"); 
 		$this->fb->sql_disconnect();
-		print(__FILE__ . ":" . __LINE__ . ' -- ' .  microtime () . "\n"); 
 
 		if ( !isset($this->_gzip) ) { $this->_gzip= trim(`which gzip`); }
 

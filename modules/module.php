@@ -34,8 +34,23 @@ class Fastback_Module {
 		die("get_meta should be overridden");
 	}
 
+	/**
+	 * Process object metadata. If other heavy object processing is needed, this could be a good place.
+	 */
 	public function process_meta() {
 		die("process_meta should be overridden");
+	}
+
+	/**
+	 * If any additional processing is needed before publishing, do it here. This is called just before the CSV is generated. 
+	 * It will be used, for example, for linking live and static photos by their content_identifier fields
+	 *
+	 * Where process_meta should in theory only get called once per row, prep_for_csv could see
+	 * rows getting processed every time a CSV is generated
+	 *
+	 */
+	public function prep_for_csv() {
+		die("prep_for_csv should be be overridden");
 	}
 
 	/**
@@ -62,7 +77,7 @@ class Fastback_Module {
 				}
 			}
 
-			$this->fb->sql_update_case_when("UPDATE fastback SET _util=NULL, thumbnail=CASE", $made_thumbs, "ELSE thumbnail END", TRUE);
+			$this->fb->sql_update_case_when($this->id,"UPDATE fastback SET _util=NULL, thumbnail=CASE", $made_thumbs, "ELSE thumbnail END", TRUE);
 
 			$flag_these = array_map('SQLite3::escapeString',$flag_these);
 			$extra_sql = "";
