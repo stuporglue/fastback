@@ -3,6 +3,11 @@
  * Licensed under the MIT License
  */
 Fastback = class Fastback {
+
+	Modules() {
+		// Classes will be populated here
+	}
+
 	/*
 	 * Load the data and set up event handlers
 	 */
@@ -13,6 +18,10 @@ Fastback = class Fastback {
 		jQuery.extend(this,args);
 		var self = this;
 		this.paths = [];
+
+		for( var m in this.modules ) {
+			this.modules[m] = new this.Modules[this.modules[m]](m,this);
+		}
 
 		// Set up handlers
 		jQuery('#speedslide').on('input',this.handle_speed_slide.bind(this));
@@ -445,7 +454,7 @@ Fastback = class Fastback {
 	 */
 	handle_send_download(e) {
 		var photoid = jQuery('#thumb').data('curphoto');
-		var download = encodeURI(this.fastbackurl + '?download=' + this.orig_photos[photoid]['mfile']);
+		var download = encodeURI(this.fastbackurl + '?download=' + this.orig_photos[photoid].mfile);
 		window.open(download, '_blank').focus();
 	}
 
@@ -454,7 +463,7 @@ Fastback = class Fastback {
 	 */
 	handle_flagphoto(e) {
 		var photoid = jQuery('#thumb').data('curphoto');
-		var imgsrc = this.orig_photos[photoid]['mfile'];
+		var imgsrc = this.orig_photos[photoid].mfile;
 		var url = encodeURI(this.fastbackurl + '?flag=' + imgsrc);
 		$.get(url).then(function(){
 			$('#thumbflag').animate({ opacity: 0.3 })
@@ -883,19 +892,7 @@ Fastback = class Fastback {
 				cellhtml += '</div>';
 				return cellhtml;
 			} else {
-				if (self.modules[p.module] == 'photos') {
-					if ( p.alt !== null ) {
-						errimg = 'picture.webp';
-						vidclass = ' alt';
-					} else {
-						errimg = 'picture.webp';
-						vidclass = ' ';
-					}
-				} else if (self.modules[p.module] == 'videos') {
-					vidclass = ' vid';
-					errimg = 'movie.webp';
-				}
-				return '<div class="tn' + vidclass + '"><img data-photoid="' + p.id + '" src="' + encodeURI(self.fastbackurl + '?thumbnail=' + p.mfile) + '" onerror="this.onerror=null;this.src=\'fastback/img/' + errimg + '\';"/></div>';
+				return self.modules[p.module].util_generate_row_block(p);
 			}
 		}).join("");
 		var e = jQuery.parseHTML('<div class="photorow">' + html + '</div>');
@@ -1062,44 +1059,9 @@ Fastback = class Fastback {
 			return false;
 		}
 		var imgsrc = showalt ? photo.alt : photo.mfile;
-		var basename = imgsrc.replace(/.*\//,'');
-		var directlink = encodeURI(this.fastbackurl + '?download=' + imgsrc);
+		var fileinfo = imgsrc.split(':');
 
-			// File type not found, proxy a jpg instead
-			var supported_type = (this.browser_supported_file_types.indexOf(imgsrc.replace(/.*\./,'').toLowerCase()) != -1);
-			if ( !supported_type || photo.isvideo ) {
-				directlink = encodeURI(this.fastbackurl + '?proxy=' + imgsrc );	
-			}
-			var share_uri = encodeURI(this.fastbackurl + '?file=' + imgsrc + '&share=' + md5('./' + photo.file));
-
-			if (showalt || this.modules[photo.module] == 'videos'){
-				// the onloadedmetadata script is to make very short videos (like iOS live photos) loop but longer videos do not loop
-				imghtml = '<video id="thevideo" controls loop ' + (showalt ? ' ' : ' poster="' + encodeURI(this.fastbackurl + '?thumbnail=' +  imgsrc) + '"') + ' preload="auto" onloadedmetadata="this.duration > 5 ? this.removeAttribute(\'loop\') : false">';
-				// Put the proxied link, this should be a transcoded mp4 version
-				imghtml += '<source src="' + directlink + '#t=0.0001" type="video/mp4">';
-				// Also include the original as a source...just in case it works
-				imghtml += '<source src="' + encodeURI(this.fastbackurl + '?download=' + imgsrc) + '#t=0.0001" type="video/' + imgsrc.replace(/.*\./,'').toLowerCase() + '">';
-				imghtml += '<p>Your browser does not support this video format.</p></video>';
-			} else {
-				imghtml = '<img src="' + directlink + '"/>';
-			}
-		jQuery('#thumbcontent').data('last_html',jQuery('#thumbcontent').html()); // Will keeping this here prevent images from unloading? 
-		jQuery('#thumbcontent').html(imghtml);
-		jQuery('#thumbinfo').html('<div id="infowrap">' + (showalt ? photo.alt : photo.file) + '</div>');
-		jQuery('#thumbgeo').attr('data-coordinates', (photo.coordinates == null ? "" : photo.coordinates ));
-		jQuery('#thumbalt ').attr('data-alt',photo.alt);
-		jQuery('#thumbalt').data('showing_alt',showalt)
-		jQuery('#thumbflag').css('opacity',1);
-		jQuery('#sharelink a').attr('href',share_uri);
-		jQuery('#thumb').data('curphoto',photo.id);
-		jQuery('#thumb').removeClass('disabled');
-		if ( showalt ) {
-			setTimeout(function(){
-				jQuery('#thevideo')[0].play();
-			},500);
-		}
-
-		return true;
+		this.modules[fileinfo[0]].ui_show_fullsized(photo,showalt);
 	}
 
 	/*

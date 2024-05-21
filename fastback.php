@@ -513,7 +513,6 @@ class Fastback {
 		$html .= '<div id="tagicon" class="disabled"></div>';
 		$html .= '<div id="rewindicon" class="date"></div>';
 		$html .= '<div id="calendaricon" class="date"><input readonly id="datepicker" type="text"></div>';
-		$html .= '<div id="pathpickericon" class="date"><select id="pathpicker"></select></div>';
 		$html .= '<div id="exiticon" class="' . (empty($this->user) ? 'disabled' : '') . '"></div>';
 		$html .= '</div>';
 		$html .= '<div id="thumb" class="disabled">
@@ -557,6 +556,8 @@ class Fastback {
 		$html .= '<script src="fastback/js/jquery.hammer.js"></script>';
 		$html .= '<script src="fastback/js/leaflet.markercluster.js"></script>';
 		$html .= '<script src="fastback/js/fastback.js?ts=' . ($this->debug ? 'debug' : filemtime(__DIR__ . '/js/fastback.js')) . '"></script>';
+		$html .= '<script src="fastback/js/modules/photos.js?ts=' . ($this->debug ? 'debug' : filemtime(__DIR__ . '/js/modules/photos.js')) . '"></script>';
+		$html .= '<script src="fastback/js/modules/videos.js?ts=' . ($this->debug ? 'debug' : filemtime(__DIR__ . '/js/modules/videos.js')) . '"></script>';
 		$html .= '<script src="fastback/js/md5.js"></script>';
 
 		$base_script = preg_replace(array('/.*\//','/\?.*/'),array('',''),$_SERVER['REQUEST_URI']);
