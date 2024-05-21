@@ -606,6 +606,7 @@ trait Fastback_Exif {
 
 				if ( array_key_exists('Error',$exif) ) {
 					$this->fb->log("Couldn't process exif for {$row['file']} because {$exif['Error']}");
+					$this->fb->sql_query_single("UPDATE fastback SET exif=CONCAT('Error:',exif) WHERE file='" . SQLite3::escapeString($row['file']) . "' AND module={$this->id}");
 					continue;
 				}
 

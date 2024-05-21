@@ -274,7 +274,6 @@ class Fastback {
 	 */
 	public function log($msg) {
 		if ( $this->debug ) {
-			ini_set('error_log', $this->fastback_log);
 			error_log($msg);
 		}
 	}
@@ -530,7 +529,7 @@ class Fastback {
 			$html .= '<div class="fakelink" id="thumbflag" data-file="#">🚩</div>';
 		}
 		$html .= '<div class="fakelink" id="thumbgeo" data-coordinates="">🌐</div>';
-		$html .= '<div class="fakelink" id="thumblive" data-showing_live="0" data-live=""><img src="fastback/img/live.png"></div>';
+		$html .= '<div class="fakelink" id="thumbalt" data-showing_alt="0" data-alt=""><img src="fastback/img/alt.png"></div>';
 		$html .= '<div id="thumbinfo"></div>';
 		$html .= '</div>';
 		$html .= '</div>';
@@ -849,8 +848,7 @@ class Fastback {
 			updated INTEGER,
 			last_completed INTEGER DEFAULT NULL, -- Set to 1 once it has last_completed at least once
 			due_to_run BOOL DEFAULT 1, -- Set to 0 each time it completes, and then cleared when the completion is stale
-			owner TEXT, -- pid of the process running it
-			meta TEXT
+			owner TEXT -- pid of the process running it
 		)";
 		$res = $this->_sql->query($q_create_meta);
 

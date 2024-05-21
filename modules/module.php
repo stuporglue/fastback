@@ -218,4 +218,91 @@ class Fastback_Module {
 	public function send_share($file){
 		$this->fb->util_readfile($this->path . '/' . $file);
 	}
+
+	public function remove_deleted(){
+		chdir($this->path);
+		$this->fb->log("Module {$this->id} checking for files now missing from $this->path\n");
+
+		$count = $this->fb->sql_query_single("SELECT COUNT(*) AS c FROM fastback WHERE module={$this->id}");
+		$this->fb->log("Checking for missing files: Found {$count} files in the database");
+
+		$this->fb->sql_connect();
+		$q = "SELECT file FROM fastback WHERE module={$this->id}";
+		$res = $this->fb->_sql->query($q);
+
+		$this->fb->_sql->query("BEGIN");
+		while($row = $res->fetchArray(SQLITE3_ASSOC)){
+			if ( !file_exists($row['file'])){
+				$this->fb->log("{$row['file']} NOT FOUND! Removing!\n");	
+				$this->fb->_sql->query("DELETE FROM fastback WHERE file='" . SQLite3::escapeString($row['file']) . "' AND module={$this->id}");
+			}
+		}
+		$this->fb->_sql->query("COMMIT");
+		$this->fb->sql_query_single("UPDATE modules SET lastmod=NULL WHERE id={$this->id}");
+		$this->fb->sql_disconnect();
+	}
+
+	/**
+	 * Standard way to find new files. Modules can override
+	 */
+	public function find_new_files(){
+
+			chdir($this->path);
+
+			$lastmod = $this->lastmod;
+
+			if ( !is_numeric($lastmod) ) {
+				$lastmod = 0;
+			}
+
+			$filetypes = implode('\|',$this->supported_types);
+			$cmd = 'find -L . -type f -regextype sed -iregex  "' . $this->file_regex . '.*\(' . $filetypes . '\)$" -newerat "@' . $lastmod . '"';
+
+			$modified_files_str = `$cmd`;
+
+			if (!is_null($modified_files_str) && strlen(trim($modified_files_str)) > 0) {
+				$modified_files = explode("\n",$modified_files_str);
+				$modified_files = array_filter($modified_files);
+
+				$today = date('Ymd');
+				$multi_insert = "INSERT INTO fastback (file,module,mtime,share_key) VALUES ";
+				$multi_insert_tail = " ON CONFLICT(file) DO UPDATE SET file=file";
+				$collect_file = array();
+				foreach($modified_files as $k => $one_file){
+					$mtime = filemtime($one_file);
+					$pathinfo = pathinfo($one_file);
+
+					if ( empty($pathinfo['extension']) ) {
+						$this->fb->log(print_r($pathinfo,TRUE));
+						continue;
+					}
+
+					if ( in_array(strtolower($pathinfo['extension']),$this->supported_types) ) {
+						$collect_file[] = "('" .  SQLite3::escapeString($one_file) . "','" . SQLite3::escapeString($this->id) . "','" .  SQLite3::escapeString($mtime) .  "','" . md5($one_file) . "')";
+					} else {
+						$this->fb->log("Don't know what to do with " . print_r($pathinfo,true));
+					}
+
+					if ( count($collect_file) >= $this->fb->_upsert_limit) {
+						$sql = $multi_insert . implode(",",$collect_file) . $multi_insert_tail;
+						$this->fb->sql_query_single($sql);
+						$this->fb->sql_query_single("UPDATE cron SET due_to_run=1 WHERE job = 'make_csv'"); // If we found files, we need to make csv
+						$this->cron->sql_update_cron_status('find_new_files');
+						$collect_file = array();
+					}
+				}
+
+				if ( count($collect_file) > 0 ) {
+					$sql = $multi_insert . implode(",",$collect_file) . $multi_insert_tail;
+					$this->fb->sql_query_single($sql);
+					$this->fb->sql_query_single("UPDATE cron SET due_to_run=1 WHERE job = 'make_csv'"); // If we found files, we need to make csv
+					$this->cron->sql_update_cron_status('find_new_files');
+					$collect_file = array();
+				}
+			}
+
+			$maxtime = $this->fb->sql_query_single("SELECT MAX(mtime) AS maxtime FROM fastback WHERE module={$this->id}");
+			$this->fb->sql_query_single("UPDATE modules SET lastmod=$maxtime WHERE id={$this->id}");
+			$this->lastmod = $maxtime;
+	}
 }

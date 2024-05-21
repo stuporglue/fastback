@@ -57,14 +57,19 @@ class Fastback_Cron {
 			exit();
 		});
 
+		if ( $this->fb->debug) {
+			$this->fb->log("Debug output enabled by configuration");
+		} 
+
 		if ( isset($argv) ) {
 			$debug_found = array_search('debug',$argv);
 			if ( $debug_found !== FALSE ) {
 				$this->fb->debug = true;
+				ini_set("error_log",'stdout');
+				$this->fb->log("Debug output enabled by commandline argument\n");
 				array_splice($argv,$debug_found,1);
 			}
 		}
-
 	}
 
 	public function run() {
@@ -92,7 +97,7 @@ class Fastback_Cron {
 	/**
 	 * Do cron upserts
 	 */
-	public function sql_update_cron_status($job,$complete = false,$meta=false) {
+	public function sql_update_cron_status($job,$complete = false) {
 		$the_time = time();
 		$owner = ( $complete ? 'NULL' : "'" . getmypid() . "'");
 
@@ -107,15 +112,9 @@ class Fastback_Cron {
 			$due_to_run = 1; // Until it is complete again, we'll keep trying
 		}
 
-		if ( $meta !== false ){
-			$this->fb->sql_query_single("INSERT INTO cron (job,updated,last_completed,due_to_run,owner,meta)
-				values ('$job'," . $the_time . ",$complete_val,$due_to_run,'" . getmypid() . "','" . SQLite3::escapeString($meta) . "')
-				ON CONFLICT(job) DO UPDATE SET updated=$the_time,last_completed=$complete_val,due_to_run=$due_to_run,owner=$owner,meta='" . SQLite3::escapeString($meta). "'");
-		} else {
-			$this->fb->sql_query_single("INSERT INTO cron (job,updated,last_completed,due_to_run,owner)
-				values ('$job',$the_time,$complete_val,$due_to_run,'" . getmypid() . "')
-				ON CONFLICT(job) DO UPDATE SET updated=$the_time,last_completed=$complete_val,due_to_run=$due_to_run,owner=$owner");
-		}
+		$this->fb->sql_query_single("INSERT INTO cron (job,updated,last_completed,due_to_run,owner)
+			values ('$job',$the_time,$complete_val,$due_to_run,'" . getmypid() . "')
+			ON CONFLICT(job) DO UPDATE SET updated=$the_time,last_completed=$complete_val,due_to_run=$due_to_run,owner=$owner");
 
 		if ( $complete ) {
 			$this->fb->log("Cron job $job was marked as complete");
@@ -216,69 +215,16 @@ class Fastback_Cron {
 		$origdir = getcwd();
 
 		foreach($this->fb->modules as $module) {
-
-			chdir($module->path);
-
-			$lastmod = $module->lastmod;
-
 			if ( $this->_direct_cron_func_call ) {
-				$this->fb->log("Finding all files, not just newer than $lastmod, since we were called directly");
-				$lastmod = 0;
+				$this->fb->log("Finding all files, not just newer than $module->lastmod, since we were called directly");
+				$module->lastmod = 0;
 			}
 
-			$filetypes = implode('\|',$module->supported_types);
-			$cmd = 'find -L . -type f -regextype sed -iregex  "' . $module->file_regex . '.*\(' . $filetypes . '\)$" -newerat "@' . $lastmod . '"';
-
-			$modified_files_str = `$cmd`;
-
-			if (!is_null($modified_files_str) && strlen(trim($modified_files_str)) > 0) {
-				$modified_files = explode("\n",$modified_files_str);
-				$modified_files = array_filter($modified_files);
-
-				$today = date('Ymd');
-				$multi_insert = "INSERT INTO fastback (file,module,mtime,share_key) VALUES ";
-				$multi_insert_tail = " ON CONFLICT(file) DO UPDATE SET file=file";
-				$collect_file = array();
-				foreach($modified_files as $k => $one_file){
-					$mtime = filemtime($one_file);
-					$pathinfo = pathinfo($one_file);
-
-					if ( empty($pathinfo['extension']) ) {
-						$this->fb->log(print_r($pathinfo,TRUE));
-						continue;
-					}
-
-					if ( in_array(strtolower($pathinfo['extension']),$module->supported_types) ) {
-						$collect_file[] = "('" .  SQLite3::escapeString($one_file) . "','" . SQLite3::escapeString($module->id) . "','" .  SQLite3::escapeString($mtime) .  "','" . md5($one_file) . "')";
-					} else {
-						$this->fb->log("Don't know what to do with " . print_r($pathinfo,true));
-					}
-
-					if ( count($collect_file) >= $this->fb->_upsert_limit) {
-						$sql = $multi_insert . implode(",",$collect_file) . $multi_insert_tail;
-						$this->fb->sql_query_single($sql);
-						$this->fb->sql_query_single("UPDATE cron SET due_to_run=1 WHERE job = 'make_csv'"); // If we found files, we need to make csv
-						$this->sql_update_cron_status('find_new_files');
-						$collect_file = array();
-					}
-				}
-
-				if ( count($collect_file) > 0 ) {
-					$sql = $multi_insert . implode(",",$collect_file) . $multi_insert_tail;
-					$this->fb->sql_query_single($sql);
-					$this->fb->sql_query_single("UPDATE cron SET due_to_run=1 WHERE job = 'make_csv'"); // If we found files, we need to make csv
-					$this->sql_update_cron_status('find_new_files');
-					$collect_file = array();
-				}
-			}
+			$module->find_new_files();
 		}
 
-
-		$maxtime = $this->fb->sql_query_single("SELECT MAX(mtime) AS maxtime FROM fastback");
-		if ( $maxtime ) {
-			// lastmod to see where to pick up from
-			$this->sql_update_cron_status('find_new_files',true,$maxtime);
-		}
+		// lastmod to see where to pick up from
+		$this->sql_update_cron_status('find_new_files',true);
 		chdir($origdir);
 		return true;
 	}
@@ -288,30 +234,15 @@ class Fastback_Cron {
 	 */
 	private function cron_remove_deleted() {
 		$this->sql_update_cron_status('remove_deleted');
-		chdir($this->fb->photobase);
-		$this->fb->log("Checking for files now missing from $this->fb->photobase\n");
 
-		$count = $this->fb->sql_query_single("SELECT COUNT(*) AS c FROM fastback");
-		$this->fb->log("Checking for missing files: Found {$count} files in the database");
-
-		$this->fb->sql_connect();
-		$q = "SELECT file FROM fastback";
-		$res = $this->fb->_sql->query($q);
-
-		$this->fb->_sql->query("BEGIN");
-		while($row = $res->fetchArray(SQLITE3_ASSOC)){
-			if ( !file_exists($row['file'])){
-				$this->fb->log("{$row['file']} NOT FOUND! Removing!\n");	
-				$this->fb->_sql->query("DELETE FROM fastback WHERE file='" . SQLite3::escapeString($row['file']) . "'");
-			}
+		foreach($this->fb->modules as $module) {
+			$module->remove_deleted();
 		}
-		$this->fb->_sql->query("COMMIT");
-		$this->fb->sql_query_single("UPDATE cron SET due_to_run=1 WHERE job = 'make_csv'"); // If we removed files, we need a new csv
 
-		$this->sql_update_cron_status('find_new_files',false,-1); 
+		$this->fb->sql_query_single("UPDATE cron SET due_to_run=1 WHERE job = 'make_csv'"); // If we removed files, we need a new csv
+		$this->sql_update_cron_status('find_new_files',false); 
 		$this->fb->sql_query_single("UPDATE cron SET due_to_run=1 WHERE job = 'find_new_files'"); // If we delted files, maybe there are new ones too? 
 
-		$this->fb->sql_disconnect();
 		$this->sql_update_cron_status('remove_deleted',true);
 	}
 

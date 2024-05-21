@@ -150,7 +150,7 @@ body #photos .photorow {
 	transition: opacity 0.05s ease-in-out;
 }
 
-.tn.live:before {
+.tn.alt:before {
 	display: block;
 	position: absolute;
 	z-index: 1;
@@ -159,7 +159,7 @@ body #photos .photorow {
 	max-width: 50px;
 	max-height: 50px;
 	content: " ";
-	background-image: url('../img/live.png');
+	background-image: url('../img/alt.png');
 	background-size: 50% 50%;
 	background-repeat: no-repeat;
 	background-position: top left; 
@@ -407,7 +407,7 @@ body.map #thumb, body.map #tagwindow {
 	display: none;
 }
 
-#thumblive[data-live=""] {
+#thumbalt[data-alt=""] {
 	display: none;
 }
 

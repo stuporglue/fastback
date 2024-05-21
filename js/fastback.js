@@ -26,7 +26,7 @@ Fastback = class Fastback {
 		jQuery(document).on('keydown',this.handle_keydown.bind(this));
 		jQuery('#thumbgeo').on('click',this.handle_geoclick.bind(this));
 		jQuery('#thumbflag').on('click',this.handle_flagphoto.bind(this));
-		jQuery('#thumblive').on('click',this.handle_liveswap.bind(this));
+		jQuery('#thumbalt').on('click',this.handle_altswap.bind(this));
 		jQuery('#sharelink').on('click',this.handle_shareclick.bind(this));
 		jQuery('#webshare').on('click',this.handle_shareclick.bind(this));
 		jQuery('#thumbdownload').on('click',this.handle_send_download.bind(this));
@@ -464,10 +464,10 @@ Fastback = class Fastback {
 	/**
 	 * Swap the static and live photos
 	 */
-	handle_liveswap(e) {
+	handle_altswap(e) {
 		var photoid = jQuery('#thumb').data('curphoto');
-		var new_is_live = jQuery('#thumblive').data('showing_live') ? 0 : 1;
-		this.ui_show_fullsized(photoid,new_is_live);
+		var new_is_alt = jQuery('#thumbalt').data('showing_alt') ? 0 : 1;
+		this.ui_show_fullsized(photoid,new_is_alt);
 	}
 
 	/*
@@ -886,7 +886,7 @@ Fastback = class Fastback {
 				if (self.modules[p.module] == 'photos') {
 					if ( p.alt !== null ) {
 						errimg = 'picture.webp';
-						vidclass = ' live';
+						vidclass = ' alt';
 					} else {
 						errimg = 'picture.webp';
 						vidclass = ' ';
@@ -1050,18 +1050,18 @@ Fastback = class Fastback {
 	 * We assume that the correct ID has been found by now, even though photos may have scrolled or shifted in the background somehow
 	 *
 	 * @photoid the ID of the photo to show, the index of the photo in the csv array
-	 * @showlive If set to 1, and the photo has a `live` attribute, then the fullsize will show the live media instead.
+	 * @showalt If set to 1, and the photo has a `alt` attribute, then the fullsize will show the alt media instead.
 	 *
 	 * Returns false if couldn't show thumb
 	 */
-	ui_show_fullsized(photoid,showlive) {
+	ui_show_fullsized(photoid,showalt) {
 		var imghtml;
-		var showlive = showlive || 0;
+		var showalt = showalt || 0;
 		var photo = this.orig_photos.find(function(p){return p.id == photoid && p.type == 'media';});
 		if ( photo === undefined ) {
 			return false;
 		}
-		var imgsrc = showlive ? photo.alt : photo.mfile;
+		var imgsrc = showalt ? photo.alt : photo.mfile;
 		var basename = imgsrc.replace(/.*\//,'');
 		var directlink = encodeURI(this.fastbackurl + '?download=' + imgsrc);
 
@@ -1072,9 +1072,9 @@ Fastback = class Fastback {
 			}
 			var share_uri = encodeURI(this.fastbackurl + '?file=' + imgsrc + '&share=' + md5('./' + photo.file));
 
-			if (showlive || this.modules[photo.module] == 'videos'){
+			if (showalt || this.modules[photo.module] == 'videos'){
 				// the onloadedmetadata script is to make very short videos (like iOS live photos) loop but longer videos do not loop
-				imghtml = '<video id="thevideo" controls loop ' + (showlive ? ' ' : ' poster="' + encodeURI(this.fastbackurl + '?thumbnail=' +  imgsrc) + '"') + ' preload="auto" onloadedmetadata="this.duration > 5 ? this.removeAttribute(\'loop\') : false">';
+				imghtml = '<video id="thevideo" controls loop ' + (showalt ? ' ' : ' poster="' + encodeURI(this.fastbackurl + '?thumbnail=' +  imgsrc) + '"') + ' preload="auto" onloadedmetadata="this.duration > 5 ? this.removeAttribute(\'loop\') : false">';
 				// Put the proxied link, this should be a transcoded mp4 version
 				imghtml += '<source src="' + directlink + '#t=0.0001" type="video/mp4">';
 				// Also include the original as a source...just in case it works
@@ -1085,15 +1085,15 @@ Fastback = class Fastback {
 			}
 		jQuery('#thumbcontent').data('last_html',jQuery('#thumbcontent').html()); // Will keeping this here prevent images from unloading? 
 		jQuery('#thumbcontent').html(imghtml);
-		jQuery('#thumbinfo').html('<div id="infowrap">' + (showlive ? photo.live : photo.file) + '</div>');
+		jQuery('#thumbinfo').html('<div id="infowrap">' + (showalt ? photo.alt : photo.file) + '</div>');
 		jQuery('#thumbgeo').attr('data-coordinates', (photo.coordinates == null ? "" : photo.coordinates ));
-		jQuery('#thumblive').attr('data-live',photo.live);
-		jQuery('#thumblive').data('showing_live',showlive)
+		jQuery('#thumbalt ').attr('data-alt',photo.alt);
+		jQuery('#thumbalt').data('showing_alt',showalt)
 		jQuery('#thumbflag').css('opacity',1);
 		jQuery('#sharelink a').attr('href',share_uri);
 		jQuery('#thumb').data('curphoto',photo.id);
 		jQuery('#thumb').removeClass('disabled');
-		if ( showlive ) {
+		if ( showalt ) {
 			setTimeout(function(){
 				jQuery('#thevideo')[0].play();
 			},500);
